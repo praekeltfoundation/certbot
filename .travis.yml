@@ -5,7 +5,7 @@ matrix:
     - python: "3.5"
       env: NO_COVERAGE=1
     - python: "pypy"
-      env: PYPY_VERSION="5.1.0" NO_COVERAGE=1 PYTHON_BUILD_CACHE_PATH="$HOME/pyenv-cache"
+      env: PYPY_VERSION="5.1" NO_COVERAGE=1 PYTHON_BUILD_CACHE_PATH="$HOME/pyenv-cache"
 cache:
   directories:
     - $HOME/.cache/pip
