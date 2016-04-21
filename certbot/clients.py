@@ -67,7 +67,7 @@ class JsonClient(object):
             scheme, authority = self.endpoint[:2]
         url = uricompose(scheme, authority, path, query)
 
-        data = json.dumps(json_data) if json_data else None
+        data = json.dumps(json_data).encode('utf-8') if json_data else None
         requester_kwargs = {
             'headers': {
                 'Content-Type': 'application/json',
