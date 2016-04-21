@@ -11,7 +11,9 @@ setup(
     author_email='jamie@praekelt.com',
     packages=find_packages(),
     install_requires=[
+        'treq',
         'Twisted',
+        'uritools>=1.0.0'
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
