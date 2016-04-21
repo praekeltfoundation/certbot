@@ -1,0 +1,28 @@
+language: python
+matrix:
+  include:
+    - python: "2.7"
+    - python: "3.5"
+      env: NO_COVERAGE=1
+    - python: "pypy"
+      env: PYPY_VERSION="5.1.0" NO_COVERAGE=1 PYTHON_BUILD_CACHE_PATH="$HOME/pyenv-cache"
+cache:
+  directories:
+    - $HOME/.cache/pip
+    - $HOME/pyenv-cache
+
+before_install:
+  # If necessary, set up an appropriate version of pypy.
+  - if [ ! -z "$PYPY_VERSION" ]; then source setup-pypy-travis.sh; fi
+  - if [ ! -z "$PYPY_VERSION" ]; then python --version 2>&1 | fgrep "PyPy $PYPY_VERSION"; fi
+install:
+  - pip install --upgrade pip # Upgrade pip to get wheel caching
+  - pip install -e .
+  - pip install -r requirements-dev.txt
+  - pip install coveralls
+script:
+  - flake8 certbot
+  - if [ -z "$NO_COVERAGE" ]; then COVERAGE_OPT="--cov certbot"; else COVERAGE_OPT=""; fi
+  - py.test certbot $COVERAGE_OPT
+after_success:
+  - if [ -z "$NO_COVERAGE" ]; then coveralls; fi
