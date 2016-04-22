@@ -11,6 +11,7 @@ setup(
     author_email='jamie@praekelt.com',
     packages=find_packages(),
     install_requires=[
+        'click',
         'treq',
         'Twisted',
         'uritools>=1.0.0'
@@ -23,4 +24,7 @@ setup(
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
     ],
+    entry_points={
+        'console_scripts': ['certbot = certbot.cli:main'],
+    }
 )
