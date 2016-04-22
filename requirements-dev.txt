@@ -1,0 +1,5 @@
+pytest
+pytest-coverage
+pytest-xdist
+flake8
+txfake>=0.1.1
