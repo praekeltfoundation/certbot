@@ -3,14 +3,14 @@ import sys
 
 
 @click.command()
+@click.option('--acme',
+              help='The address for the ACME Directory Resource',
+              default='https://acme-v01.api.letsencrypt.org/directory',
+              show_default=True)
 @click.option('--email',
               help='Email address for Let\'s Encrypt certificate registration '
                    'and recovery contact',
               required=True)
-@click.option('--server',
-              help='The address for the ACME Directory Resource',
-              default='https://acme-v01.api.letsencrypt.org/directory',
-              show_default=True)
 @click.option('--storage-dir',
               help='Path to directory for storing certificates')
 @click.option('--marathon', default='http://marathon.service.consul:8080',
@@ -30,7 +30,7 @@ import sys
 @click.option('--consul', default='http://consul.service.consul:8500',
               help='The address for the Consul HTTP API',
               show_default=True)
-@click.option('--consul-prefix', default='certbot',
+@click.option('--kv-prefix', default='certbot',
               help='Prefix for all paths to certificates in Consul\'s '
                    'key/value store',
               show_default=True)
@@ -45,9 +45,9 @@ import sys
 @click.option('--debug',
               help='Log debug output',
               is_flag=True)
-def main(email, server, storage_dir,         # Certificates
+def main(acme, email, storage_dir,           # ACME
          marathon, listen, port, advertise,  # Marathon
-         consul, consul_prefix, poll,        # Consul
+         consul, kv_prefix, poll,            # Consul
          logfile, debug):                    # Logging
     """
     A tool to automatically request, renew and distribute Let's Encrypt
