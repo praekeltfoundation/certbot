@@ -7,6 +7,9 @@ import sys
               help='Email address for Let\'s Encrypt certificate registration '
                    'and recovery contact',
               required=True)
+@click.option('--server',
+              help='The address for the ACME Directory Resource',
+              default='https://acme-v01.api.letsencrypt.org/directory')
 @click.option('--storage-dir',
               help='Path to directory for storing certificates')
 @click.option('--marathon', default='http://marathon.service.consul:8080',
@@ -36,7 +39,7 @@ import sys
 @click.option('--debug',
               help='Log debug output',
               is_flag=True)
-def main(email, storage_dir,                 # Certificates
+def main(email, server, storage_dir,         # Certificates
          marathon, listen, port, advertise,  # Marathon
          consul, consul_prefix, poll,        # Consul
          logfile, debug):                    # Logging
