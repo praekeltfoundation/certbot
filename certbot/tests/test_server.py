@@ -27,7 +27,7 @@ class FakeServerAgent(ProxyAgent):
             bodyProducer, parsedURI.originForm)
 
 
-class MarathonEventServerTest(TestCase):
+class TestMarathonEventServer(TestCase):
 
     def setUp(self):
         self.event_server = MarathonEventServer()
