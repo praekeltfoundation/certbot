@@ -115,8 +115,23 @@ class MarathonEventServerTest(TestCase):
                          ['application/json; charset=utf-8'])
         self.assertEqual(response_json, {'error': 'Something went wrong'})
 
+    @inlineCallbacks
     def test_handle_event_unknown(self):
-        pass
+        json_data = {
+          'eventType': 'subscribe_event',
+          'timestamp': '2014-03-01T23:29:30.158Z',
+          'clientIp': '1.2.3.4',
+          'callbackUrl': 'http://subscriber.acme.org/callbacks'
+        }
+        response = yield self.request('POST', '/events', json_data=json_data)
+        response_json = yield response.json()
+
+        self.assertEqual(response.code, 501)
+        self.assertEqual(response.headers.getRawHeaders('Content-Type'),
+                         ['application/json; charset=utf-8'])
+        self.assertEqual(response_json, {
+            'error': 'Event type subscribe_event not supported.'
+        })
 
     def test_health_healthy(self):
         pass
