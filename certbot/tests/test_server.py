@@ -44,9 +44,7 @@ class TestMarathonEventServer(TestCase):
     def request(self, method, path, query=None, json_data=None):
         url = uricompose('http', 'www.example.com', path, query)
         data = None
-        headers = {
-            'Accept': 'application/json',
-        }
+        headers = {'Accept': 'application/json'}
 
         # Add JSON body if there is JSON data
         if json_data is not None:
