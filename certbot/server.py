@@ -6,8 +6,6 @@ from twisted.web.http import (
 
 from klein import Klein
 
-from certbot.utils import json_dumpb
-
 
 class MarathonEventServer(object):
 
@@ -23,10 +21,21 @@ class MarathonEventServer(object):
     def run(self, host, port, log_file=None):
         self.app.run(host, port, log_file)
 
+    def _return_json(self, json_obj, request):
+        request.setHeader('Content-Type', 'application/json; charset=utf-8')
+        return json.dumps(json_obj).encode('utf-8')
+
+    def _ok_response(self, json_obj, request):
+        request.setResponseCode(OK)
+        return self._return_json(json_obj, request)
+
+    def _error_response(self, failure, request):
+        request.setResponseCode(INTERNAL_SERVER_ERROR)
+        return self._return_json({'error': failure.getErrorMessage()}, request)
+
     @app.route('/')
     def index(self, request):
-        request.setHeader('Content-Type', 'application/json')
-        return json_dumpb({})
+        return self._ok_response({}, request)
 
     @app.route('/events')
     def events(self, request):
@@ -36,41 +45,31 @@ class MarathonEventServer(object):
         :param klein.app.KleinRequest request:
             The Klein HTTP request
         """
-        request.setHeader('Content-Type', 'application/json')
         event = json.load(request.content)
         handler = self.event_dispatch.get(event.get('eventType'))
         if handler is None:
             return self.handle_unknown_event(request, event)
 
         d = handler(event)
-        d.addCallback(self.event_handler_success, request)
-        d.addErrback(self.event_handler_failure, request)
+        d.addCallback(self._ok_response, request)
+        d.addErrback(self._error_response, request)
 
         return d
-
-    def event_handler_success(self, response, request):
-        request.setResponseCode(OK)
-        return json.dumps(response)
-
-    def event_handler_failure(self, error, request):
-        request.setResponseCode(INTERNAL_SERVER_ERROR)
-        return json_dumpb(error.message())
 
     def handle_unknown_event(self, request, event):
         event_type = event.get('eventType')
         request.setResponseCode(NOT_IMPLEMENTED)
         log.msg('Not handling event type: %s' % (event_type,))
-        return json_dumpb({
+        return self._return_json({
             'error': 'Event type %s not supported.' % (event_type,)
-        })
+        }, request)
 
     @app.route('/health')
     def health(self, request):
         health = self.health_handler()
         response_code = OK if health.healthy else SERVICE_UNAVAILABLE
         request.setResponseCode(response_code)
-        request.setHeader('Content-Type', 'application/json')
-        return json_dumpb(health.json_message)
+        return self._return_json(health.json_message, request)
 
 
 class Health(object):

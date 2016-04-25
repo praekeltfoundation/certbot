@@ -43,13 +43,18 @@ class MarathonEventServerTest(TestCase):
 
     def request(self, method, path, query=None, json_data=None):
         url = uricompose('http', 'www.example.com', path, query)
-        data = json.dumps(json_data) if json_data is not None else None
-        treq_kwargs = {
-            'data': data,
-            'agent': self.agent
+        data = None
+        headers = {
+            'Accept': 'application/json',
         }
 
-        return treq.request(method, url, **treq_kwargs)
+        # Add JSON body if there is JSON data
+        if json_data is not None:
+            data = json.dumps(json_data).encode('utf-8')
+            headers['Content-Type'] = 'application/json; charset=utf-8'
+
+        return treq.request(
+            method, url, data=data, headers=headers, agent=self.agent)
 
     @inlineCallbacks
     def test_index(self):
