@@ -41,12 +41,13 @@ class MarathonEventServer(object):
 
     app = Klein()
     event_dispatch = {}
-
-    def __init__(self, health_handler):
-        self.health_handler = health_handler
+    health_handler = None
 
     def add_handler(self, event_type, event_handler):
         self.event_dispatch[event_type] = event_handler
+
+    def set_health_handler(self, health_handler):
+        self.health_handler = health_handler
 
     def run(self, host, port, log_file=None):
         self.app.run(host, port, log_file)
@@ -96,10 +97,19 @@ class MarathonEventServer(object):
 
     @app.route('/health')
     def health(self, request):
+        if self.health_handler is None:
+            return self._no_health_handler(request)
+
         health = self.health_handler()
         response_code = OK if health.healthy else SERVICE_UNAVAILABLE
         request.setResponseCode(response_code)
         return self._return_json(health.json_message, request)
+
+    def _no_health_handler(self, request):
+        request.setResponseCode(NOT_IMPLEMENTED)
+        return self._return_json({
+            'error': 'Cannot determine service health: no handler set'
+        }, request)
 
 
 class Health(object):

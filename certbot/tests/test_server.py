@@ -30,7 +30,7 @@ class FakeServerAgent(ProxyAgent):
 class MarathonEventServerTest(TestCase):
 
     def setUp(self):
-        self.event_server = MarathonEventServer(lambda: Health(200))
+        self.event_server = MarathonEventServer()
 
         # FIXME: Current released version (15.3.1) of Klein expects the host to
         # have a 'port' attribute which in the case of Twisted's UNIX localhost
@@ -133,8 +133,40 @@ class MarathonEventServerTest(TestCase):
             'error': 'Event type subscribe_event not supported.'
         })
 
+    @inlineCallbacks
     def test_health_healthy(self):
-        pass
+        self.event_server.set_health_handler(
+            lambda: Health(True, {'message': 'I\'m 200/OK!'}))
 
+        response = yield self.request('GET', '/health')
+        response_json = yield response.json()
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers.getRawHeaders('Content-Type'),
+                         ['application/json; charset=utf-8'])
+        self.assertEqual(response_json, {'message': 'I\'m 200/OK!'})
+
+    @inlineCallbacks
     def test_health_unhealthy(self):
-        pass
+        self.event_server.set_health_handler(
+            lambda: Health(False, {'error': 'I\'m sad :('}))
+
+        response = yield self.request('GET', '/health')
+        response_json = yield response.json()
+
+        self.assertEqual(response.code, 503)
+        self.assertEqual(response.headers.getRawHeaders('Content-Type'),
+                         ['application/json; charset=utf-8'])
+        self.assertEqual(response_json, {'error': 'I\'m sad :('})
+
+    @inlineCallbacks
+    def test_health_handler_unset(self):
+        response = yield self.request('GET', '/health')
+        response_json = yield response.json()
+
+        self.assertEqual(response.code, 501)
+        self.assertEqual(response.headers.getRawHeaders('Content-Type'),
+                         ['application/json; charset=utf-8'])
+        self.assertEqual(response_json, {
+            'error': 'Cannot determine service health: no handler set'
+        })
