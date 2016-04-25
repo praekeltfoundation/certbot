@@ -122,8 +122,8 @@ class MarathonEventServer(object):
 
     def _handle_unknown_event(self, request, event):
         event_type = event.get('eventType')
-        request.setResponseCode(NOT_IMPLEMENTED)
         log.msg('Not handling event type: %s' % (event_type,))
+        request.setResponseCode(NOT_IMPLEMENTED)
         return self._return_json({
             'error': 'Event type %s not supported.' % (event_type,)
         }, request)
@@ -145,6 +145,7 @@ class MarathonEventServer(object):
         return self._return_json(health.json_message, request)
 
     def _no_health_handler(self, request):
+        log.msg('Request to /health made but no handler is set')
         request.setResponseCode(NOT_IMPLEMENTED)
         return self._return_json({
             'error': 'Cannot determine service health: no handler set'
