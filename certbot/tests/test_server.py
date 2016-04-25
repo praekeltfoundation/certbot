@@ -1,7 +1,7 @@
 import json
 import treq
 
-from twisted.internet.defer import inlineCallbacks, succeed
+from twisted.internet.defer import fail, inlineCallbacks, succeed
 from twisted.protocols.loopback import _LoopbackAddress
 from twisted.trial.unittest import TestCase
 from twisted.web.client import ProxyAgent, URI
@@ -90,8 +90,30 @@ class MarathonEventServerTest(TestCase):
                          ['application/json; charset=utf-8'])
         self.assertEqual(response_json, {'message': 'hello'})
 
+    @inlineCallbacks
     def test_handle_event_failure(self):
-        pass
+        self.event_server.add_handler(
+            'status_update_event',
+            lambda event: fail(RuntimeError('Something went wrong')))
+
+        json_data = {
+            'eventType': 'status_update_event',
+            'timestamp': '2014-03-01T23:29:30.158Z',
+            'slaveId': '20140909-054127-177048842-5050-1494-0',
+            'taskId': 'my-app_0-1396592784349',
+            'taskStatus': 'TASK_RUNNING',
+            'appId': '/my-app',
+            'host': 'slave-1234.acme.org',
+            'ports': [31372],
+            'version': '2014-04-04T06:26:23.051Z',
+        }
+        response = yield self.request('POST', '/events', json_data=json_data)
+        response_json = yield response.json()
+
+        self.assertEqual(response.code, 500)
+        self.assertEqual(response.headers.getRawHeaders('Content-Type'),
+                         ['application/json; charset=utf-8'])
+        self.assertEqual(response_json, {'error': 'Something went wrong'})
 
     def test_handle_event_unknown(self):
         pass
