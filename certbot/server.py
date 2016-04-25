@@ -44,23 +44,56 @@ class MarathonEventServer(object):
     health_handler = None
 
     def add_handler(self, event_type, event_handler):
+        """
+        Add a handler for a certain event type.
+
+        :param event_type:
+            The type of event for which this handler should be invoked.
+        :param event_handler:
+            The handler for the given event type. This must be a callable that
+            returns a Deferred.
+        """
         self.event_dispatch[event_type] = event_handler
 
     def set_health_handler(self, health_handler):
+        """
+        Set the handler for the health endpoint.
+
+        :param health_handler:
+            The handler for health status requests. This must be a callable
+            that returns a Health object.
+        """
         self.health_handler = health_handler
 
     def run(self, host, port, log_file=None):
+        """
+        Run the server, i.e. start listening for requests on the given host and
+        port.
+
+        :param host:
+            The address to the interface to listen on.
+        :param port:
+            The port to bind to.
+        :param log_file:
+            The file to write logs to.
+        """
         self.app.run(host, port, log_file)
 
     def _return_json(self, json_obj, request):
+        """
+        Return a serialized JSON object and set the appropriate Content-Type
+        header.
+        """
         request.setHeader('Content-Type', 'application/json; charset=utf-8')
         return json.dumps(json_obj).encode('utf-8')
 
     def _ok_response(self, json_obj, request):
+        """ Return a 200/OK response with a JSON object. """
         request.setResponseCode(OK)
         return self._return_json(json_obj, request)
 
     def _error_response(self, failure, request):
+        """ Return a 503 response with a JSON object. """
         request.setResponseCode(INTERNAL_SERVER_ERROR)
         return self._return_json({'error': failure.getErrorMessage()}, request)
 
@@ -79,7 +112,7 @@ class MarathonEventServer(object):
         event = _json_content(request)
         handler = self.event_dispatch.get(event.get('eventType'))
         if handler is None:
-            return self.handle_unknown_event(request, event)
+            return self._handle_unknown_event(request, event)
 
         d = handler(event)
         d.addCallback(self._ok_response, request)
@@ -87,7 +120,7 @@ class MarathonEventServer(object):
 
         return d
 
-    def handle_unknown_event(self, request, event):
+    def _handle_unknown_event(self, request, event):
         event_type = event.get('eventType')
         request.setResponseCode(NOT_IMPLEMENTED)
         log.msg('Not handling event type: %s' % (event_type,))
@@ -97,6 +130,12 @@ class MarathonEventServer(object):
 
     @app.route('/health')
     def health(self, request):
+        """
+        Listens to incoming pings from Marathon on ``/events``.
+
+        :param klein.app.KleinRequest request:
+            The Klein HTTP request
+        """
         if self.health_handler is None:
             return self._no_health_handler(request)
 
@@ -114,5 +153,14 @@ class MarathonEventServer(object):
 
 class Health(object):
     def __init__(self, healthy, json_message={}):
+        """
+        Health objects store the current health status of the service.
+
+        :param bool healthy:
+            The service is either healthy (True) or unhealthy (False).
+        :param json_message:
+            An object that can be serialized as JSON that will be sent as a
+            message when the health status is requested.
+        """
         self.healthy = healthy
         self.json_message = json_message

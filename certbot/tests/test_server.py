@@ -20,7 +20,7 @@ class FakeServerAgent(ProxyAgent):
     thing to do when talking to a proxy but not for non-proxy servers.
     """
     def request(self, method, uri, headers=None, bodyProducer=None):
-        key = ("http-proxy", self._proxyEndpoint)
+        key = ('http-proxy', self._proxyEndpoint)
         parsedURI = URI.fromBytes(uri)
         return self._requestWithEndpoint(
             key, self._proxyEndpoint, method, parsedURI, headers,
@@ -58,6 +58,10 @@ class MarathonEventServerTest(TestCase):
 
     @inlineCallbacks
     def test_index(self):
+        """
+        When a GET request is made to the root path ``/``, the server should
+        return a 200 status code and an empty JSON object.
+        """
         response = yield self.request('GET', '/')
         response_json = yield response.json()
 
@@ -68,6 +72,12 @@ class MarathonEventServerTest(TestCase):
 
     @inlineCallbacks
     def test_handle_event_success(self):
+        """
+        When a POST request is made to the events endpoint, and an event is
+        sent that has a handler set, and the handler returns successfully, a
+        200 status code should be returned as well as the JSON message from the
+        handler.
+        """
         self.event_server.add_handler(
             'status_update_event', lambda event: succeed({'message': 'hello'}))
 
@@ -92,6 +102,12 @@ class MarathonEventServerTest(TestCase):
 
     @inlineCallbacks
     def test_handle_event_failure(self):
+        """
+        When a POST request is made to the events endpoint, and an event is
+        sent that has a handler set, and the handler fails, a 500 status code
+        should be returned as well as a JSON object containing the error
+        message from the handler.
+        """
         self.event_server.add_handler(
             'status_update_event',
             lambda event: fail(RuntimeError('Something went wrong')))
@@ -117,6 +133,12 @@ class MarathonEventServerTest(TestCase):
 
     @inlineCallbacks
     def test_handle_event_unknown(self):
+        """
+        When a POST request is made to the events endpoint, and an event is
+        sent that has a handler is not set, a 501 status code should be
+        returned as well as a JSON message that explains that the event type
+        is not supported.
+        """
         json_data = {
           'eventType': 'subscribe_event',
           'timestamp': '2014-03-01T23:29:30.158Z',
@@ -135,6 +157,11 @@ class MarathonEventServerTest(TestCase):
 
     @inlineCallbacks
     def test_health_healthy(self):
+        """
+        When a GET request is made to the health endpoint, and the health
+        handler reports that the service is healthy, a 200 status code should
+        be returned together with the JSON message from the handler.
+        """
         self.event_server.set_health_handler(
             lambda: Health(True, {'message': 'I\'m 200/OK!'}))
 
@@ -148,6 +175,11 @@ class MarathonEventServerTest(TestCase):
 
     @inlineCallbacks
     def test_health_unhealthy(self):
+        """
+        When a GET request is made to the health endpoint, and the health
+        handler reports that the service is unhealthy, a 503 status code should
+        be returned together with the JSON message from the handler.
+        """
         self.event_server.set_health_handler(
             lambda: Health(False, {'error': 'I\'m sad :('}))
 
@@ -161,6 +193,11 @@ class MarathonEventServerTest(TestCase):
 
     @inlineCallbacks
     def test_health_handler_unset(self):
+        """
+        When a GET request is made to the health endpoint, and the health
+        handler hasn't been set, a 501 status code should be returned together
+        with a JSON message that explains that the handler is not set.
+        """
         response = yield self.request('GET', '/health')
         response_json = yield response.json()
 
