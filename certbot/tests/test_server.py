@@ -59,9 +59,12 @@ class MarathonEventServerTest(TestCase):
     @inlineCallbacks
     def test_index(self):
         response = yield self.request('GET', '/')
-        response_json = yield response.content()
+        response_json = yield response.json()
 
-        self.assertEqual(response_json, '')
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers.getRawHeaders('Content-Type'),
+                         ['application/json; charset=utf-8'])
+        self.assertEqual(response_json, {})
 
     def test_handle_event_success(self):
         pass
