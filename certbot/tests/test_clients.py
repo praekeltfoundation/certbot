@@ -32,20 +32,18 @@ class JsonClientTestBase(TestCase):
     def json_dumpb(self, json_data):
         return json.dumps(json_data).encode('utf-8')
 
-    def write_json_response(self, request, json_data, response_code=200,
-                            headers={'Content-Type': 'application/json'}):
+    def write_json_response(self, request, json_data, response_code=200):
         request.setResponseCode(response_code)
-        for name, value in headers.items():
-            request.setHeader(name, value)
+        request.setHeader('Content-Type', 'application/json; charset=utf-8')
         request.write(self.json_dumpb(json_data))
         request.finish()
 
     def read_json_response(self, request):
-        return json.loads(request.content.getvalue().decode('utf-8'))
+        return json.loads(request.content.read().decode('utf-8'))
 
     def uri(self, path, encode=False):
         uri = '%s%s' % (self.client.endpoint.geturi(), path,)
-        return uri.encode('utf-8') if encode else uri
+        return uri.encode('ascii') if encode else uri
 
     def parse_query(self, uri):
         """
@@ -73,7 +71,6 @@ class JsonClientTest(JsonClientTestBase):
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
         self.assertEqual(request.uri, self.uri('/hello', encode=True))
-        self.assertEqual(request.getHeader('content-type'), 'application/json')
         self.assertEqual(request.getHeader('accept'), 'application/json')
         self.assertEqual(request.content.read(), b'')
 
@@ -89,13 +86,17 @@ class JsonClientTest(JsonClientTestBase):
     def test_request_json_data(self):
         """
         When a request is made with the json_data parameter set, that data
-        should be sent as JSON.
+        should be sent as JSON and the content-type header should be set to
+        indicate this.
         """
         d = self.client.request('GET', '/hello', json_data={'test': 'hello'})
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
         self.assertEqual(request.uri, self.uri('/hello', encode=True))
+        self.assertEqual(request.getHeader('content-type'),
+                         'application/json; charset=utf-8')
+        self.assertEqual(request.getHeader('accept'), 'application/json')
         self.assertEqual(self.read_json_response(request), {'test': 'hello'})
 
         request.setResponseCode(200)
