@@ -1,5 +1,3 @@
-import json
-
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.trial.unittest import TestCase
 from twisted.web.server import NOT_DONE_YET
@@ -7,10 +5,10 @@ from twisted.web.server import NOT_DONE_YET
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
-from uritools import urisplit
-
 from certbot.clients import (
     ConsulClient, HTTPError, JsonClient, MarathonClient)
+from certbot.tests.helpers import (
+    parse_query, read_json_response, write_json_response)
 
 
 class JsonClientTestBase(TestCase):
@@ -29,29 +27,9 @@ class JsonClientTestBase(TestCase):
         """To be implemented by subclass"""
         raise NotImplementedError()
 
-    def json_dumpb(self, json_data):
-        return json.dumps(json_data).encode('utf-8')
-
-    def write_json_response(self, request, json_data, response_code=200):
-        request.setResponseCode(response_code)
-        request.setHeader('Content-Type', 'application/json; charset=utf-8')
-        request.write(self.json_dumpb(json_data))
-        request.finish()
-
-    def read_json_response(self, request):
-        return json.loads(request.content.read().decode('utf-8'))
-
     def uri(self, path, encode=False):
         uri = '%s%s' % (self.client.endpoint.geturi(), path,)
         return uri.encode('ascii') if encode else uri
-
-    def parse_query(self, uri):
-        """
-        When Twisted parses "args" from the URI, it leaves out query parameters
-        that have no value. In those cases we rather use uritools to parse the
-        query parameters.
-        """
-        return urisplit(uri).getquerydict()
 
 
 class JsonClientTest(JsonClientTestBase):
@@ -97,7 +75,7 @@ class JsonClientTest(JsonClientTestBase):
         self.assertEqual(request.getHeader('content-type'),
                          'application/json; charset=utf-8')
         self.assertEqual(request.getHeader('accept'), 'application/json')
-        self.assertEqual(self.read_json_response(request), {'test': 'hello'})
+        self.assertEqual(read_json_response(request), {'test': 'hello'})
 
         request.setResponseCode(200)
         request.finish()
@@ -134,9 +112,7 @@ class JsonClientTest(JsonClientTestBase):
         self.assertEqual(request.method, b'GET')
         self.assertEqual(request.uri, self.uri('/hello', encode=True))
 
-        request.setResponseCode(200)
-        request.write(self.json_dumpb({'test': 'hello'}))
-        request.finish()
+        write_json_response(request, {'test': 'hello'})
 
         res = yield d
         self.assertEqual(res, {'test': 'hello'})
@@ -203,7 +179,7 @@ class MarathonClientTest(JsonClientTestBase):
         self.assertEqual(request.method, b'GET')
         self.assertEqual(request.uri, self.uri('/my-path', encode=True))
 
-        self.write_json_response(request, {
+        write_json_response(request, {
             'field-key': 'field-value',
             'other-field-key': 'do-not-care'
         })
@@ -224,7 +200,7 @@ class MarathonClientTest(JsonClientTestBase):
         self.assertEqual(request.method, b'GET')
         self.assertEqual(request.uri, self.uri('/my-path', encode=True))
 
-        self.write_json_response(request, {'other-field-key': 'do-not-care'})
+        write_json_response(request, {'other-field-key': 'do-not-care'})
 
         yield wait0()
         failure = self.failureResultOf(d, KeyError)
@@ -246,7 +222,7 @@ class MarathonClientTest(JsonClientTestBase):
         self.assertEqual(request.uri,
                          self.uri('/v2/eventSubscriptions', encode=True))
 
-        self.write_json_response(request, {
+        write_json_response(request, {
             'callbackUrls': [
                 'http://localhost:7000/events?registration=localhost'
             ]
@@ -276,7 +252,7 @@ class MarathonClientTest(JsonClientTestBase):
             ]
         })
 
-        self.write_json_response(request, {
+        write_json_response(request, {
             # TODO: Add check that callbackUrl is correct
             'callbackUrl':
                 'http://localhost:7000/events?registration=localhost',
@@ -306,7 +282,7 @@ class MarathonClientTest(JsonClientTestBase):
             ]
         })
 
-        self.write_json_response(request, {}, response_code=201)
+        write_json_response(request, {}, response_code=201)
 
         res = yield d
         self.assertEqual(res, False)
@@ -357,7 +333,7 @@ class MarathonClientTest(JsonClientTestBase):
                 }
             ]
         }
-        self.write_json_response(request, apps)
+        write_json_response(request, apps)
 
         res = yield d
         self.assertEqual(res, apps['apps'])
@@ -437,7 +413,7 @@ class MarathonClientTest(JsonClientTestBase):
                 }
             }
         }
-        self.write_json_response(request, app)
+        write_json_response(request, app)
 
         res = yield d
         self.assertEqual(res, app['app'])
@@ -481,7 +457,7 @@ class MarathonClientTest(JsonClientTestBase):
                 }
             ]
         }
-        self.write_json_response(request, tasks)
+        write_json_response(request, tasks)
 
         res = yield d
         self.assertEqual(res, tasks['tasks'])
@@ -520,7 +496,7 @@ class ConsulClientTest(JsonClientTestBase):
         self.assertEqual(
             request.uri,
             b'http://foo.example.com:8500/v1/agent/service/register')
-        self.assertEqual(self.read_json_response(request), registration)
+        self.assertEqual(read_json_response(request), registration)
 
         request.setResponseCode(200)
         request.finish()
@@ -564,7 +540,7 @@ class ConsulClientTest(JsonClientTestBase):
         self.assertEqual(request.method, b'PUT')
         self.assertEqual(request.uri,
                          self.uri('/v1/agent/service/register', encode=True))
-        self.assertEqual(self.read_json_response(request), registration)
+        self.assertEqual(read_json_response(request), registration)
 
         request.setResponseCode(200)
         request.finish()
@@ -601,7 +577,7 @@ class ConsulClientTest(JsonClientTestBase):
         request = yield self.requests.get()
         self.assertEqual(request.method, b'PUT')
         self.assertEqual(request.uri, self.uri('/v1/kv/foo', encode=True))
-        self.assertEqual(self.read_json_response(request), {'bar': 'baz'})
+        self.assertEqual(read_json_response(request), {'bar': 'baz'})
 
         request.setResponseCode(200)
         request.write(b'true')
@@ -624,17 +600,13 @@ class ConsulClientTest(JsonClientTestBase):
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
         self.assertEqual(request.path, self.uri('/v1/kv/foo', encode=True))
-        self.assertEqual(self.parse_query(request.uri), {
-            'keys': [None]
-        })
+        self.assertEqual(parse_query(request.uri), {'keys': [None]})
 
         keys = [
             '/foo/bar',
             '/foo/baz/boo'
         ]
-        request.setResponseCode(200)
-        request.write(self.json_dumpb(keys))
-        request.finish()
+        write_json_response(request, keys)
 
         res = yield d
         self.assertEqual(res, keys)
@@ -651,7 +623,7 @@ class ConsulClientTest(JsonClientTestBase):
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
         self.assertEqual(request.path, self.uri('/v1/kv/foo', encode=True))
-        self.assertEqual(self.parse_query(request.uri), {
+        self.assertEqual(parse_query(request.uri), {
             'keys': [None],
             'separator': ['/']
         })
@@ -660,9 +632,7 @@ class ConsulClientTest(JsonClientTestBase):
             '/foo/bar',
             '/foo/baz/'
         ]
-        request.setResponseCode(200)
-        request.write(self.json_dumpb(keys))
-        request.finish()
+        write_json_response(request, keys)
 
         res = yield d
         self.assertEqual(res, keys)
@@ -695,7 +665,7 @@ class ConsulClientTest(JsonClientTestBase):
         request = yield self.requests.get()
         self.assertEqual(request.method, b'DELETE')
         self.assertEqual(request.path, self.uri('/v1/kv/foo', encode=True))
-        self.assertEqual(self.parse_query(request.uri), {
+        self.assertEqual(parse_query(request.uri), {
             'recurse': [None]
         })
 
@@ -727,9 +697,7 @@ class ConsulClientTest(JsonClientTestBase):
                 'Address': '10.1.10.12'
             }
         ]
-        request.setResponseCode(200)
-        request.write(self.json_dumpb(nodes))
-        request.finish()
+        write_json_response(request, nodes)
 
         res = yield d
         self.assertEqual(res, nodes)
@@ -756,9 +724,7 @@ class ConsulClientTest(JsonClientTestBase):
                 'Port': 8000
             }
         }
-        request.setResponseCode(200)
-        request.write(self.json_dumpb(services))
-        request.finish()
+        write_json_response(request, services)
 
         res = yield d
         self.assertEqual(res, services)
