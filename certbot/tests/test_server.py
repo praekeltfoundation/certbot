@@ -135,9 +135,9 @@ class TestMarathonEventServer(TestCase):
     def test_handle_event_unknown(self):
         """
         When a POST request is made to the events endpoint, and an event is
-        sent that has a handler is not set, a 501 status code should be
-        returned as well as a JSON message that explains that the event type
-        is not supported.
+        sent that doesn't have a handler, a 501 status code should be returned
+        as well as a JSON message that explains that the event type is not
+        supported.
         """
         json_data = {
           'eventType': 'subscribe_event',
