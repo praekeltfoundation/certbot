@@ -4,7 +4,7 @@ import treq
 from twisted.internet.defer import inlineCallbacks
 from twisted.protocols.loopback import _LoopbackAddress
 from twisted.trial.unittest import TestCase
-from twisted.web.client import ProxyAgent
+from twisted.web.client import ProxyAgent, URI
 from twisted.web.server import Site
 
 from txfake import FakeServer
@@ -12,6 +12,19 @@ from txfake import FakeServer
 from uritools import uricompose
 
 from certbot.server import MarathonEventServer, Health
+
+
+class FakeServerAgent(ProxyAgent):
+    """
+    ProxyAgent uses the entire URI as the request path, which is the correct
+    thing to do when talking to a proxy but not for non-proxy servers.
+    """
+    def request(self, method, uri, headers=None, bodyProducer=None):
+        key = ("http-proxy", self._proxyEndpoint)
+        parsedURI = URI.fromBytes(uri)
+        return self._requestWithEndpoint(
+            key, self._proxyEndpoint, method, parsedURI, headers,
+            bodyProducer, parsedURI.originForm)
 
 
 class MarathonEventServerTest(TestCase):
@@ -26,7 +39,7 @@ class MarathonEventServerTest(TestCase):
         _LoopbackAddress.port = 7000
 
         fake_server = FakeServer(Site(self.event_server.app.resource()))
-        self.agent = ProxyAgent(fake_server.endpoint)
+        self.agent = FakeServerAgent(fake_server.endpoint)
 
     def request(self, method, path, query=None, json_data=None):
         url = uricompose('http', 'www.example.com', path, query)
