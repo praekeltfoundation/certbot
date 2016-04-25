@@ -1,3 +1,4 @@
+import cgi
 import json
 
 from twisted.python import log
@@ -5,6 +6,35 @@ from twisted.web.http import (
     OK, INTERNAL_SERVER_ERROR, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE)
 
 from klein import Klein
+
+
+# The below 3 methods are roughly stolen from the treq.content module and help
+# to decode JSON content from requests correctly.
+def _encoding_from_headers(headers):
+    content_types = headers.getRawHeaders('content-type')
+    if content_types is None:
+        return None
+
+    # This seems to be the choice browsers make when encountering multiple
+    # content-type headers.
+    content_type, params = cgi.parse_header(content_types[-1])
+
+    if 'charset' in params:
+        return params.get('charset').strip("'\"")
+
+
+def _text_content(request, encoding='ISO-8859-1'):
+    e = _encoding_from_headers(request.requestHeaders)
+    content = request.content.read()
+
+    if e is not None:
+        return content.decode(e)
+
+    return content.decode(encoding)
+
+
+def _json_content(request):
+    return json.loads(_text_content(request))
 
 
 class MarathonEventServer(object):
@@ -45,7 +75,7 @@ class MarathonEventServer(object):
         :param klein.app.KleinRequest request:
             The Klein HTTP request
         """
-        event = json.load(request.content)
+        event = _json_content(request)
         handler = self.event_dispatch.get(event.get('eventType'))
         if handler is None:
             return self.handle_unknown_event(request, event)
