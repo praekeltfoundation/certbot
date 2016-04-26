@@ -8,6 +8,7 @@ from twisted.web.server import Site
 
 from testtools import TestCase
 from testtools.matchers import Equals
+from testtools.twistedsupport import AsynchronousDeferredRunTest
 
 from txfake import FakeServer
 
@@ -30,6 +31,8 @@ class FakeServerAgent(ProxyAgent):
 
 
 class TestMarathonEventServer(TestCase):
+
+    run_tests_with = AsynchronousDeferredRunTest
 
     def setUp(self):
         super(TestMarathonEventServer, self).setUp()
