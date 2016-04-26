@@ -7,7 +7,7 @@ from twisted.web.client import ProxyAgent, URI
 from twisted.web.server import Site
 
 from testtools import TestCase
-from testtools.matchers import Equals
+from testtools.matchers import Equals, MatchesStructure
 from testtools.twistedsupport import AsynchronousDeferredRunTest
 
 from txfake import FakeServer
@@ -15,6 +15,7 @@ from txfake import FakeServer
 from uritools import uricompose
 
 from certbot.server import MarathonEventServer, Health
+from certbot.tests.matchers import HasHeader
 
 
 class FakeServerAgent(ProxyAgent):
@@ -28,6 +29,17 @@ class FakeServerAgent(ProxyAgent):
         return self._requestWithEndpoint(
             key, self._proxyEndpoint, method, parsedURI, headers,
             bodyProducer, parsedURI.originForm)
+
+
+def IsJsonResponseWithCode(code):
+    """
+    Match the status code on a treq.response object and check that a header is
+    set to indicate that the content type is UTF-8 encoded JSON.
+    """
+    return MatchesStructure(
+        code=Equals(code),
+        headers=HasHeader('Content-Type', ['application/json; charset=utf-8'])
+    )
 
 
 class TestMarathonEventServer(TestCase):
@@ -68,11 +80,9 @@ class TestMarathonEventServer(TestCase):
         return a 200 status code and an empty JSON object.
         """
         response = yield self.request('GET', '/')
-        response_json = yield response.json()
+        self.assertThat(response, IsJsonResponseWithCode(200))
 
-        self.assertThat(response.code, Equals(200))
-        self.assertThat(response.headers.getRawHeaders('Content-Type'),
-                        Equals(['application/json; charset=utf-8']))
+        response_json = yield response.json()
         self.assertThat(response_json, Equals({}))
 
     @inlineCallbacks
@@ -98,11 +108,9 @@ class TestMarathonEventServer(TestCase):
             'version': '2014-04-04T06:26:23.051Z',
         }
         response = yield self.request('POST', '/events', json_data=json_data)
-        response_json = yield response.json()
+        self.assertThat(response, IsJsonResponseWithCode(200))
 
-        self.assertThat(response.code, Equals(200))
-        self.assertThat(response.headers.getRawHeaders('Content-Type'),
-                        Equals(['application/json; charset=utf-8']))
+        response_json = yield response.json()
         self.assertThat(response_json, Equals({'message': 'hello'}))
 
     @inlineCallbacks
@@ -129,11 +137,9 @@ class TestMarathonEventServer(TestCase):
             'version': '2014-04-04T06:26:23.051Z',
         }
         response = yield self.request('POST', '/events', json_data=json_data)
-        response_json = yield response.json()
+        self.assertThat(response, IsJsonResponseWithCode(500))
 
-        self.assertThat(response.code, Equals(500))
-        self.assertThat(response.headers.getRawHeaders('Content-Type'),
-                        Equals(['application/json; charset=utf-8']))
+        response_json = yield response.json()
         self.assertThat(response_json,
                         Equals({'error': 'Something went wrong'}))
 
@@ -152,11 +158,9 @@ class TestMarathonEventServer(TestCase):
           'callbackUrl': 'http://subscriber.acme.org/callbacks'
         }
         response = yield self.request('POST', '/events', json_data=json_data)
-        response_json = yield response.json()
+        self.assertThat(response, IsJsonResponseWithCode(501))
 
-        self.assertThat(response.code, Equals(501))
-        self.assertThat(response.headers.getRawHeaders('Content-Type'),
-                        Equals(['application/json; charset=utf-8']))
+        response_json = yield response.json()
         self.assertThat(response_json, Equals({
             'error': 'Event type subscribe_event not supported.'
         }))
@@ -172,11 +176,9 @@ class TestMarathonEventServer(TestCase):
             lambda: Health(True, {'message': 'I\'m 200/OK!'}))
 
         response = yield self.request('GET', '/health')
-        response_json = yield response.json()
+        self.assertThat(response, IsJsonResponseWithCode(200))
 
-        self.assertThat(response.code, Equals(200))
-        self.assertThat(response.headers.getRawHeaders('Content-Type'),
-                        Equals(['application/json; charset=utf-8']))
+        response_json = yield response.json()
         self.assertThat(response_json, Equals({'message': 'I\'m 200/OK!'}))
 
     @inlineCallbacks
@@ -190,11 +192,9 @@ class TestMarathonEventServer(TestCase):
             lambda: Health(False, {'error': 'I\'m sad :('}))
 
         response = yield self.request('GET', '/health')
-        response_json = yield response.json()
+        self.assertThat(response, IsJsonResponseWithCode(503))
 
-        self.assertThat(response.code, Equals(503))
-        self.assertThat(response.headers.getRawHeaders('Content-Type'),
-                        Equals(['application/json; charset=utf-8']))
+        response_json = yield response.json()
         self.assertThat(response_json, Equals({'error': 'I\'m sad :('}))
 
     @inlineCallbacks
@@ -205,11 +205,9 @@ class TestMarathonEventServer(TestCase):
         with a JSON message that explains that the handler is not set.
         """
         response = yield self.request('GET', '/health')
-        response_json = yield response.json()
+        self.assertThat(response, IsJsonResponseWithCode(501))
 
-        self.assertThat(response.code, Equals(501))
-        self.assertThat(response.headers.getRawHeaders('Content-Type'),
-                        Equals(['application/json; charset=utf-8']))
+        response_json = yield response.json()
         self.assertThat(response_json, Equals({
             'error': 'Cannot determine service health: no handler set'
         }))
