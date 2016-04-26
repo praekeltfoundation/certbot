@@ -28,7 +28,7 @@ class TestHasHeader(TestCase):
         self.assertThat(match.describe(),
                         Equals('The response does not have a "test" header'))
         self.assertThat(match.get_details(),
-                        Equals({'raw headers': {'Something else': ['abc']}}))
+                        Equals({'raw headers': {b'Something else': [b'abc']}}))
 
     def test_header_value_mismatch(self):
         """
