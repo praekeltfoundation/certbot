@@ -4,21 +4,10 @@ import testtools
 
 from testtools.twistedsupport import AsynchronousDeferredRunTest
 
-from uritools import urisplit
-
 
 class TestCase(testtools.TestCase):
     """ TestCase class for use with Twisted asynchornous tests. """
     run_tests_with = AsynchronousDeferredRunTest.make_factory(timeout=0.01)
-
-
-def parse_query(uri):
-    """
-    Parse the query dict from the given URI. When Twisted parses "args" from
-    the URI, it leaves out query parameters that have no value. In those cases
-    we rather use uritools to parse the query parameters.
-    """
-    return urisplit(uri).getquerydict()
 
 
 def read_json_response(request):
