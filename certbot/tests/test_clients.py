@@ -11,7 +11,7 @@ from certbot.clients import (
     ConsulClient, HTTPError, JsonClient, MarathonClient)
 from certbot.tests.helpers import (
     parse_query, read_json_response, TestCase, write_json_response)
-from certbot.tests.matchers import WithErrorTypeAndMessage
+from certbot.tests.matchers import HasHeader, WithErrorTypeAndMessage
 
 
 def HasMethodAndUri(method, uri):
@@ -70,8 +70,8 @@ class JsonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasMethodAndUri('GET', self.uri('/hello')))
-        self.assertThat(request.getHeader('accept'),
-                        Equals('application/json'))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
         self.assertThat(request.content.read(), Equals(b''))
 
         request.setResponseCode(200)
@@ -94,10 +94,10 @@ class JsonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasMethodAndUri('GET', self.uri('/hello')))
-        self.assertThat(request.getHeader('content-type'),
-                        Equals('application/json; charset=utf-8'))
-        self.assertThat(request.getHeader('accept'),
-                        Equals('application/json'))
+        self.assertThat(request.requestHeaders, HasHeader(
+            'content-type', ['application/json; charset=utf-8']))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
         self.assertThat(read_json_response(request), Equals({'test': 'hello'}))
 
         request.setResponseCode(200)
