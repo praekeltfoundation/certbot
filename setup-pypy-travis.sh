@@ -4,10 +4,10 @@
 deactivate
 
 # Install pyenv.
-curl -L https://raw.githubusercontent.com/yyuu/pyenv-installer/master/bin/pyenv-installer | bash
-export PATH="$HOME/.pyenv/bin:$PATH"
+git clone https://github.com/yyuu/pyenv.git "$HOME/.pyenv"
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
-eval "$(pyenv virtualenv-init -)"
 
 # Make sure the cache directory exists
 # NOTE: pyenv fails to install properly if ~/.pyenv is present, even if the
@@ -18,5 +18,5 @@ mkdir -p "${PYTHON_BUILD_CACHE_PATH:-$HOME/.pyenv/cache}"
 # Install pypy and make a virtualenv for it.
 pyenv install -s pypy-$PYPY_VERSION
 pyenv global pypy-$PYPY_VERSION
-virtualenv -p $(which python) ~/env-pypy-$PYPY_VERSION
-source ~/env-pypy-$PYPY_VERSION/bin/activate
+virtualenv -p $(which python) "$HOME/env-pypy-$PYPY_VERSION"
+source "$HOME/env-pypy-$PYPY_VERSION/bin/activate"
