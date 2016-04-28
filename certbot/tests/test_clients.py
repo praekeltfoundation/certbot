@@ -32,8 +32,9 @@ class JsonClientTestBase(TestCase):
         """To be implemented by subclass"""
         raise NotImplementedError()
 
-    def uri(self, path):
-        return '%s%s' % (self.client.endpoint.geturi(), path,)
+    def uri(self, path, encode=False):
+        uri = '%s%s' % (self.client.endpoint.geturi(), path,)
+        return uri.encode('ascii') if encode else uri
 
     def cleanup_d(self, d):
         self.addCleanup(lambda: d)
@@ -56,7 +57,7 @@ class JsonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/hello')))
+        self.assertThat(request.uri, Equals(self.uri('/hello', encode=True)))
         self.assertThat(request.getHeader('accept'),
                         Equals('application/json'))
         self.assertThat(request.content.read(), Equals(b''))
@@ -81,7 +82,7 @@ class JsonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/hello')))
+        self.assertThat(request.uri, Equals(self.uri('/hello', encode=True)))
         self.assertThat(request.getHeader('content-type'),
                         Equals('application/json; charset=utf-8'))
         self.assertThat(request.getHeader('accept'),
@@ -117,7 +118,7 @@ class JsonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/hello')))
+        self.assertThat(request.uri, Equals(self.uri('/hello', encode=True)))
 
         write_json_response(request, {'test': 'hello'})
 
@@ -134,7 +135,7 @@ class JsonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/hello')))
+        self.assertThat(request.uri, Equals(self.uri('/hello', encode=True)))
 
         request.setResponseCode(403)
         request.write(b'Unauthorized\n')
@@ -154,7 +155,7 @@ class JsonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/hello')))
+        self.assertThat(request.uri, Equals(self.uri('/hello', encode=True)))
 
         request.setResponseCode(502)
         request.write(b'Bad gateway\n')
@@ -180,7 +181,7 @@ class MarathonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/my-path')))
+        self.assertThat(request.uri, Equals(self.uri('/my-path', encode=True)))
 
         write_json_response(request, {
             'field-key': 'field-value',
@@ -201,7 +202,7 @@ class MarathonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/my-path')))
+        self.assertThat(request.uri, Equals(self.uri('/my-path', encode=True)))
 
         write_json_response(request, {'other-field-key': 'do-not-care'})
 
@@ -222,8 +223,8 @@ class MarathonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri,
-                        Equals(self.uri('/v2/eventSubscriptions')))
+        self.assertThat(request.uri, Equals(
+            self.uri('/v2/eventSubscriptions', encode=True)))
 
         write_json_response(request, {
             'callbackUrls': [
@@ -247,8 +248,8 @@ class MarathonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'POST'))
-        self.assertThat(request.path,
-                        Equals(self.uri('/v2/eventSubscriptions')))
+        self.assertThat(request.path, Equals(
+            self.uri('/v2/eventSubscriptions', encode=True)))
         self.assertThat(request.args, Equals({
             b'callbackUrl': [
                 b'http://localhost:7000/events?registration=localhost'
@@ -277,8 +278,8 @@ class MarathonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'POST'))
-        self.assertThat(request.path,
-                        Equals(self.uri('/v2/eventSubscriptions')))
+        self.assertThat(request.path, Equals(
+            self.uri('/v2/eventSubscriptions', encode=True)))
         self.assertThat(request.args, Equals({
             b'callbackUrl': [
                 b'http://localhost:7000/events?registration=localhost'
@@ -300,7 +301,7 @@ class MarathonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/v2/apps')))
+        self.assertThat(request.uri, Equals(self.uri('/v2/apps', encode=True)))
 
         apps = {
             'apps': [
@@ -351,7 +352,8 @@ class MarathonClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.uri, Equals(self.uri('/v2/apps/my-app')))
+        self.assertThat(request.uri, Equals(
+            self.uri('/v2/apps/my-app', encode=True)))
 
         app = {
             'app': {
@@ -432,7 +434,7 @@ class MarathonClientTest(JsonClientTestBase):
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
         self.assertThat(request.uri,
-                        Equals(self.uri('/v2/apps/my-app/tasks')))
+                        Equals(self.uri('/v2/apps/my-app/tasks', encode=True)))
 
         tasks = {
             'tasks': [
@@ -541,8 +543,8 @@ class ConsulClientTest(JsonClientTestBase):
         # Expect the request to fallback to the regular endpoint
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'PUT'))
-        self.assertThat(request.uri,
-                        Equals(self.uri('/v1/agent/service/register')))
+        self.assertThat(request.uri, Equals(
+            self.uri('/v1/agent/service/register', encode=True)))
         self.assertThat(read_json_response(request), Equals(registration))
 
         request.setResponseCode(200)
@@ -575,7 +577,8 @@ class ConsulClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'PUT'))
-        self.assertThat(request.uri, Equals(self.uri('/v1/kv/foo')))
+        self.assertThat(request.uri, Equals(
+            self.uri('/v1/kv/foo', encode=True)))
         self.assertThat(read_json_response(request), Equals({'bar': 'baz'}))
 
         request.setResponseCode(200)
@@ -598,7 +601,8 @@ class ConsulClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.path, Equals(self.uri('/v1/kv/foo')))
+        self.assertThat(request.path, Equals(
+            self.uri('/v1/kv/foo', encode=True)))
         self.assertThat(parse_query(request.uri), Equals({'keys': [None]}))
 
         keys = [
@@ -621,7 +625,8 @@ class ConsulClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
-        self.assertThat(request.path, Equals(self.uri('/v1/kv/foo')))
+        self.assertThat(request.path, Equals(
+            self.uri('/v1/kv/foo', encode=True)))
         self.assertThat(parse_query(request.uri), Equals({
             'keys': [None],
             'separator': ['/']
@@ -646,7 +651,8 @@ class ConsulClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'DELETE'))
-        self.assertThat(request.uri, Equals(self.uri('/v1/kv/foo')))
+        self.assertThat(request.uri, Equals(
+            self.uri('/v1/kv/foo', encode=True)))
 
         request.setResponseCode(200)
         request.finish()
@@ -661,7 +667,8 @@ class ConsulClientTest(JsonClientTestBase):
 
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'DELETE'))
-        self.assertThat(request.path, Equals(self.uri('/v1/kv/foo')))
+        self.assertThat(request.path, Equals(
+            self.uri('/v1/kv/foo', encode=True)))
         self.assertThat(parse_query(request.uri), Equals({
             'recurse': [None]
         }))
@@ -680,7 +687,7 @@ class ConsulClientTest(JsonClientTestBase):
         request = yield self.requests.get()
         self.assertThat(request.method, Equals(b'GET'))
         self.assertThat(request.uri,
-                        Equals(self.uri('/v1/catalog/nodes')))
+                        Equals(self.uri('/v1/catalog/nodes', encode=True)))
 
         nodes = [
             {
