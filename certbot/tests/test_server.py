@@ -7,7 +7,6 @@ from twisted.web.client import ProxyAgent, URI
 from twisted.web.server import Site
 
 from testtools.matchers import Equals, MatchesStructure
-from testtools.twistedsupport import AsynchronousDeferredRunTest
 
 from txfake import FakeServer
 
