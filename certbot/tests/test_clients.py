@@ -37,6 +37,7 @@ class JsonClientTestBase(TestCase):
 
     def cleanup_d(self, d):
         self.addCleanup(lambda: d)
+        return d
 
 
 class JsonClientTest(JsonClientTestBase):
@@ -51,8 +52,7 @@ class JsonClientTest(JsonClientTestBase):
         address and headers, and should contain an empty body. The response
         should be returned.
         """
-        d = self.client.request('GET', '/hello')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.request('GET', '/hello'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -75,8 +75,8 @@ class JsonClientTest(JsonClientTestBase):
         should be sent as JSON and the content-type header should be set to
         indicate this.
         """
-        d = self.client.request('GET', '/hello', json_data={'test': 'hello'})
-        self.cleanup_d(d)
+        self.cleanup_d(self.client.request(
+            'GET', '/hello', json_data={'test': 'hello'}))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -95,9 +95,8 @@ class JsonClientTest(JsonClientTestBase):
         When a request is made with the endpoint parameter set, that parameter
         should be used as the endpoint.
         """
-        d = self.client.request('GET', '/hello',
-                                endpoint='http://localhost:9000')
-        self.cleanup_d(d)
+        self.cleanup_d(self.client.request(
+            'GET', '/hello', endpoint='http://localhost:9000'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -112,8 +111,7 @@ class JsonClientTest(JsonClientTestBase):
         When the get_json method is called, a GET request should be made and
         the response should be deserialized from JSON.
         """
-        d = self.client.get_json('/hello')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_json('/hello'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -130,8 +128,7 @@ class JsonClientTest(JsonClientTestBase):
         When a request is made and a 4xx response code is returned, a HTTPError
         should be raised to indicate a client error.
         """
-        d = self.client.request('GET', '/hello')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.request('GET', '/hello'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -151,8 +148,7 @@ class JsonClientTest(JsonClientTestBase):
         When a request is made and a 5xx response code is returned, a HTTPError
         should be raised to indicate a server error.
         """
-        d = self.client.request('GET', '/hello')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.request('GET', '/hello'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -178,8 +174,7 @@ class MarathonClientTest(JsonClientTestBase):
         deserialized from JSON and the value of the specified field is
         returned.
         """
-        d = self.client.get_json_field('/my-path', 'field-key')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -200,8 +195,7 @@ class MarathonClientTest(JsonClientTestBase):
         deserialized from JSON and if the specified field is missing, an error
         is raised.
         """
-        d = self.client.get_json_field('/my-path', 'field-key')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -222,8 +216,7 @@ class MarathonClientTest(JsonClientTestBase):
         When we request event subscriptions from Marathon, we should receive a
         list of callback URLs.
         """
-        d = self.client.get_event_subscriptions()
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_event_subscriptions())
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -247,9 +240,8 @@ class MarathonClientTest(JsonClientTestBase):
         When we post an event subscription with a callback URL, we should
         return True for a 200/OK response from Marathon.
         """
-        d = self.client.post_event_subscription(
-            'http://localhost:7000/events?registration=localhost')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.post_event_subscription(
+            'http://localhost:7000/events?registration=localhost'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'POST')
@@ -278,9 +270,8 @@ class MarathonClientTest(JsonClientTestBase):
         When we post an event subscription with a callback URL, we should
         return False for a non-200/OK response from Marathon.
         """
-        d = self.client.post_event_subscription(
-            'http://localhost:7000/events?registration=localhost')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.post_event_subscription(
+            'http://localhost:7000/events?registration=localhost'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'POST')
@@ -303,8 +294,7 @@ class MarathonClientTest(JsonClientTestBase):
         When we request the list of apps from Marathon, we should receive the
         list of apps with some information.
         """
-        d = self.client.get_apps()
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_apps())
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -355,8 +345,7 @@ class MarathonClientTest(JsonClientTestBase):
         When we request information on a specific app from Marathon, we should
         receive information on that app.
         """
-        d = self.client.get_app('/my-app')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_app('/my-app'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -436,8 +425,7 @@ class MarathonClientTest(JsonClientTestBase):
         When we request the list of tasks for an app from Marathon, we should
         receive a list of app tasks.
         """
-        d = self.client.get_app_tasks('/my-app')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_app_tasks('/my-app'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -502,8 +490,8 @@ class ConsulClientTest(JsonClientTestBase):
                 'TTL': '15s'
             }
         }
-        d = self.client.register_agent_service('foo.example.com', registration)
-        self.cleanup_d(d)
+        self.cleanup_d(self.client.register_agent_service(
+            'foo.example.com', registration))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'PUT')
@@ -539,8 +527,8 @@ class ConsulClientTest(JsonClientTestBase):
                 'TTL': '15s'
             }
         }
-        d = self.client.register_agent_service('foo.example.com', registration)
-        self.cleanup_d(d)
+        self.cleanup_d(self.client.register_agent_service(
+            'foo.example.com', registration))
 
         request = yield self.requests.get()
         # Fail the request
@@ -564,8 +552,8 @@ class ConsulClientTest(JsonClientTestBase):
         When a service is deregistered, a PUT request is made to the correct
         address.
         """
-        d = self.client.deregister_agent_service('foo.example.com', 'redis1')
-        self.cleanup_d(d)
+        self.cleanup_d(self.client.deregister_agent_service(
+            'foo.example.com', 'redis1'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'PUT')
@@ -582,8 +570,7 @@ class ConsulClientTest(JsonClientTestBase):
         When a value is put in the key/value store, a PUT request is made to
         the correct address with the JSON data in the payload.
         """
-        d = self.client.put_kv('foo', {'bar': 'baz'})
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.put_kv('foo', {'bar': 'baz'}))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'PUT')
@@ -606,8 +593,7 @@ class ConsulClientTest(JsonClientTestBase):
         When we get keys from the key/value store, a request is made to the
         correct address and a list of keys is returned.
         """
-        d = self.client.get_kv_keys('foo')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_kv_keys('foo'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -630,8 +616,7 @@ class ConsulClientTest(JsonClientTestBase):
         is specified, a request is made to the correct address, the separator
         is passed as a query parameter, and a list of keys is returned.
         """
-        d = self.client.get_kv_keys('foo', separator='/')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_kv_keys('foo', separator='/'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -656,8 +641,7 @@ class ConsulClientTest(JsonClientTestBase):
         When we delete keys from the key/value store, a request is made to the
         correct address.
         """
-        d = self.client.delete_kv_keys('foo')
-        self.cleanup_d(d)
+        self.cleanup_d(self.client.delete_kv_keys('foo'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'DELETE')
@@ -672,8 +656,7 @@ class ConsulClientTest(JsonClientTestBase):
         When we delete keys from the key/value store recursively, a request is
         made to the correct address with the "recurse" query parameter set.
         """
-        d = self.client.delete_kv_keys('foo', recurse=True)
-        self.cleanup_d(d)
+        self.cleanup_d(self.client.delete_kv_keys('foo', recurse=True))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'DELETE')
@@ -691,8 +674,7 @@ class ConsulClientTest(JsonClientTestBase):
         When we get the list of nodes from the catalog, a request is made to
         the correct address and a list of nodes is returned.
         """
-        d = self.client.get_catalog_nodes()
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_catalog_nodes())
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
@@ -720,8 +702,7 @@ class ConsulClientTest(JsonClientTestBase):
         When we get the list of services from an agent, a request is made to
         the correct address and a list of services is returned.
         """
-        d = self.client.get_agent_services('foo.example.com')
-        self.cleanup_d(d)
+        d = self.cleanup_d(self.client.get_agent_services('foo.example.com'))
 
         request = yield self.requests.get()
         self.assertEqual(request.method, b'GET')
