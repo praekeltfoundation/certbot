@@ -1,4 +1,8 @@
-from testtools.matchers import Equals, Mismatch
+from testtools.matchers import (
+    AfterPreprocessing, Equals, IsInstance, MatchesAll, MatchesStructure,
+    Mismatch
+)
+from testtools.twistedsupport import failed
 
 
 class HasHeader(Equals):
@@ -31,3 +35,14 @@ class HasHeader(Equals):
 
         raw_values = headers.getRawHeaders(self.key)
         return super(HasHeader, self).match(raw_values)
+
+
+def WithErrorTypeAndMessage(error_type, message):
+    """
+    Check that a Twisted failure was caused by a certain error type with a
+    certain message.
+    """
+    return MatchesAll(
+        MatchesStructure(value=IsInstance(error_type)),
+        AfterPreprocessing(lambda f: f.getErrorMessage(), Equals(message))
+    )

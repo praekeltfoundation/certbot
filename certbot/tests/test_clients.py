@@ -1,6 +1,8 @@
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
-from twisted.trial.unittest import TestCase
 from twisted.web.server import NOT_DONE_YET
+
+from testtools import TestCase
+from testtools.twistedsupport import AsynchronousDeferredRunTest, failed
 
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
@@ -9,10 +11,13 @@ from certbot.clients import (
     ConsulClient, HTTPError, JsonClient, MarathonClient)
 from certbot.tests.helpers import (
     parse_query, read_json_response, write_json_response)
+from certbot.tests.matchers import WithErrorTypeAndMessage
 
 
 class JsonClientTestBase(TestCase):
     def setUp(self):
+        super(JsonClientTestBase, self).setUp()
+
         self.client = self.get_client()
         self.requests = DeferredQueue()
         self.fake_server = FakeHttpServer(self.handle_request)
@@ -33,6 +38,8 @@ class JsonClientTestBase(TestCase):
 
 
 class JsonClientTest(JsonClientTestBase):
+
+    run_tests_with = AsynchronousDeferredRunTest
 
     def get_client(self):
         return JsonClient('http://localhost:8000')
@@ -134,10 +141,8 @@ class JsonClientTest(JsonClientTestBase):
         request.finish()
 
         yield wait0()
-        failure = self.failureResultOf(d, HTTPError)
-        self.assertEqual(
-            failure.getErrorMessage(),
-            '403 Client Error for url: %s' % self.uri('/hello'))
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, '403 Client Error for url: %s' % self.uri('/hello'))))
 
     @inlineCallbacks
     def test_server_error_response(self):
@@ -156,10 +161,8 @@ class JsonClientTest(JsonClientTestBase):
         request.finish()
 
         yield wait0()
-        failure = self.failureResultOf(d, HTTPError)
-        self.assertEqual(
-            failure.getErrorMessage(),
-            '502 Server Error for url: %s' % self.uri('/hello'))
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, '502 Server Error for url: %s' % self.uri('/hello'))))
 
 
 class MarathonClientTest(JsonClientTestBase):
@@ -203,11 +206,11 @@ class MarathonClientTest(JsonClientTestBase):
         write_json_response(request, {'other-field-key': 'do-not-care'})
 
         yield wait0()
-        failure = self.failureResultOf(d, KeyError)
-        self.assertEqual(
-            failure.getErrorMessage(),
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            KeyError,
             '\'Unable to get value for "field-key" from Marathon response: '
-            '"{"other-field-key": "do-not-care"}"\'')
+            '"{"other-field-key": "do-not-care"}"\''
+        )))
 
     @inlineCallbacks
     def test_get_event_subscription(self):
