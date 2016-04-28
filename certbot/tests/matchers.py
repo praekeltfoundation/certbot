@@ -2,7 +2,6 @@ from testtools.matchers import (
     AfterPreprocessing, Equals, IsInstance, MatchesAll, MatchesStructure,
     Mismatch
 )
-from testtools.twistedsupport import failed
 
 
 class HasHeader(Equals):
