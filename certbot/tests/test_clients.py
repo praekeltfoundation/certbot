@@ -1,6 +1,8 @@
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
-from twisted.trial.unittest import TestCase
 from twisted.web.server import NOT_DONE_YET
+
+from testtools.matchers import Equals
+from testtools.twistedsupport import failed
 
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
@@ -8,11 +10,15 @@ from txfake.fake_connection import wait0
 from certbot.clients import (
     ConsulClient, HTTPError, JsonClient, MarathonClient)
 from certbot.tests.helpers import (
-    parse_query, read_json_response, write_json_response)
+    read_json_response, TestCase, write_json_response)
+from certbot.tests.matchers import (
+    HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
 
 
 class JsonClientTestBase(TestCase):
     def setUp(self):
+        super(JsonClientTestBase, self).setUp()
+
         self.client = self.get_client()
         self.requests = DeferredQueue()
         self.fake_server = FakeHttpServer(self.handle_request)
@@ -28,8 +34,11 @@ class JsonClientTestBase(TestCase):
         raise NotImplementedError()
 
     def uri(self, path, encode=False):
-        uri = '%s%s' % (self.client.endpoint.geturi(), path,)
-        return uri.encode('ascii') if encode else uri
+        return '%s%s' % (self.client.endpoint.geturi(), path,)
+
+    def cleanup_d(self, d):
+        self.addCleanup(lambda: d)
+        return d
 
 
 class JsonClientTest(JsonClientTestBase):
@@ -44,13 +53,14 @@ class JsonClientTest(JsonClientTestBase):
         address and headers, and should contain an empty body. The response
         should be returned.
         """
-        d = self.client.request('GET', '/hello')
+        d = self.cleanup_d(self.client.request('GET', '/hello'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/hello', encode=True))
-        self.assertEqual(request.getHeader('accept'), 'application/json')
-        self.assertEqual(request.content.read(), b'')
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
+        self.assertThat(request.content.read(), Equals(b''))
 
         request.setResponseCode(200)
         request.write(b'hi\n')
@@ -58,7 +68,7 @@ class JsonClientTest(JsonClientTestBase):
 
         response = yield d
         text = yield response.text()
-        self.assertEqual(text, 'hi\n')
+        self.assertThat(text, Equals('hi\n'))
 
     @inlineCallbacks
     def test_request_json_data(self):
@@ -67,20 +77,20 @@ class JsonClientTest(JsonClientTestBase):
         should be sent as JSON and the content-type header should be set to
         indicate this.
         """
-        d = self.client.request('GET', '/hello', json_data={'test': 'hello'})
+        self.cleanup_d(self.client.request(
+            'GET', '/hello', json_data={'test': 'hello'}))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/hello', encode=True))
-        self.assertEqual(request.getHeader('content-type'),
-                         'application/json; charset=utf-8')
-        self.assertEqual(request.getHeader('accept'), 'application/json')
-        self.assertEqual(read_json_response(request), {'test': 'hello'})
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(request.requestHeaders, HasHeader(
+            'content-type', ['application/json; charset=utf-8']))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
+        self.assertThat(read_json_response(request), Equals({'test': 'hello'}))
 
         request.setResponseCode(200)
         request.finish()
-
-        yield d
 
     @inlineCallbacks
     def test_request_endpoint(self):
@@ -88,17 +98,15 @@ class JsonClientTest(JsonClientTestBase):
         When a request is made with the endpoint parameter set, that parameter
         should be used as the endpoint.
         """
-        d = self.client.request('GET', '/hello',
-                                endpoint='http://localhost:9000')
+        self.cleanup_d(self.client.request(
+            'GET', '/hello', endpoint='http://localhost:9000'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, b'http://localhost:9000/hello')
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url='http://localhost:9000/hello'))
 
         request.setResponseCode(200)
         request.finish()
-
-        yield d
 
     @inlineCallbacks
     def test_get_json(self):
@@ -106,16 +114,16 @@ class JsonClientTest(JsonClientTestBase):
         When the get_json method is called, a GET request should be made and
         the response should be deserialized from JSON.
         """
-        d = self.client.get_json('/hello')
+        d = self.cleanup_d(self.client.get_json('/hello'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/hello', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
 
         write_json_response(request, {'test': 'hello'})
 
         res = yield d
-        self.assertEqual(res, {'test': 'hello'})
+        self.assertThat(res, Equals({'test': 'hello'}))
 
     @inlineCallbacks
     def test_client_error_response(self):
@@ -123,21 +131,19 @@ class JsonClientTest(JsonClientTestBase):
         When a request is made and a 4xx response code is returned, a HTTPError
         should be raised to indicate a client error.
         """
-        d = self.client.request('GET', '/hello')
+        d = self.cleanup_d(self.client.request('GET', '/hello'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/hello', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
 
         request.setResponseCode(403)
         request.write(b'Unauthorized\n')
         request.finish()
 
         yield wait0()
-        failure = self.failureResultOf(d, HTTPError)
-        self.assertEqual(
-            failure.getErrorMessage(),
-            '403 Client Error for url: %s' % self.uri('/hello'))
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, '403 Client Error for url: %s' % self.uri('/hello'))))
 
     @inlineCallbacks
     def test_server_error_response(self):
@@ -145,21 +151,19 @@ class JsonClientTest(JsonClientTestBase):
         When a request is made and a 5xx response code is returned, a HTTPError
         should be raised to indicate a server error.
         """
-        d = self.client.request('GET', '/hello')
+        d = self.cleanup_d(self.client.request('GET', '/hello'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/hello', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
 
         request.setResponseCode(502)
         request.write(b'Bad gateway\n')
         request.finish()
 
         yield wait0()
-        failure = self.failureResultOf(d, HTTPError)
-        self.assertEqual(
-            failure.getErrorMessage(),
-            '502 Server Error for url: %s' % self.uri('/hello'))
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, '502 Server Error for url: %s' % self.uri('/hello'))))
 
 
 class MarathonClientTest(JsonClientTestBase):
@@ -173,11 +177,11 @@ class MarathonClientTest(JsonClientTestBase):
         deserialized from JSON and the value of the specified field is
         returned.
         """
-        d = self.client.get_json_field('/my-path', 'field-key')
+        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/my-path', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/my-path')))
 
         write_json_response(request, {
             'field-key': 'field-value',
@@ -185,7 +189,7 @@ class MarathonClientTest(JsonClientTestBase):
         })
 
         res = yield d
-        self.assertEqual(res, 'field-value')
+        self.assertThat(res, Equals('field-value'))
 
     @inlineCallbacks
     def test_get_json_field_missing(self):
@@ -194,20 +198,20 @@ class MarathonClientTest(JsonClientTestBase):
         deserialized from JSON and if the specified field is missing, an error
         is raised.
         """
-        d = self.client.get_json_field('/my-path', 'field-key')
+        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/my-path', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/my-path')))
 
         write_json_response(request, {'other-field-key': 'do-not-care'})
 
         yield wait0()
-        failure = self.failureResultOf(d, KeyError)
-        self.assertEqual(
-            failure.getErrorMessage(),
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            KeyError,
             '\'Unable to get value for "field-key" from Marathon response: '
-            '"{"other-field-key": "do-not-care"}"\'')
+            '"{"other-field-key": "do-not-care"}"\''
+        )))
 
     @inlineCallbacks
     def test_get_event_subscription(self):
@@ -215,12 +219,11 @@ class MarathonClientTest(JsonClientTestBase):
         When we request event subscriptions from Marathon, we should receive a
         list of callback URLs.
         """
-        d = self.client.get_event_subscriptions()
+        d = self.cleanup_d(self.client.get_event_subscriptions())
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri,
-                         self.uri('/v2/eventSubscriptions', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/eventSubscriptions')))
 
         write_json_response(request, {
             'callbackUrls': [
@@ -229,9 +232,9 @@ class MarathonClientTest(JsonClientTestBase):
         })
 
         res = yield d
-        self.assertEqual(res, [
+        self.assertThat(res, Equals([
             'http://localhost:7000/events?registration=localhost'
-        ])
+        ]))
 
     @inlineCallbacks
     def test_post_event_subscription(self):
@@ -239,18 +242,19 @@ class MarathonClientTest(JsonClientTestBase):
         When we post an event subscription with a callback URL, we should
         return True for a 200/OK response from Marathon.
         """
-        d = self.client.post_event_subscription(
-            'http://localhost:7000/events?registration=localhost')
+        d = self.cleanup_d(self.client.post_event_subscription(
+            'http://localhost:7000/events?registration=localhost'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'POST')
-        self.assertEqual(request.path,
-                         self.uri('/v2/eventSubscriptions', encode=True))
-        self.assertEqual(request.args, {
-            b'callbackUrl': [
-                b'http://localhost:7000/events?registration=localhost'
-            ]
-        })
+        self.assertThat(request, HasRequestProperties(
+            method='POST',
+            url=self.uri('/v2/eventSubscriptions'),
+            query={
+                'callbackUrl': [
+                    'http://localhost:7000/events?registration=localhost'
+                ]
+            }
+        ))
 
         write_json_response(request, {
             # TODO: Add check that callbackUrl is correct
@@ -261,7 +265,7 @@ class MarathonClientTest(JsonClientTestBase):
         })
 
         res = yield d
-        self.assertEqual(res, True)
+        self.assertThat(res, Equals(True))
 
     @inlineCallbacks
     def test_post_event_subscription_not_ok(self):
@@ -269,23 +273,24 @@ class MarathonClientTest(JsonClientTestBase):
         When we post an event subscription with a callback URL, we should
         return False for a non-200/OK response from Marathon.
         """
-        d = self.client.post_event_subscription(
-            'http://localhost:7000/events?registration=localhost')
+        d = self.cleanup_d(self.client.post_event_subscription(
+            'http://localhost:7000/events?registration=localhost'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'POST')
-        self.assertEqual(request.path,
-                         self.uri('/v2/eventSubscriptions', encode=True))
-        self.assertEqual(request.args, {
-            b'callbackUrl': [
-                b'http://localhost:7000/events?registration=localhost'
-            ]
-        })
+        self.assertThat(request, HasRequestProperties(
+            method='POST',
+            url=self.uri('/v2/eventSubscriptions'),
+            query={
+                'callbackUrl': [
+                    'http://localhost:7000/events?registration=localhost'
+                ]
+            }
+        ))
 
         write_json_response(request, {}, response_code=201)
 
         res = yield d
-        self.assertEqual(res, False)
+        self.assertThat(res, Equals(False))
 
     @inlineCallbacks
     def test_get_apps(self):
@@ -293,11 +298,11 @@ class MarathonClientTest(JsonClientTestBase):
         When we request the list of apps from Marathon, we should receive the
         list of apps with some information.
         """
-        d = self.client.get_apps()
+        d = self.cleanup_d(self.client.get_apps())
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/v2/apps', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/apps')))
 
         apps = {
             'apps': [
@@ -336,7 +341,7 @@ class MarathonClientTest(JsonClientTestBase):
         write_json_response(request, apps)
 
         res = yield d
-        self.assertEqual(res, apps['apps'])
+        self.assertThat(res, Equals(apps['apps']))
 
     @inlineCallbacks
     def test_get_app(self):
@@ -344,11 +349,11 @@ class MarathonClientTest(JsonClientTestBase):
         When we request information on a specific app from Marathon, we should
         receive information on that app.
         """
-        d = self.client.get_app('/my-app')
+        d = self.cleanup_d(self.client.get_app('/my-app'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri, self.uri('/v2/apps/my-app', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/apps/my-app')))
 
         app = {
             'app': {
@@ -416,7 +421,7 @@ class MarathonClientTest(JsonClientTestBase):
         write_json_response(request, app)
 
         res = yield d
-        self.assertEqual(res, app['app'])
+        self.assertThat(res, Equals(app['app']))
 
     @inlineCallbacks
     def test_get_app_tasks(self):
@@ -424,12 +429,11 @@ class MarathonClientTest(JsonClientTestBase):
         When we request the list of tasks for an app from Marathon, we should
         receive a list of app tasks.
         """
-        d = self.client.get_app_tasks('/my-app')
+        d = self.cleanup_d(self.client.get_app_tasks('/my-app'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri,
-                         self.uri('/v2/apps/my-app/tasks', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/apps/my-app/tasks')))
 
         tasks = {
             'tasks': [
@@ -460,7 +464,7 @@ class MarathonClientTest(JsonClientTestBase):
         write_json_response(request, tasks)
 
         res = yield d
-        self.assertEqual(res, tasks['tasks'])
+        self.assertThat(res, Equals(tasks['tasks']))
 
 
 class ConsulClientTest(JsonClientTestBase):
@@ -489,19 +493,17 @@ class ConsulClientTest(JsonClientTestBase):
                 'TTL': '15s'
             }
         }
-        d = self.client.register_agent_service('foo.example.com', registration)
+        self.cleanup_d(self.client.register_agent_service(
+            'foo.example.com', registration))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'PUT')
-        self.assertEqual(
-            request.uri,
-            b'http://foo.example.com:8500/v1/agent/service/register')
-        self.assertEqual(read_json_response(request), registration)
+        self.assertThat(request, HasRequestProperties(
+            method='PUT',
+            url='http://foo.example.com:8500/v1/agent/service/register'))
+        self.assertThat(read_json_response(request), Equals(registration))
 
         request.setResponseCode(200)
         request.finish()
-
-        yield d
 
     @inlineCallbacks
     def test_register_agent_service_fallback(self):
@@ -527,7 +529,8 @@ class ConsulClientTest(JsonClientTestBase):
                 'TTL': '15s'
             }
         }
-        d = self.client.register_agent_service('foo.example.com', registration)
+        self.cleanup_d(self.client.register_agent_service(
+            'foo.example.com', registration))
 
         request = yield self.requests.get()
         # Fail the request
@@ -537,15 +540,12 @@ class ConsulClientTest(JsonClientTestBase):
 
         # Expect the request to fallback to the regular endpoint
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'PUT')
-        self.assertEqual(request.uri,
-                         self.uri('/v1/agent/service/register', encode=True))
-        self.assertEqual(read_json_response(request), registration)
+        self.assertThat(request, HasRequestProperties(
+            method='PUT', url=self.uri('/v1/agent/service/register')))
+        self.assertThat(read_json_response(request), Equals(registration))
 
         request.setResponseCode(200)
         request.finish()
-
-        yield d
 
     @inlineCallbacks
     def test_deregister_agent_service(self):
@@ -553,18 +553,17 @@ class ConsulClientTest(JsonClientTestBase):
         When a service is deregistered, a PUT request is made to the correct
         address.
         """
-        d = self.client.deregister_agent_service('foo.example.com', 'redis1')
+        self.cleanup_d(self.client.deregister_agent_service(
+            'foo.example.com', 'redis1'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'PUT')
-        self.assertEqual(
-            request.uri,
-            b'http://foo.example.com:8500/v1/agent/service/deregister/redis1')
+        self.assertThat(request, HasRequestProperties(
+            method='PUT',
+            url='http://foo.example.com:8500'
+                '/v1/agent/service/deregister/redis1'))
 
         request.setResponseCode(200)
         request.finish()
-
-        yield d
 
     @inlineCallbacks
     def test_put_kv(self):
@@ -572,12 +571,12 @@ class ConsulClientTest(JsonClientTestBase):
         When a value is put in the key/value store, a PUT request is made to
         the correct address with the JSON data in the payload.
         """
-        d = self.client.put_kv('foo', {'bar': 'baz'})
+        d = self.cleanup_d(self.client.put_kv('foo', {'bar': 'baz'}))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'PUT')
-        self.assertEqual(request.uri, self.uri('/v1/kv/foo', encode=True))
-        self.assertEqual(read_json_response(request), {'bar': 'baz'})
+        self.assertThat(request, HasRequestProperties(
+            method='PUT', url=self.uri('/v1/kv/foo')))
+        self.assertThat(read_json_response(request), Equals({'bar': 'baz'}))
 
         request.setResponseCode(200)
         request.write(b'true')
@@ -585,7 +584,7 @@ class ConsulClientTest(JsonClientTestBase):
 
         res = yield d
         json_res = yield res.json()
-        self.assertEqual(json_res, True)
+        self.assertThat(json_res, Equals(True))
 
     # TODO: Consul returns False. What should we do?
 
@@ -595,12 +594,14 @@ class ConsulClientTest(JsonClientTestBase):
         When we get keys from the key/value store, a request is made to the
         correct address and a list of keys is returned.
         """
-        d = self.client.get_kv_keys('foo')
+        d = self.cleanup_d(self.client.get_kv_keys('foo'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.path, self.uri('/v1/kv/foo', encode=True))
-        self.assertEqual(parse_query(request.uri), {'keys': [None]})
+        self.assertThat(request, HasRequestProperties(
+            method='GET',
+            url=self.uri('/v1/kv/foo'),
+            query={'keys': [None]}
+        ))
 
         keys = [
             '/foo/bar',
@@ -609,7 +610,7 @@ class ConsulClientTest(JsonClientTestBase):
         write_json_response(request, keys)
 
         res = yield d
-        self.assertEqual(res, keys)
+        self.assertThat(res, Equals(keys))
 
     @inlineCallbacks
     def test_get_kv_keys_separator(self):
@@ -618,15 +619,17 @@ class ConsulClientTest(JsonClientTestBase):
         is specified, a request is made to the correct address, the separator
         is passed as a query parameter, and a list of keys is returned.
         """
-        d = self.client.get_kv_keys('foo', separator='/')
+        d = self.cleanup_d(self.client.get_kv_keys('foo', separator='/'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.path, self.uri('/v1/kv/foo', encode=True))
-        self.assertEqual(parse_query(request.uri), {
-            'keys': [None],
-            'separator': ['/']
-        })
+        self.assertThat(request, HasRequestProperties(
+            method='GET',
+            url=self.uri('/v1/kv/foo'),
+            query={
+                'keys': [None],
+                'separator': ['/']
+            }
+        ))
 
         keys = [
             '/foo/bar',
@@ -635,7 +638,7 @@ class ConsulClientTest(JsonClientTestBase):
         write_json_response(request, keys)
 
         res = yield d
-        self.assertEqual(res, keys)
+        self.assertThat(res, Equals(keys))
 
     @inlineCallbacks
     def test_delete_kv_keys(self):
@@ -643,16 +646,14 @@ class ConsulClientTest(JsonClientTestBase):
         When we delete keys from the key/value store, a request is made to the
         correct address.
         """
-        d = self.client.delete_kv_keys('foo')
+        self.cleanup_d(self.client.delete_kv_keys('foo'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'DELETE')
-        self.assertEqual(request.uri, self.uri('/v1/kv/foo', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='DELETE', url=self.uri('/v1/kv/foo')))
 
         request.setResponseCode(200)
         request.finish()
-
-        yield d
 
     @inlineCallbacks
     def test_delete_kv_keys_recursive(self):
@@ -660,19 +661,17 @@ class ConsulClientTest(JsonClientTestBase):
         When we delete keys from the key/value store recursively, a request is
         made to the correct address with the "recurse" query parameter set.
         """
-        d = self.client.delete_kv_keys('foo', recurse=True)
+        self.cleanup_d(self.client.delete_kv_keys('foo', recurse=True))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'DELETE')
-        self.assertEqual(request.path, self.uri('/v1/kv/foo', encode=True))
-        self.assertEqual(parse_query(request.uri), {
-            'recurse': [None]
-        })
+        self.assertThat(request, HasRequestProperties(
+            method='DELETE',
+            url=self.uri('/v1/kv/foo'),
+            query={'recurse': [None]}
+        ))
 
         request.setResponseCode(200)
         request.finish()
-
-        yield d
 
     @inlineCallbacks
     def test_get_catalog_nodes(self):
@@ -680,12 +679,11 @@ class ConsulClientTest(JsonClientTestBase):
         When we get the list of nodes from the catalog, a request is made to
         the correct address and a list of nodes is returned.
         """
-        d = self.client.get_catalog_nodes()
+        d = self.cleanup_d(self.client.get_catalog_nodes())
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri,
-                         self.uri('/v1/catalog/nodes', encode=True))
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v1/catalog/nodes')))
 
         nodes = [
             {
@@ -700,7 +698,7 @@ class ConsulClientTest(JsonClientTestBase):
         write_json_response(request, nodes)
 
         res = yield d
-        self.assertEqual(res, nodes)
+        self.assertThat(res, Equals(nodes))
 
     @inlineCallbacks
     def test_get_agent_services(self):
@@ -708,12 +706,11 @@ class ConsulClientTest(JsonClientTestBase):
         When we get the list of services from an agent, a request is made to
         the correct address and a list of services is returned.
         """
-        d = self.client.get_agent_services('foo.example.com')
+        d = self.cleanup_d(self.client.get_agent_services('foo.example.com'))
 
         request = yield self.requests.get()
-        self.assertEqual(request.method, b'GET')
-        self.assertEqual(request.uri,
-                         b'http://foo.example.com:8500/v1/agent/services')
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url='http://foo.example.com:8500/v1/agent/services'))
 
         services = {
             'redis': {
@@ -727,4 +724,4 @@ class ConsulClientTest(JsonClientTestBase):
         write_json_response(request, services)
 
         res = yield d
-        self.assertEqual(res, services)
+        self.assertThat(res, Equals(services))

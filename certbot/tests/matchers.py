@@ -1,4 +1,9 @@
-from testtools.matchers import Equals, Mismatch
+from testtools.matchers import (
+    AfterPreprocessing, Equals, IsInstance, MatchesAll, MatchesStructure,
+    Mismatch
+)
+
+from uritools import urisplit
 
 
 class HasHeader(Equals):
@@ -31,3 +36,38 @@ class HasHeader(Equals):
 
         raw_values = headers.getRawHeaders(self.key)
         return super(HasHeader, self).match(raw_values)
+
+
+def WithErrorTypeAndMessage(error_type, message):
+    """
+    Check that a Twisted failure was caused by a certain error type with a
+    certain message.
+    """
+    return MatchesAll(
+        MatchesStructure(value=IsInstance(error_type)),
+        AfterPreprocessing(lambda f: f.getErrorMessage(), Equals(message))
+    )
+
+
+def HasRequestProperties(method=None, url=None, query={}):
+    """
+    Check if a HTTP request object has certain properties.
+
+    Parses the query dict from the request URI rather than using the request
+    "args" property as the args do not include query parameters that have no
+    value.
+
+    :param str method:
+        The HTTP method.
+    :param str url:
+        The HTTP URL, without any query parameters. Should already be percent
+        encoded.
+    :param dict query:
+        A dictionary of HTTP query parameters.
+    """
+    return MatchesStructure(
+        method=Equals(method.encode('ascii')),
+        path=Equals(url.encode('ascii')),
+        uri=AfterPreprocessing(lambda u: urisplit(u).getquerydict(),
+                               Equals(query))
+    )

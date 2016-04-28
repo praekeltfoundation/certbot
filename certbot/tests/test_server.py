@@ -6,15 +6,14 @@ from twisted.protocols.loopback import _LoopbackAddress
 from twisted.web.client import ProxyAgent, URI
 from twisted.web.server import Site
 
-from testtools import TestCase
 from testtools.matchers import Equals, MatchesStructure
-from testtools.twistedsupport import AsynchronousDeferredRunTest
 
 from txfake import FakeServer
 
 from uritools import uricompose
 
 from certbot.server import MarathonEventServer, Health
+from certbot.tests.helpers import TestCase
 from certbot.tests.matchers import HasHeader
 
 
@@ -43,9 +42,6 @@ def IsJsonResponseWithCode(code):
 
 
 class TestMarathonEventServer(TestCase):
-
-    run_tests_with = AsynchronousDeferredRunTest
-
     def setUp(self):
         super(TestMarathonEventServer, self).setUp()
 
