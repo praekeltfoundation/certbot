@@ -1,6 +1,15 @@
 import json
 
+import testtools
+
+from testtools.twistedsupport import AsynchronousDeferredRunTest
+
 from uritools import urisplit
+
+
+class TestCase(testtools.TestCase):
+    """ TestCase class for use with Twisted asynchornous tests. """
+    run_tests_with = AsynchronousDeferredRunTest
 
 
 def parse_query(uri):

@@ -1,8 +1,7 @@
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.web.server import NOT_DONE_YET
 
-from testtools import TestCase
-from testtools.twistedsupport import AsynchronousDeferredRunTest, failed
+from testtools.twistedsupport import failed
 
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
@@ -10,7 +9,7 @@ from txfake.fake_connection import wait0
 from certbot.clients import (
     ConsulClient, HTTPError, JsonClient, MarathonClient)
 from certbot.tests.helpers import (
-    parse_query, read_json_response, write_json_response)
+    parse_query, read_json_response, TestCase, write_json_response)
 from certbot.tests.matchers import WithErrorTypeAndMessage
 
 
@@ -38,8 +37,6 @@ class JsonClientTestBase(TestCase):
 
 
 class JsonClientTest(JsonClientTestBase):
-
-    run_tests_with = AsynchronousDeferredRunTest
 
     def get_client(self):
         return JsonClient('http://localhost:8000')
