@@ -9,7 +9,7 @@ from uritools import urisplit
 
 class TestCase(testtools.TestCase):
     """ TestCase class for use with Twisted asynchornous tests. """
-    run_tests_with = AsynchronousDeferredRunTest
+    run_tests_with = AsynchronousDeferredRunTest.make_factory(timeout=0.01)
 
 
 def parse_query(uri):
