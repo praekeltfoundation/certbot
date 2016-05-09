@@ -27,7 +27,7 @@ class FakeMarathon(object):
         self._app_tasks[app_id] = task_ids
 
     def get_apps(self):
-        return self._apps.values()
+        return list(self._apps.values())
 
     def get_app(self, app_id):
         return self._apps.get(app_id)
