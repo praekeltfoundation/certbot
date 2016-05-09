@@ -38,6 +38,17 @@ class HasHeader(Equals):
         return super(HasHeader, self).match(raw_values)
 
 
+def IsJsonResponseWithCode(code):
+    """
+    Match the status code on a treq.response object and check that a header is
+    set to indicate that the content type is UTF-8 encoded JSON.
+    """
+    return MatchesStructure(
+        code=Equals(code),
+        headers=HasHeader('Content-Type', ['application/json; charset=utf-8'])
+    )
+
+
 def WithErrorTypeAndMessage(error_type, message):
     """
     Check that a Twisted failure was caused by a certain error type with a
