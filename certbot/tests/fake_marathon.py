@@ -32,12 +32,6 @@ class FakeMarathon(object):
     def get_app(self, app_id):
         return self._apps.get(app_id)
 
-    def get_tasks(self):
-        return self._tasks.values()
-
-    def get_task(self, task_id):
-        return self._tasks.get(task_id)
-
     def get_app_tasks(self, app_id):
         task_ids = self._app_tasks.get(app_id)
         if task_ids is None:
