@@ -12,9 +12,9 @@ from txfake import FakeServer
 
 from uritools import uricompose
 
-from certbot.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
-from certbot.tests.helpers import FakeServerAgent, TestCase
-from certbot.tests.matchers import IsJsonResponseWithCode
+from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
+from marathon_acme.tests.helpers import FakeServerAgent, TestCase
+from marathon_acme.tests.matchers import IsJsonResponseWithCode
 
 
 class TestFakeMarathonAPI(TestCase):

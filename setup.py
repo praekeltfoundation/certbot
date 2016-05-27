@@ -2,11 +2,12 @@ from setuptools import setup, find_packages
 
 
 setup(
-    name="certbot",
+    name='marathon-acme',
     version='0.0.1',
     license='MIT',
-    url="https://github.com/praekeltfoundation/certbot",
-    description="A robot for managing Let's Encrypt! certs in Seed Stack",
+    url='https://github.com/praekeltfoundation/marathon-acme',
+    description=("Automated management of Let's Encrypt certificates for apps "
+                 "running on Mesosphere Marathon"),
     author='Jamie Hewland',
     author_email='jamie@praekelt.com',
     packages=find_packages(),
@@ -26,6 +27,6 @@ setup(
         'Programming Language :: Python :: 3',
     ],
     entry_points={
-        'console_scripts': ['certbot = certbot.cli:main'],
+        'console_scripts': ['marathon-acme = marathon_acme.cli:main'],
     }
 )

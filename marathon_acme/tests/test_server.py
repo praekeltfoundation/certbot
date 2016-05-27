@@ -11,9 +11,9 @@ from txfake import FakeServer
 
 from uritools import uricompose
 
-from certbot.server import MarathonEventServer, Health
-from certbot.tests.helpers import TestCase, FakeServerAgent
-from certbot.tests.matchers import IsJsonResponseWithCode
+from marathon_acme.server import MarathonEventServer, Health
+from marathon_acme.tests.helpers import TestCase, FakeServerAgent
+from marathon_acme.tests.matchers import IsJsonResponseWithCode
 
 
 class TestMarathonEventServer(TestCase):

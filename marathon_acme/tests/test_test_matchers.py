@@ -3,7 +3,7 @@ from testtools.matchers import Equals, Is
 
 from twisted.web.http_headers import Headers
 
-from certbot.tests.matchers import HasHeader
+from marathon_acme.tests.matchers import HasHeader
 
 
 class TestHasHeader(TestCase):
