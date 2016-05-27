@@ -3,42 +3,17 @@ import treq
 
 from twisted.internet.defer import fail, inlineCallbacks, succeed
 from twisted.protocols.loopback import _LoopbackAddress
-from twisted.web.client import ProxyAgent, URI
 from twisted.web.server import Site
 
-from testtools.matchers import Equals, MatchesStructure
+from testtools.matchers import Equals
 
 from txfake import FakeServer
 
 from uritools import uricompose
 
 from certbot.server import MarathonEventServer, Health
-from certbot.tests.helpers import TestCase
-from certbot.tests.matchers import HasHeader
-
-
-class FakeServerAgent(ProxyAgent):
-    """
-    ProxyAgent uses the entire URI as the request path, which is the correct
-    thing to do when talking to a proxy but not for non-proxy servers.
-    """
-    def request(self, method, uri, headers=None, bodyProducer=None):
-        key = ('http-proxy', self._proxyEndpoint)
-        parsedURI = URI.fromBytes(uri)
-        return self._requestWithEndpoint(
-            key, self._proxyEndpoint, method, parsedURI, headers,
-            bodyProducer, parsedURI.originForm)
-
-
-def IsJsonResponseWithCode(code):
-    """
-    Match the status code on a treq.response object and check that a header is
-    set to indicate that the content type is UTF-8 encoded JSON.
-    """
-    return MatchesStructure(
-        code=Equals(code),
-        headers=HasHeader('Content-Type', ['application/json; charset=utf-8'])
-    )
+from certbot.tests.helpers import TestCase, FakeServerAgent
+from certbot.tests.matchers import IsJsonResponseWithCode
 
 
 class TestMarathonEventServer(TestCase):
