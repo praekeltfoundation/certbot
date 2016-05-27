@@ -187,3 +187,19 @@ class TestFakeMarathonAPI(TestCase):
         response_json = yield response.json()
         self.assertThat(response_json,
                         Equals({'message': "App '/my-app_1' does not exist"}))
+
+    @inlineCallbacks
+    def test_get_event_subscriptions(self):
+        """
+        When the event subscriptions are requested, the callback URLs for
+        subscribers should be returned.
+        """
+        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+        self.marathon.add_event_subscription(callback_url)
+
+        response = yield self.request('GET', '/v2/eventSubscriptions')
+        self.assertThat(response, IsJsonResponseWithCode(200))
+
+        response_json = yield response.json()
+        self.assertThat(response_json,
+                        Equals({'callbackUrls': [callback_url]}))
