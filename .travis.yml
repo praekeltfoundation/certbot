@@ -20,8 +20,8 @@ install:
   - pip install -r requirements-dev.txt
   - pip install codecov
 script:
-  - flake8 certbot
-  - if [ -z "$NO_COVERAGE" ]; then COVERAGE_OPT="--cov certbot"; else COVERAGE_OPT=""; fi
-  - py.test certbot $COVERAGE_OPT
+  - if [ -z "$NO_COVERAGE" ]; then COVERAGE_OPT="--cov marathon_acme"; else COVERAGE_OPT=""; fi
+  - py.test marathon_acme $COVERAGE_OPT
+  - flake8 .
 after_success:
   - if [ -z "$NO_COVERAGE" ]; then codecov; fi

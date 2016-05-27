@@ -2,7 +2,7 @@ import re
 
 from click.testing import CliRunner
 
-from certbot.cli import main
+from marathon_acme.cli import main
 
 
 def test_email_required():

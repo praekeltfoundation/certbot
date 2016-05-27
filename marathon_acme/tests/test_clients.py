@@ -7,11 +7,11 @@ from testtools.twistedsupport import failed
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
-from certbot.clients import (
+from marathon_acme.clients import (
     ConsulClient, HTTPError, JsonClient, MarathonClient)
-from certbot.tests.helpers import (
+from marathon_acme.tests.helpers import (
     read_json_response, TestCase, write_json_response)
-from certbot.tests.matchers import (
+from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
 
 
