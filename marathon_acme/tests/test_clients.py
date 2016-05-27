@@ -127,10 +127,12 @@ class JsonClientTest(JsonClientTestBase):
     @inlineCallbacks
     def test_client_error_response(self):
         """
-        When a request is made and a 4xx response code is returned, a HTTPError
-        should be raised to indicate a client error.
+        When raise_for_status is True and a request is made and a 4xx response
+        code is returned, a HTTPError should be raised to indicate a client
+        error.
         """
-        d = self.cleanup_d(self.client.request('GET', '/hello'))
+        d = self.cleanup_d(self.client.request(
+            'GET', '/hello', raise_for_status=True))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -147,10 +149,12 @@ class JsonClientTest(JsonClientTestBase):
     @inlineCallbacks
     def test_server_error_response(self):
         """
-        When a request is made and a 5xx response code is returned, a HTTPError
-        should be raised to indicate a server error.
+        When raise_for_status is True and a request is made and a 5xx response
+        code is returned, a HTTPError should be raised to indicate a server
+        error.
         """
-        d = self.cleanup_d(self.client.request('GET', '/hello'))
+        d = self.cleanup_d(self.client.request(
+            'GET', '/hello', raise_for_status=True))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -163,6 +167,28 @@ class JsonClientTest(JsonClientTestBase):
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
             HTTPError, '502 Server Error for url: %s' % self.uri('/hello'))))
+
+    @inlineCallbacks
+    def test_unraised_error_response(self):
+        """
+        When raise_for_status is False and a request is made and a error
+        response code is returned, no error should be raised.
+        """
+        d = self.cleanup_d(self.client.request('GET', '/hello'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+
+        request.setResponseCode(503)
+        request.write(b'Service unavailable\n')
+        request.finish()
+
+        response = yield d
+        self.assertThat(response.code, Equals(503))
+
+        response_text = yield response.text()
+        self.assertThat(response_text, Equals('Service unavailable\n'))
 
 
 class MarathonClientTest(JsonClientTestBase):
@@ -189,6 +215,26 @@ class MarathonClientTest(JsonClientTestBase):
 
         res = yield d
         self.assertThat(res, Equals('field-value'))
+
+    @inlineCallbacks
+    def test_get_json_field_error(self):
+        """
+        When get_json_field is used to make a request but the response code
+        indicates an error, an HTTPError should be raised.
+        """
+        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/my-path')))
+
+        request.setResponseCode(404)
+        request.write(b'Not found\n')
+        request.finish()
+
+        yield wait0()
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, '404 Client Error for url: %s' % self.uri('/my-path'))))
 
     @inlineCallbacks
     def test_get_json_field_missing(self):

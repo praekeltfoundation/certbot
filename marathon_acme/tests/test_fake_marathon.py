@@ -1,7 +1,3 @@
-import json
-
-import treq
-
 from testtools.matchers import Equals
 
 from twisted.internet.defer import inlineCallbacks
@@ -10,8 +6,7 @@ from twisted.web.server import Site
 
 from txfake import FakeServer
 
-from uritools import uricompose
-
+from marathon_acme.clients import JsonClient
 from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
 from marathon_acme.tests.matchers import IsJsonResponseWithCode
@@ -31,21 +26,9 @@ class TestFakeMarathonAPI(TestCase):
         # https://github.com/twisted/klein/issues/102
         _LoopbackAddress.port = 7000
 
+        self.client = JsonClient('http://www.example.com')
         fake_server = FakeServer(Site(self.marathon_api.app.resource()))
-        self.agent = FakeServerAgent(fake_server.endpoint)
-
-    def request(self, method, path, query=None, json_data=None):
-        url = uricompose('http', 'www.example.com', path, query)
-        data = None
-        headers = {'Accept': 'application/json'}
-
-        # Add JSON body if there is JSON data
-        if json_data is not None:
-            data = json.dumps(json_data).encode('utf-8')
-            headers['Content-Type'] = 'application/json'
-
-        return treq.request(
-            method, url, data=data, headers=headers, agent=self.agent)
+        self.client.agent = FakeServerAgent(fake_server.endpoint)
 
     @inlineCallbacks
     def test_get_apps_empty(self):
@@ -53,7 +36,7 @@ class TestFakeMarathonAPI(TestCase):
         When the list of apps is requested and there are no apps, an empty list
         of apps should be returned.
         """
-        response = yield self.request('GET', '/v2/apps')
+        response = yield self.client.request('GET', '/v2/apps')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield response.json()
@@ -83,7 +66,7 @@ class TestFakeMarathonAPI(TestCase):
         ]
         self.marathon.add_app(app, tasks)
 
-        response = yield self.request('GET', '/v2/apps')
+        response = yield self.client.request('GET', '/v2/apps')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield response.json()
@@ -112,7 +95,7 @@ class TestFakeMarathonAPI(TestCase):
         ]
         self.marathon.add_app(app, tasks)
 
-        response = yield self.request('GET', '/v2/apps/my-app_1')
+        response = yield self.client.request('GET', '/v2/apps/my-app_1')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield response.json()
@@ -125,7 +108,7 @@ class TestFakeMarathonAPI(TestCase):
         response code should be returned as well as a message about the app
         not existing.
         """
-        response = yield self.request('GET', '/v2/apps/my-app_1')
+        response = yield self.client.request('GET', '/v2/apps/my-app_1')
         self.assertThat(response, IsJsonResponseWithCode(404))
 
         response_json = yield response.json()
@@ -168,7 +151,7 @@ class TestFakeMarathonAPI(TestCase):
         ]
         self.marathon.add_app(app, tasks)
 
-        response = yield self.request('GET', '/v2/apps/my-app_1/tasks')
+        response = yield self.client.request('GET', '/v2/apps/my-app_1/tasks')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield response.json()
@@ -181,7 +164,7 @@ class TestFakeMarathonAPI(TestCase):
         404 response code should be returned as well as a message about the app
         not existing.
         """
-        response = yield self.request('GET', '/v2/apps/my-app_1/tasks')
+        response = yield self.client.request('GET', '/v2/apps/my-app_1/tasks')
         self.assertThat(response, IsJsonResponseWithCode(404))
 
         response_json = yield response.json()
@@ -197,7 +180,7 @@ class TestFakeMarathonAPI(TestCase):
         callback_url = 'http://marathon-acme.marathon.mesos:7000'
         self.marathon.add_event_subscription(callback_url)
 
-        response = yield self.request('GET', '/v2/eventSubscriptions')
+        response = yield self.client.request('GET', '/v2/eventSubscriptions')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield response.json()

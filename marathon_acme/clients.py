@@ -38,7 +38,7 @@ class JsonClient(object):
         return failure
 
     def request(self, method, path, query=None, endpoint=None, json_data=None,
-                **kwargs):
+                raise_for_status=False, **kwargs):
         """
         Perform a request. A number of basic defaults are set on the request
         that make using a JSON API easier. These defaults can be overridden by
@@ -57,6 +57,8 @@ class JsonClient(object):
         :param: json_data:
             A python data structure that will be converted to a JSON string
             using `json.dumps` and used as the request body.
+        :param: raise_for_status:
+            Whether to raise an error for a 4xx or 5xx response code.
         :param: kwargs:
             Any other parameters that will be passed to `treq.request`, for
             example headers or parameters.
@@ -90,7 +92,11 @@ class JsonClient(object):
             d.addCallback(self._log_http_response, method, url, data)
 
         d.addErrback(self._log_http_error, url)
-        return d.addCallback(self._raise_for_status, url)
+
+        if raise_for_status:
+            d.addCallback(self._raise_for_status, url)
+
+        return d
 
     def get_json(self, path, query=None, **kwargs):
         """
@@ -140,8 +146,13 @@ class MarathonClient(JsonClient):
         which points to the actual data of the response. For example /v2/apps
         returns something like {"apps": [ {"app1"}, {"app2"} ]}. We're
         interested in the contents of "apps".
+
+        This method will raise an error if:
+        * There is an error response code
+        * The field with the given name cannot be found
         """
-        return self.get_json(path).addCallback(self._get_json_field, field)
+        return self.get_json(path, raise_for_status=True).addCallback(
+            self._get_json_field, field)
 
     def _get_json_field(self, response_json, field_name):
         """
