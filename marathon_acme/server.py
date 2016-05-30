@@ -1,4 +1,3 @@
-import cgi
 import json
 
 from twisted.python import log
@@ -8,33 +7,13 @@ from twisted.web.http import (
 from klein import Klein
 
 
-# The below 3 methods are roughly stolen from the treq.content module and help
-# to decode JSON content from requests correctly.
-def _encoding_from_headers(headers):
-    content_types = headers.getRawHeaders('content-type')
-    if content_types is None:
-        return None
-
-    # This seems to be the choice browsers make when encountering multiple
-    # content-type headers.
-    content_type, params = cgi.parse_header(content_types[-1])
-
-    if 'charset' in params:
-        return params.get('charset').strip("'\"")
+def read_request_json(request):
+    return json.loads(request.content.read().decode('utf-8'))
 
 
-def _text_content(request, encoding='ISO-8859-1'):
-    e = _encoding_from_headers(request.requestHeaders)
-    content = request.content.read()
-
-    if e is not None:
-        return content.decode(e)
-
-    return content.decode(encoding)
-
-
-def _json_content(request):
-    return json.loads(_text_content(request, encoding='utf-8'))
+def write_request_json(request, json_obj):
+    request.setHeader('Content-Type', 'application/json')
+    request.write(json.dumps(json_obj).encode('utf-8'))
 
 
 class MarathonEventServer(object):
@@ -79,23 +58,15 @@ class MarathonEventServer(object):
         """
         self.app.run(host, port, log_file)
 
-    def _return_json(self, json_obj, request):
-        """
-        Return a serialized JSON object and set the appropriate Content-Type
-        header.
-        """
-        request.setHeader('Content-Type', 'application/json')
-        return json.dumps(json_obj).encode('utf-8')
-
     def _ok_response(self, json_obj, request):
         """ Return a 200/OK response with a JSON object. """
         request.setResponseCode(OK)
-        return self._return_json(json_obj, request)
+        write_request_json(request, json_obj)
 
     def _error_response(self, failure, request):
         """ Return a 503 response with a JSON object. """
         request.setResponseCode(INTERNAL_SERVER_ERROR)
-        return self._return_json({'error': failure.getErrorMessage()}, request)
+        write_request_json(request, {'error': failure.getErrorMessage()})
 
     @app.route('/')
     def index(self, request):
@@ -109,7 +80,7 @@ class MarathonEventServer(object):
         :param klein.app.KleinRequest request:
             The Klein HTTP request
         """
-        event = _json_content(request)
+        event = read_request_json(request)
         handler = self.event_dispatch.get(event.get('eventType'))
         if handler is None:
             return self._handle_unknown_event(request, event)
@@ -124,9 +95,9 @@ class MarathonEventServer(object):
         event_type = event.get('eventType')
         log.msg('Not handling event type: %s' % (event_type,))
         request.setResponseCode(NOT_IMPLEMENTED)
-        return self._return_json({
+        return write_request_json(request, {
             'error': 'Event type %s not supported.' % (event_type,)
-        }, request)
+        })
 
     @app.route('/health')
     def health(self, request):
@@ -142,14 +113,14 @@ class MarathonEventServer(object):
         health = self.health_handler()
         response_code = OK if health.healthy else SERVICE_UNAVAILABLE
         request.setResponseCode(response_code)
-        return self._return_json(health.json_message, request)
+        write_request_json(request, health.json_message)
 
     def _no_health_handler(self, request):
         log.msg('Request to /health made but no handler is set')
         request.setResponseCode(NOT_IMPLEMENTED)
-        return self._return_json({
+        write_request_json(request, {
             'error': 'Cannot determine service health: no handler set'
-        }, request)
+        })
 
 
 class Health(object):

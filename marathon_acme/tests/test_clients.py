@@ -8,10 +8,17 @@ from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import HTTPError, JsonClient, MarathonClient
-from marathon_acme.tests.helpers import (
-    read_json_response, TestCase, write_json_response)
+from marathon_acme.server import read_request_json, write_request_json
+from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
+
+
+def json_response(request, json_data, response_code=200):
+    """ Set the response code, write encoded JSON, and finish() a request. """
+    request.setResponseCode(response_code)
+    write_request_json(request, json_data)
+    request.finish()
 
 
 class JsonClientTestBase(TestCase):
@@ -85,7 +92,7 @@ class JsonClientTest(JsonClientTestBase):
             'content-type', ['application/json']))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['application/json']))
-        self.assertThat(read_json_response(request), Equals({'test': 'hello'}))
+        self.assertThat(read_request_json(request), Equals({'test': 'hello'}))
 
         request.setResponseCode(200)
         request.finish()
@@ -118,7 +125,7 @@ class JsonClientTest(JsonClientTestBase):
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/hello')))
 
-        write_json_response(request, {'test': 'hello'})
+        json_response(request, {'test': 'hello'})
 
         res = yield d
         self.assertThat(res, Equals({'test': 'hello'}))
@@ -207,7 +214,7 @@ class MarathonClientTest(JsonClientTestBase):
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/my-path')))
 
-        write_json_response(request, {
+        json_response(request, {
             'field-key': 'field-value',
             'other-field-key': 'do-not-care'
         })
@@ -248,7 +255,7 @@ class MarathonClientTest(JsonClientTestBase):
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/my-path')))
 
-        write_json_response(request, {'other-field-key': 'do-not-care'})
+        json_response(request, {'other-field-key': 'do-not-care'})
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
@@ -269,7 +276,7 @@ class MarathonClientTest(JsonClientTestBase):
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/v2/eventSubscriptions')))
 
-        write_json_response(request, {
+        json_response(request, {
             'callbackUrls': [
                 'http://localhost:7000/events?registration=localhost'
             ]
@@ -300,7 +307,7 @@ class MarathonClientTest(JsonClientTestBase):
             }
         ))
 
-        write_json_response(request, {
+        json_response(request, {
             # TODO: Add check that callbackUrl is correct
             'callbackUrl':
                 'http://localhost:7000/events?registration=localhost',
@@ -331,7 +338,7 @@ class MarathonClientTest(JsonClientTestBase):
             }
         ))
 
-        write_json_response(request, {}, response_code=201)
+        json_response(request, {}, response_code=201)
 
         res = yield d
         self.assertThat(res, Equals(False))
@@ -382,7 +389,7 @@ class MarathonClientTest(JsonClientTestBase):
                 }
             ]
         }
-        write_json_response(request, apps)
+        json_response(request, apps)
 
         res = yield d
         self.assertThat(res, Equals(apps['apps']))
@@ -462,7 +469,7 @@ class MarathonClientTest(JsonClientTestBase):
                 }
             }
         }
-        write_json_response(request, app)
+        json_response(request, app)
 
         res = yield d
         self.assertThat(res, Equals(app['app']))
@@ -505,7 +512,7 @@ class MarathonClientTest(JsonClientTestBase):
                 }
             ]
         }
-        write_json_response(request, tasks)
+        json_response(request, tasks)
 
         res = yield d
         self.assertThat(res, Equals(tasks['tasks']))
