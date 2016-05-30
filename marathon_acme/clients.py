@@ -12,33 +12,37 @@ from uritools import uricompose, urisplit
 client._HTTP11ClientFactory.noisy = False
 
 
+def json_content(response):
+    # Workaround for treq not treating JSON as UTF-8 by default (RFC7158)
+    # https://github.com/twisted/treq/pull/126
+    # See this discussion: http://stackoverflow.com/q/9254891
+    d = response.text(encoding='utf-8')
+    return d.addCallback(json.loads)
+
+
 class JsonClient(object):
     debug = False
-    clock = reactor
     timeout = 5
-    agent = None
 
-    def __init__(self, endpoint):
+    def __init__(self, endpoint, agent=None, clock=reactor):
         """
         Create a client with the specified default endpoint.
         """
         self.endpoint = urisplit(endpoint)
-        self.pool = client.HTTPConnectionPool(self.clock, persistent=False)
+        self._agent = agent
+        self._pool = client.HTTPConnectionPool(clock, persistent=False)
 
-    def requester(self, *args, **kwargs):
-        return treq.request(*args, **kwargs)
-
-    def _log_http_response(self, response, method, path, data):
+    def _log_request_response(self, response, method, path, data):
         log.msg('%s %s with %s returned: %s' % (
             method, path, data, response.code))
         return response
 
-    def _log_http_error(self, failure, url):
+    def _log_request_error(self, failure, url):
         log.err(failure, 'Error performing request to %s' % (url,))
         return failure
 
     def request(self, method, path, query=None, endpoint=None, json_data=None,
-                **kwargs):
+                raise_for_status=False, **kwargs):
         """
         Perform a request. A number of basic defaults are set on the request
         that make using a JSON API easier. These defaults can be overridden by
@@ -57,6 +61,8 @@ class JsonClient(object):
         :param: json_data:
             A python data structure that will be converted to a JSON string
             using `json.dumps` and used as the request body.
+        :param: raise_for_status:
+            Whether to raise an error for a 4xx or 5xx response code.
         :param: kwargs:
             Any other parameters that will be passed to `treq.request`, for
             example headers or parameters.
@@ -73,31 +79,35 @@ class JsonClient(object):
         # Add JSON body if there is JSON data
         if json_data is not None:
             data = json.dumps(json_data).encode('utf-8')
-            headers['Content-Type'] = 'application/json; charset=utf-8'
+            headers['Content-Type'] = 'application/json'
 
-        requester_kwargs = {
+        request_kwargs = {
             'headers': headers,
             'data': data,
-            'pool': self.pool,
-            'agent': self.agent,
+            'pool': self._pool,
+            'agent': self._agent,
             'timeout': self.timeout
         }
-        requester_kwargs.update(kwargs)
+        request_kwargs.update(kwargs)
 
-        d = self.requester(method, url, **requester_kwargs)
+        d = treq.request(method, url, **request_kwargs)
 
         if self.debug:
-            d.addCallback(self._log_http_response, method, url, data)
+            d.addCallback(self._log_request_response, method, url, data)
 
-        d.addErrback(self._log_http_error, url)
-        return d.addCallback(self._raise_for_status, url)
+        d.addErrback(self._log_request_error, url)
+
+        if raise_for_status:
+            d.addCallback(self._raise_for_status, url)
+
+        return d
 
     def get_json(self, path, query=None, **kwargs):
         """
         Perform a GET request to the given path and return the JSON response.
         """
         d = self.request('GET', path, query, **kwargs)
-        return d.addCallback(lambda response: response.json())
+        return d.addCallback(json_content)
 
     def _raise_for_status(self, response, url):
         """
@@ -140,8 +150,13 @@ class MarathonClient(JsonClient):
         which points to the actual data of the response. For example /v2/apps
         returns something like {"apps": [ {"app1"}, {"app2"} ]}. We're
         interested in the contents of "apps".
+
+        This method will raise an error if:
+        * There is an error response code
+        * The field with the given name cannot be found
         """
-        return self.get_json(path).addCallback(self._get_json_field, field)
+        return self.get_json(path, raise_for_status=True).addCallback(
+            self._get_json_field, field)
 
     def _get_json_field(self, response_json, field_name):
         """

@@ -8,6 +8,7 @@ class FakeMarathon(object):
         self._apps = {}
         self._tasks = {}
         self._app_tasks = {}
+        self._event_subscriptions = []
 
     def add_app(self, app, tasks):
         # Store the app
@@ -38,6 +39,13 @@ class FakeMarathon(object):
             return None
 
         return [self._tasks[task_id] for task_id in task_ids]
+
+    def get_event_subscriptions(self):
+        return self._event_subscriptions
+
+    def add_event_subscription(self, callback_url):
+        assert callback_url not in self._event_subscriptions
+        self._event_subscriptions.append(callback_url)
 
 
 class FakeMarathonAPI(object):
@@ -78,8 +86,16 @@ class FakeMarathonAPI(object):
         request.setResponseCode(200)
         return self._json_response(request, response)
 
+    @app.route('/v2/eventSubscriptions', methods=['GET'])
+    def get_event_subscriptions(self, request):
+        response = {
+            'callbackUrls': self._marathon.get_event_subscriptions()
+        }
+        request.setResponseCode(200)
+        return self._json_response(request, response)
+
     def _json_response(self, request, json_obj):
-        request.setHeader('Content-Type', 'application/json; charset=utf-8')
+        request.setHeader('Content-Type', 'application/json')
         return json.dumps(json_obj).encode('utf-8')
 
     def _app_not_found(self, request, app_id):

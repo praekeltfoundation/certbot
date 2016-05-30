@@ -1,7 +1,3 @@
-import json
-
-import treq
-
 from testtools.matchers import Equals
 
 from twisted.internet.defer import inlineCallbacks
@@ -10,8 +6,7 @@ from twisted.web.server import Site
 
 from txfake import FakeServer
 
-from uritools import uricompose
-
+from marathon_acme.clients import JsonClient, json_content
 from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
 from marathon_acme.tests.matchers import IsJsonResponseWithCode
@@ -32,20 +27,8 @@ class TestFakeMarathonAPI(TestCase):
         _LoopbackAddress.port = 7000
 
         fake_server = FakeServer(Site(self.marathon_api.app.resource()))
-        self.agent = FakeServerAgent(fake_server.endpoint)
-
-    def request(self, method, path, query=None, json_data=None):
-        url = uricompose('http', 'www.example.com', path, query)
-        data = None
-        headers = {'Accept': 'application/json'}
-
-        # Add JSON body if there is JSON data
-        if json_data is not None:
-            data = json.dumps(json_data).encode('utf-8')
-            headers['Content-Type'] = 'application/json'
-
-        return treq.request(
-            method, url, data=data, headers=headers, agent=self.agent)
+        fake_agent = FakeServerAgent(fake_server.endpoint)
+        self.client = JsonClient('http://www.example.com', agent=fake_agent)
 
     @inlineCallbacks
     def test_get_apps_empty(self):
@@ -53,10 +36,10 @@ class TestFakeMarathonAPI(TestCase):
         When the list of apps is requested and there are no apps, an empty list
         of apps should be returned.
         """
-        response = yield self.request('GET', '/v2/apps')
+        response = yield self.client.request('GET', '/v2/apps')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'apps': []}))
 
     @inlineCallbacks
@@ -83,10 +66,10 @@ class TestFakeMarathonAPI(TestCase):
         ]
         self.marathon.add_app(app, tasks)
 
-        response = yield self.request('GET', '/v2/apps')
+        response = yield self.client.request('GET', '/v2/apps')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'apps': [app]}))
 
     @inlineCallbacks
@@ -112,10 +95,10 @@ class TestFakeMarathonAPI(TestCase):
         ]
         self.marathon.add_app(app, tasks)
 
-        response = yield self.request('GET', '/v2/apps/my-app_1')
+        response = yield self.client.request('GET', '/v2/apps/my-app_1')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'app': app}))
 
     @inlineCallbacks
@@ -125,10 +108,10 @@ class TestFakeMarathonAPI(TestCase):
         response code should be returned as well as a message about the app
         not existing.
         """
-        response = yield self.request('GET', '/v2/apps/my-app_1')
+        response = yield self.client.request('GET', '/v2/apps/my-app_1')
         self.assertThat(response, IsJsonResponseWithCode(404))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json,
                         Equals({'message': "App '/my-app_1' does not exist"}))
 
@@ -168,10 +151,10 @@ class TestFakeMarathonAPI(TestCase):
         ]
         self.marathon.add_app(app, tasks)
 
-        response = yield self.request('GET', '/v2/apps/my-app_1/tasks')
+        response = yield self.client.request('GET', '/v2/apps/my-app_1/tasks')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'tasks': tasks}))
 
     @inlineCallbacks
@@ -181,9 +164,25 @@ class TestFakeMarathonAPI(TestCase):
         404 response code should be returned as well as a message about the app
         not existing.
         """
-        response = yield self.request('GET', '/v2/apps/my-app_1/tasks')
+        response = yield self.client.request('GET', '/v2/apps/my-app_1/tasks')
         self.assertThat(response, IsJsonResponseWithCode(404))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json,
                         Equals({'message': "App '/my-app_1' does not exist"}))
+
+    @inlineCallbacks
+    def test_get_event_subscriptions(self):
+        """
+        When the event subscriptions are requested, the callback URLs for
+        subscribers should be returned.
+        """
+        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+        self.marathon.add_event_subscription(callback_url)
+
+        response = yield self.client.request('GET', '/v2/eventSubscriptions')
+        self.assertThat(response, IsJsonResponseWithCode(200))
+
+        response_json = yield json_content(response)
+        self.assertThat(response_json,
+                        Equals({'callbackUrls': [callback_url]}))
