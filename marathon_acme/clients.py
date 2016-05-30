@@ -24,12 +24,12 @@ class JsonClient(object):
         self._agent = agent
         self._pool = client.HTTPConnectionPool(clock, persistent=False)
 
-    def _log_http_response(self, response, method, path, data):
+    def _log_request_response(self, response, method, path, data):
         log.msg('%s %s with %s returned: %s' % (
             method, path, data, response.code))
         return response
 
-    def _log_http_error(self, failure, url):
+    def _log_request_error(self, failure, url):
         log.err(failure, 'Error performing request to %s' % (url,))
         return failure
 
@@ -85,9 +85,9 @@ class JsonClient(object):
         d = treq.request(method, url, **request_kwargs)
 
         if self.debug:
-            d.addCallback(self._log_http_response, method, url, data)
+            d.addCallback(self._log_request_response, method, url, data)
 
-        d.addErrback(self._log_http_error, url)
+        d.addErrback(self._log_request_error, url)
 
         if raise_for_status:
             d.addCallback(self._raise_for_status, url)
