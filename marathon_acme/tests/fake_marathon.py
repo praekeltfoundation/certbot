@@ -1,6 +1,10 @@
 import json
 
+from datetime import datetime
+
 from klein import Klein
+
+from uritools import urisplit
 
 
 class FakeMarathon(object):
@@ -44,8 +48,22 @@ class FakeMarathon(object):
         return self._event_subscriptions
 
     def add_event_subscription(self, callback_url):
-        assert callback_url not in self._event_subscriptions
-        self._event_subscriptions.append(callback_url)
+        if callback_url not in self._event_subscriptions:
+            self._event_subscriptions.append(callback_url)
+
+    def trigger_event(self, event_type, **kwargs):
+        event = {
+            'eventType': event_type,
+            # FIXME: This isn't quite like Marathon's timestamp.
+            # Differences: this has microseconds instead of milliseconds,
+            # Marathon has a trailing 'Z'.
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        event.update(kwargs)
+
+        # TODO: Send off event to subscribers
+
+        return event
 
 
 class FakeMarathonAPI(object):
@@ -93,6 +111,24 @@ class FakeMarathonAPI(object):
         }
         request.setResponseCode(200)
         return self._json_response(request, response)
+
+    @app.route('/v2/eventSubscriptions', methods=['POST'])
+    def post_event_subscriptions(self, request):
+        query = urisplit(request.uri).getquerydict()
+
+        assert 'callbackUrl' in query
+        assert query['callbackUrl']
+
+        callback_url = query['callbackUrl'][0]
+        self._marathon.add_event_subscription(callback_url)
+
+        # FIXME: Should this be triggered by add_event_subscription()?
+        event = self._marathon.trigger_event('subscribe_event',
+                                             clientIp=request.getClientIP(),
+                                             callbackUrl=callback_url)
+
+        request.setResponseCode(200)
+        return self._json_response(request, event)
 
     def _json_response(self, request, json_obj):
         request.setHeader('Content-Type', 'application/json')
