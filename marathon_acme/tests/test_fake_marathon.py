@@ -6,7 +6,7 @@ from twisted.web.server import Site
 
 from txfake import FakeServer
 
-from marathon_acme.clients import JsonClient
+from marathon_acme.clients import JsonClient, json_content
 from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
 from marathon_acme.tests.matchers import IsJsonResponseWithCode
@@ -39,7 +39,7 @@ class TestFakeMarathonAPI(TestCase):
         response = yield self.client.request('GET', '/v2/apps')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'apps': []}))
 
     @inlineCallbacks
@@ -69,7 +69,7 @@ class TestFakeMarathonAPI(TestCase):
         response = yield self.client.request('GET', '/v2/apps')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'apps': [app]}))
 
     @inlineCallbacks
@@ -98,7 +98,7 @@ class TestFakeMarathonAPI(TestCase):
         response = yield self.client.request('GET', '/v2/apps/my-app_1')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'app': app}))
 
     @inlineCallbacks
@@ -111,7 +111,7 @@ class TestFakeMarathonAPI(TestCase):
         response = yield self.client.request('GET', '/v2/apps/my-app_1')
         self.assertThat(response, IsJsonResponseWithCode(404))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json,
                         Equals({'message': "App '/my-app_1' does not exist"}))
 
@@ -154,7 +154,7 @@ class TestFakeMarathonAPI(TestCase):
         response = yield self.client.request('GET', '/v2/apps/my-app_1/tasks')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'tasks': tasks}))
 
     @inlineCallbacks
@@ -167,7 +167,7 @@ class TestFakeMarathonAPI(TestCase):
         response = yield self.client.request('GET', '/v2/apps/my-app_1/tasks')
         self.assertThat(response, IsJsonResponseWithCode(404))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json,
                         Equals({'message': "App '/my-app_1' does not exist"}))
 
@@ -183,6 +183,6 @@ class TestFakeMarathonAPI(TestCase):
         response = yield self.client.request('GET', '/v2/eventSubscriptions')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json,
                         Equals({'callbackUrls': [callback_url]}))

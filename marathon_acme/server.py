@@ -34,7 +34,7 @@ def _text_content(request, encoding='ISO-8859-1'):
 
 
 def _json_content(request):
-    return json.loads(_text_content(request))
+    return json.loads(_text_content(request, encoding='utf-8'))
 
 
 class MarathonEventServer(object):

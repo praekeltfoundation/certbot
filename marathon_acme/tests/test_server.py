@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from twisted.internet.defer import fail, inlineCallbacks, succeed
 from twisted.protocols.loopback import _LoopbackAddress
 from twisted.web.server import Site
@@ -6,7 +7,7 @@ from testtools.matchers import Equals
 
 from txfake import FakeServer
 
-from marathon_acme.clients import JsonClient
+from marathon_acme.clients import JsonClient, json_content
 from marathon_acme.server import MarathonEventServer, Health
 from marathon_acme.tests.helpers import TestCase, FakeServerAgent
 from marathon_acme.tests.matchers import IsJsonResponseWithCode
@@ -37,7 +38,7 @@ class TestMarathonEventServer(TestCase):
         response = yield self.client.request('GET', '/')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({}))
 
     @inlineCallbacks
@@ -66,7 +67,7 @@ class TestMarathonEventServer(TestCase):
             'POST', '/events', json_data=json_data)
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'message': 'hello'}))
 
     @inlineCallbacks
@@ -96,7 +97,7 @@ class TestMarathonEventServer(TestCase):
             'POST', '/events', json_data=json_data)
         self.assertThat(response, IsJsonResponseWithCode(500))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json,
                         Equals({'error': 'Something went wrong'}))
 
@@ -118,7 +119,7 @@ class TestMarathonEventServer(TestCase):
             'POST', '/events', json_data=json_data)
         self.assertThat(response, IsJsonResponseWithCode(501))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({
             'error': 'Event type subscribe_event not supported.'
         }))
@@ -131,13 +132,13 @@ class TestMarathonEventServer(TestCase):
         be returned together with the JSON message from the handler.
         """
         self.event_server.set_health_handler(
-            lambda: Health(True, {'message': 'I\'m 200/OK!'}))
+            lambda: Health(True, {'message': "I'm 200/OK!"}))
 
         response = yield self.client.request('GET', '/health')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
-        response_json = yield response.json()
-        self.assertThat(response_json, Equals({'message': 'I\'m 200/OK!'}))
+        response_json = yield json_content(response)
+        self.assertThat(response_json, Equals({'message': "I'm 200/OK!"}))
 
     @inlineCallbacks
     def test_health_unhealthy(self):
@@ -147,13 +148,13 @@ class TestMarathonEventServer(TestCase):
         be returned together with the JSON message from the handler.
         """
         self.event_server.set_health_handler(
-            lambda: Health(False, {'error': 'I\'m sad :('}))
+            lambda: Health(False, {'error': "I'm sad :("}))
 
         response = yield self.client.request('GET', '/health')
         self.assertThat(response, IsJsonResponseWithCode(503))
 
-        response_json = yield response.json()
-        self.assertThat(response_json, Equals({'error': 'I\'m sad :('}))
+        response_json = yield json_content(response)
+        self.assertThat(response_json, Equals({'error': "I'm sad :("}))
 
     @inlineCallbacks
     def test_health_handler_unset(self):
@@ -165,7 +166,23 @@ class TestMarathonEventServer(TestCase):
         response = yield self.client.request('GET', '/health')
         self.assertThat(response, IsJsonResponseWithCode(501))
 
-        response_json = yield response.json()
+        response_json = yield json_content(response)
         self.assertThat(response_json, Equals({
             'error': 'Cannot determine service health: no handler set'
         }))
+
+    @inlineCallbacks
+    def test_health_handler_unicode(self):
+        """
+        When a GET request is made to the health endpoint, and the health
+        handler reports that the service is unhealthy, a 503 status code should
+        be returned together with the JSON message from the handler.
+        """
+        self.event_server.set_health_handler(
+            lambda: Health(False, {'error': u"I'm sad 🙁"}))
+
+        response = yield self.client.request('GET', '/health')
+        self.assertThat(response, IsJsonResponseWithCode(503))
+
+        response_json = yield json_content(response)
+        self.assertThat(response_json, Equals({'error': u"I'm sad 🙁"}))

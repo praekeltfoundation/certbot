@@ -1,8 +1,6 @@
 import json
 import treq
 
-from treq.content import text_content
-
 from twisted.internet import reactor
 from twisted.python import log
 from twisted.web import client
@@ -12,6 +10,14 @@ from uritools import uricompose, urisplit
 
 # Twisted's default HTTP11 client factory is way too verbose
 client._HTTP11ClientFactory.noisy = False
+
+
+def json_content(response):
+    # Workaround for treq not treating JSON as UTF-8 by default (RFC7158)
+    # https://github.com/twisted/treq/pull/126
+    # See this discussion: http://stackoverflow.com/q/9254891
+    d = response.text(encoding='utf-8')
+    return d.addCallback(json.loads)
 
 
 class JsonClient(object):
@@ -101,11 +107,7 @@ class JsonClient(object):
         Perform a GET request to the given path and return the JSON response.
         """
         d = self.request('GET', path, query, **kwargs)
-        # Workaround for treq not treating JSON as UTF-8 by default (RFC7158)
-        # https://github.com/twisted/treq/pull/126
-        # See this discussion: http://stackoverflow.com/q/9254891
-        d.addCallback(text_content, encoding='utf-8')
-        return d.addCallback(json.loads)
+        return d.addCallback(json_content)
 
     def _raise_for_status(self, response, url):
         """
