@@ -1,6 +1,3 @@
-import json
-import treq
-
 from twisted.internet.defer import fail, inlineCallbacks, succeed
 from twisted.protocols.loopback import _LoopbackAddress
 from twisted.web.server import Site
@@ -9,8 +6,7 @@ from testtools.matchers import Equals
 
 from txfake import FakeServer
 
-from uritools import uricompose
-
+from marathon_acme.clients import JsonClient
 from marathon_acme.server import MarathonEventServer, Health
 from marathon_acme.tests.helpers import TestCase, FakeServerAgent
 from marathon_acme.tests.matchers import IsJsonResponseWithCode
@@ -29,20 +25,8 @@ class TestMarathonEventServer(TestCase):
         _LoopbackAddress.port = 7000
 
         fake_server = FakeServer(Site(self.event_server.app.resource()))
-        self.agent = FakeServerAgent(fake_server.endpoint)
-
-    def request(self, method, path, query=None, json_data=None):
-        url = uricompose('http', 'www.example.com', path, query)
-        data = None
-        headers = {'Accept': 'application/json'}
-
-        # Add JSON body if there is JSON data
-        if json_data is not None:
-            data = json.dumps(json_data).encode('utf-8')
-            headers['Content-Type'] = 'application/json; charset=utf-8'
-
-        return treq.request(
-            method, url, data=data, headers=headers, agent=self.agent)
+        fake_agent = FakeServerAgent(fake_server.endpoint)
+        self.client = JsonClient('http://www.example.com', agent=fake_agent)
 
     @inlineCallbacks
     def test_index(self):
@@ -50,7 +34,7 @@ class TestMarathonEventServer(TestCase):
         When a GET request is made to the root path ``/``, the server should
         return a 200 status code and an empty JSON object.
         """
-        response = yield self.request('GET', '/')
+        response = yield self.client.request('GET', '/')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield response.json()
@@ -78,7 +62,8 @@ class TestMarathonEventServer(TestCase):
             'ports': [31372],
             'version': '2014-04-04T06:26:23.051Z',
         }
-        response = yield self.request('POST', '/events', json_data=json_data)
+        response = yield self.client.request(
+            'POST', '/events', json_data=json_data)
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield response.json()
@@ -107,7 +92,8 @@ class TestMarathonEventServer(TestCase):
             'ports': [31372],
             'version': '2014-04-04T06:26:23.051Z',
         }
-        response = yield self.request('POST', '/events', json_data=json_data)
+        response = yield self.client.request(
+            'POST', '/events', json_data=json_data)
         self.assertThat(response, IsJsonResponseWithCode(500))
 
         response_json = yield response.json()
@@ -128,7 +114,8 @@ class TestMarathonEventServer(TestCase):
           'clientIp': '1.2.3.4',
           'callbackUrl': 'http://subscriber.acme.org/callbacks'
         }
-        response = yield self.request('POST', '/events', json_data=json_data)
+        response = yield self.client.request(
+            'POST', '/events', json_data=json_data)
         self.assertThat(response, IsJsonResponseWithCode(501))
 
         response_json = yield response.json()
@@ -146,7 +133,7 @@ class TestMarathonEventServer(TestCase):
         self.event_server.set_health_handler(
             lambda: Health(True, {'message': 'I\'m 200/OK!'}))
 
-        response = yield self.request('GET', '/health')
+        response = yield self.client.request('GET', '/health')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield response.json()
@@ -162,7 +149,7 @@ class TestMarathonEventServer(TestCase):
         self.event_server.set_health_handler(
             lambda: Health(False, {'error': 'I\'m sad :('}))
 
-        response = yield self.request('GET', '/health')
+        response = yield self.client.request('GET', '/health')
         self.assertThat(response, IsJsonResponseWithCode(503))
 
         response_json = yield response.json()
@@ -175,7 +162,7 @@ class TestMarathonEventServer(TestCase):
         handler hasn't been set, a 501 status code should be returned together
         with a JSON message that explains that the handler is not set.
         """
-        response = yield self.request('GET', '/health')
+        response = yield self.client.request('GET', '/health')
         self.assertThat(response, IsJsonResponseWithCode(501))
 
         response_json = yield response.json()
