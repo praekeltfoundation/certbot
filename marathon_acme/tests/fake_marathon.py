@@ -95,7 +95,7 @@ class FakeMarathonAPI(object):
         return self._json_response(request, response)
 
     def _json_response(self, request, json_obj):
-        request.setHeader('Content-Type', 'application/json; charset=utf-8')
+        request.setHeader('Content-Type', 'application/json')
         return json.dumps(json_obj).encode('utf-8')
 
     def _app_not_found(self, request, app_id):

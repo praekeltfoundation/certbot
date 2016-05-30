@@ -82,7 +82,7 @@ class JsonClientTest(JsonClientTestBase):
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/hello')))
         self.assertThat(request.requestHeaders, HasHeader(
-            'content-type', ['application/json; charset=utf-8']))
+            'content-type', ['application/json']))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['application/json']))
         self.assertThat(read_json_response(request), Equals({'test': 'hello'}))

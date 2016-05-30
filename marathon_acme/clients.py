@@ -1,6 +1,8 @@
 import json
 import treq
 
+from treq.content import text_content
+
 from twisted.internet import reactor
 from twisted.python import log
 from twisted.web import client
@@ -71,7 +73,7 @@ class JsonClient(object):
         # Add JSON body if there is JSON data
         if json_data is not None:
             data = json.dumps(json_data).encode('utf-8')
-            headers['Content-Type'] = 'application/json; charset=utf-8'
+            headers['Content-Type'] = 'application/json'
 
         request_kwargs = {
             'headers': headers,
@@ -99,7 +101,11 @@ class JsonClient(object):
         Perform a GET request to the given path and return the JSON response.
         """
         d = self.request('GET', path, query, **kwargs)
-        return d.addCallback(lambda response: response.json())
+        # Workaround for treq not treating JSON as UTF-8 by default (RFC7158)
+        # https://github.com/twisted/treq/pull/126
+        # See this discussion: http://stackoverflow.com/q/9254891
+        d.addCallback(text_content, encoding='utf-8')
+        return d.addCallback(json.loads)
 
     def _raise_for_status(self, response, url):
         """

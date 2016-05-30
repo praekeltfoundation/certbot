@@ -84,7 +84,7 @@ class MarathonEventServer(object):
         Return a serialized JSON object and set the appropriate Content-Type
         header.
         """
-        request.setHeader('Content-Type', 'application/json; charset=utf-8')
+        request.setHeader('Content-Type', 'application/json')
         return json.dumps(json_obj).encode('utf-8')
 
     def _ok_response(self, json_obj, request):

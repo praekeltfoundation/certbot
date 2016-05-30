@@ -41,11 +41,11 @@ class HasHeader(Equals):
 def IsJsonResponseWithCode(code):
     """
     Match the status code on a treq.response object and check that a header is
-    set to indicate that the content type is UTF-8 encoded JSON.
+    set to indicate that the content type is JSON.
     """
     return MatchesStructure(
         code=Equals(code),
-        headers=HasHeader('Content-Type', ['application/json; charset=utf-8'])
+        headers=HasHeader('Content-Type', ['application/json'])
     )
 
 
