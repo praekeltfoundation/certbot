@@ -14,19 +14,15 @@ client._HTTP11ClientFactory.noisy = False
 
 class JsonClient(object):
     debug = False
-    clock = reactor
     timeout = 5
-    agent = None
 
-    def __init__(self, endpoint):
+    def __init__(self, endpoint, agent=None, clock=reactor):
         """
         Create a client with the specified default endpoint.
         """
         self.endpoint = urisplit(endpoint)
-        self.pool = client.HTTPConnectionPool(self.clock, persistent=False)
-
-    def requester(self, *args, **kwargs):
-        return treq.request(*args, **kwargs)
+        self._agent = agent
+        self._pool = client.HTTPConnectionPool(clock, persistent=False)
 
     def _log_http_response(self, response, method, path, data):
         log.msg('%s %s with %s returned: %s' % (
@@ -77,16 +73,16 @@ class JsonClient(object):
             data = json.dumps(json_data).encode('utf-8')
             headers['Content-Type'] = 'application/json; charset=utf-8'
 
-        requester_kwargs = {
+        request_kwargs = {
             'headers': headers,
             'data': data,
-            'pool': self.pool,
-            'agent': self.agent,
+            'pool': self._pool,
+            'agent': self._agent,
             'timeout': self.timeout
         }
-        requester_kwargs.update(kwargs)
+        request_kwargs.update(kwargs)
 
-        d = self.requester(method, url, **requester_kwargs)
+        d = treq.request(method, url, **request_kwargs)
 
         if self.debug:
             d.addCallback(self._log_http_response, method, url, data)

@@ -26,9 +26,9 @@ class TestFakeMarathonAPI(TestCase):
         # https://github.com/twisted/klein/issues/102
         _LoopbackAddress.port = 7000
 
-        self.client = JsonClient('http://www.example.com')
         fake_server = FakeServer(Site(self.marathon_api.app.resource()))
-        self.client.agent = FakeServerAgent(fake_server.endpoint)
+        fake_agent = FakeServerAgent(fake_server.endpoint)
+        self.client = JsonClient('http://www.example.com', agent=fake_agent)
 
     @inlineCallbacks
     def test_get_apps_empty(self):

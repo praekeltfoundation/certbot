@@ -18,21 +18,20 @@ class JsonClientTestBase(TestCase):
     def setUp(self):
         super(JsonClientTestBase, self).setUp()
 
-        self.client = self.get_client()
         self.requests = DeferredQueue()
-        self.fake_server = FakeHttpServer(self.handle_request)
+        fake_server = FakeHttpServer(self.handle_request)
 
-        self.client.agent = self.fake_server.get_agent()
+        self.client = self.get_client(fake_server.get_agent())
 
     def handle_request(self, request):
         self.requests.put(request)
         return NOT_DONE_YET
 
-    def get_client(self):
+    def get_client(self, agent):
         """To be implemented by subclass"""
         raise NotImplementedError()
 
-    def uri(self, path, encode=False):
+    def uri(self, path):
         return '%s%s' % (self.client.endpoint.geturi(), path,)
 
     def cleanup_d(self, d):
@@ -42,8 +41,8 @@ class JsonClientTestBase(TestCase):
 
 class JsonClientTest(JsonClientTestBase):
 
-    def get_client(self):
-        return JsonClient('http://localhost:8000')
+    def get_client(self, agent):
+        return JsonClient('http://localhost:8000', agent=agent)
 
     @inlineCallbacks
     def test_request(self):
@@ -192,8 +191,8 @@ class JsonClientTest(JsonClientTestBase):
 
 
 class MarathonClientTest(JsonClientTestBase):
-    def get_client(self):
-        return MarathonClient('http://localhost:8080')
+    def get_client(self, agent):
+        return MarathonClient('http://localhost:8080', agent=agent)
 
     @inlineCallbacks
     def test_get_json_field(self):
