@@ -62,6 +62,13 @@ class FakeMarathon(object):
         return self.trigger_event(
             'subscribe_event', callbackUrl=callback_url, clientIp=client_ip)
 
+    def remove_event_subscription(self, callback_url, client_ip=None):
+        if callback_url in self._event_subscriptions:
+            self._event_subscriptions.remove(callback_url)
+
+        return self.trigger_event(
+            'unsubscribe_event', callbackUrl=callback_url, clientIp=client_ip)
+
     def trigger_event(self, event_type, **kwargs):
         event = {
             'eventType': event_type,
@@ -131,6 +138,20 @@ class FakeMarathonAPI(object):
 
         callback_url = query['callbackUrl'][0]
         event = self._marathon.add_event_subscription(
+            callback_url, request.getClientIP())
+
+        request.setResponseCode(200)
+        write_request_json(request, event)
+
+    @app.route('/v2/eventSubscriptions', methods=['DELETE'])
+    def delete_event_subscriptions(self, request):
+        query = urisplit(request.uri).getquerydict()
+
+        assert 'callbackUrl' in query
+        assert query['callbackUrl']
+
+        callback_url = query['callbackUrl'][0]
+        event = self._marathon.remove_event_subscription(
             callback_url, request.getClientIP())
 
         request.setResponseCode(200)
