@@ -1,10 +1,10 @@
-import json
-
 from datetime import datetime
 
 from klein import Klein
 
 from uritools import urisplit
+
+from marathon_acme.server import write_request_json
 
 
 class FakeMarathon(object):
@@ -81,31 +81,33 @@ class FakeMarathonAPI(object):
             'apps': self._marathon.get_apps()
         }
         request.setResponseCode(200)
-        return self._json_response(request, response)
+        write_request_json(request, response)
 
     @app.route('/v2/apps/<app_id>', methods=['GET'])
     def get_app(self, request, app_id):
         app = self._marathon.get_app('/' + app_id.rstrip('/'))
         if app is None:
-            return self._app_not_found(request, app_id)
+            self._app_not_found(request, app_id)
+            return
 
         response = {
             'app': app
         }
         request.setResponseCode(200)
-        return self._json_response(request, response)
+        write_request_json(request, response)
 
     @app.route('/v2/apps/<app_id>/tasks', methods=['GET'])
     def get_app_tasks(self, request, app_id):
         tasks = self._marathon.get_app_tasks('/' + app_id)
         if tasks is None:
-            return self._app_not_found(request, app_id)
+            self._app_not_found(request, app_id)
+            return
 
         response = {
             'tasks': tasks
         }
         request.setResponseCode(200)
-        return self._json_response(request, response)
+        write_request_json(request, response)
 
     @app.route('/v2/eventSubscriptions', methods=['GET'])
     def get_event_subscriptions(self, request):
@@ -113,7 +115,7 @@ class FakeMarathonAPI(object):
             'callbackUrls': self._marathon.get_event_subscriptions()
         }
         request.setResponseCode(200)
-        return self._json_response(request, response)
+        write_request_json(request, response)
 
     @app.route('/v2/eventSubscriptions', methods=['POST'])
     def post_event_subscriptions(self, request):
@@ -127,14 +129,10 @@ class FakeMarathonAPI(object):
             callback_url, request.getClientIP())
 
         request.setResponseCode(200)
-        return self._json_response(request, event)
-
-    def _json_response(self, request, json_obj):
-        request.setHeader('Content-Type', 'application/json')
-        return json.dumps(json_obj).encode('utf-8')
+        write_request_json(request, event)
 
     def _app_not_found(self, request, app_id):
         request.setResponseCode(404)
-        return self._json_response(request, {
-            'message': 'App \'/%s\' does not exist' % (app_id,)
+        write_request_json(request, {
+            'message': "App '/%s' does not exist" % (app_id,)
         })
