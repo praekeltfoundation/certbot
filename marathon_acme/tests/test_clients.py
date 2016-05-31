@@ -7,7 +7,8 @@ from testtools.twistedsupport import failed
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
-from marathon_acme.clients import HTTPError, JsonClient, MarathonClient
+from marathon_acme.clients import (
+    HTTPError, JsonClient, MarathonClient, raise_for_status)
 from marathon_acme.server import read_request_json, write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
@@ -133,12 +134,12 @@ class JsonClientTest(JsonClientTestBase):
     @inlineCallbacks
     def test_client_error_response(self):
         """
-        When raise_for_status is True and a request is made and a 4xx response
-        code is returned, a HTTPError should be raised to indicate a client
-        error.
+        When a request is made and the raise_for_status callback is added and a
+        4xx response code is returned, a HTTPError should be raised to indicate
+        a client error.
         """
-        d = self.cleanup_d(self.client.request(
-            'GET', path='/hello', raise_for_status=True))
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
+        d.addCallback(raise_for_status)
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -155,12 +156,12 @@ class JsonClientTest(JsonClientTestBase):
     @inlineCallbacks
     def test_server_error_response(self):
         """
-        When raise_for_status is True and a request is made and a 5xx response
-        code is returned, a HTTPError should be raised to indicate a server
-        error.
+        When a request is made and the raise_for_status callback is added and a
+        5xx response code is returned, a HTTPError should be raised to indicate
+        a server error.
         """
-        d = self.cleanup_d(self.client.request(
-            'GET', path='/hello', raise_for_status=True))
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
+        d.addCallback(raise_for_status)
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -173,28 +174,6 @@ class JsonClientTest(JsonClientTestBase):
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
             HTTPError, '502 Server Error for url: %s' % self.uri('/hello'))))
-
-    @inlineCallbacks
-    def test_unraised_error_response(self):
-        """
-        When raise_for_status is False and a request is made and a error
-        response code is returned, no error should be raised.
-        """
-        d = self.cleanup_d(self.client.request('GET', path='/hello'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/hello')))
-
-        request.setResponseCode(503)
-        request.write(b'Service unavailable\n')
-        request.finish()
-
-        response = yield d
-        self.assertThat(response.code, Equals(503))
-
-        response_text = yield response.text()
-        self.assertThat(response_text, Equals('Service unavailable\n'))
 
 
 class MarathonClientTest(JsonClientTestBase):

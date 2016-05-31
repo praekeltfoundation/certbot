@@ -1,11 +1,13 @@
 import json
 
+from requests.exceptions import HTTPError
+
 from treq.client import HTTPClient
 
 from twisted.python import log
 from twisted.web.http import OK
 
-from uritools import uricompose, urisplit
+from uritools import uricompose, uridecode, urisplit
 
 
 def json_content(response):
@@ -14,6 +16,28 @@ def json_content(response):
     # See this discussion: http://stackoverflow.com/q/9254891
     d = response.text(encoding='utf-8')
     return d.addCallback(json.loads)
+
+
+def raise_for_status(response):
+    """
+    Raises a `requests.exceptions.HTTPError` if the response did not succeed.
+    Adapted from the Requests library:
+    https://github.com/kennethreitz/requests/blob/v2.8.1/requests/models.py#L825-L837
+    """
+    http_error_msg = ''
+
+    if 400 <= response.code < 500:
+        http_error_msg = '%s Client Error for url: %s' % (
+            response.code, uridecode(response.request.absoluteURI))
+
+    elif 500 <= response.code < 600:
+        http_error_msg = '%s Server Error for url: %s' % (
+            response.code, uridecode(response.request.absoluteURI))
+
+    if http_error_msg:
+        raise HTTPError(http_error_msg, response=response)
+
+    return response
 
 
 def _default_agent(agent=None, reactor=None, pool=None):
@@ -78,8 +102,7 @@ class JsonClient(object):
 
         return uricompose(**compose_kwargs)
 
-    def request(self, method, url=None, json_data=None, raise_for_status=False,
-                **kwargs):
+    def request(self, method, url=None, json_data=None, **kwargs):
         """
         Perform a request. A number of basic defaults are set on the request
         that make using a JSON API easier. These defaults can be overridden by
@@ -93,8 +116,6 @@ class JsonClient(object):
         :param: json_data:
             A python data structure that will be converted to a JSON string
             using `json.dumps` and used as the request body.
-        :param: raise_for_status:
-            Whether to raise an error for a 4xx or 5xx response code.
         :param: kwargs:
             Any other parameters that will be passed to `treq.request`, for
             example headers. Or any URL parameters to override, for example
@@ -124,9 +145,6 @@ class JsonClient(object):
 
         d.addErrback(self._log_request_error, url)
 
-        if raise_for_status:
-            d.addCallback(self._raise_for_status, url)
-
         return d
 
     def get_json(self, **kwargs):
@@ -135,36 +153,6 @@ class JsonClient(object):
         """
         d = self.request('GET', **kwargs)
         return d.addCallback(json_content)
-
-    def _raise_for_status(self, response, url):
-        """
-        Raises an `HTTPError` if the response did not succeed.
-        Adapted from the Requests library:
-        https://github.com/kennethreitz/requests/blob/v2.8.1/requests/models.py#L825-L837
-        """
-        http_error_msg = ''
-
-        if 400 <= response.code < 500:
-            http_error_msg = '%s Client Error for url: %s' % (response.code,
-                                                              url)
-
-        elif 500 <= response.code < 600:
-            http_error_msg = '%s Server Error for url: %s' % (response.code,
-                                                              url)
-
-        if http_error_msg:
-            raise HTTPError(http_error_msg, response)
-
-        return response
-
-
-class HTTPError(IOError):
-    """
-    Error raised for 4xx and 5xx response codes.
-    """
-    def __init__(self, message, response):
-        self.response = response
-        super(HTTPError, self).__init__(message)
 
 
 class MarathonClient(JsonClient):
@@ -182,8 +170,11 @@ class MarathonClient(JsonClient):
         * There is an error response code
         * The field with the given name cannot be found
         """
-        return self.get_json(raise_for_status=True, **kwargs).addCallback(
-            self._get_json_field, field)
+        d = self.request('GET', **kwargs)
+        d.addCallback(raise_for_status)
+        d.addCallback(json_content)
+        d.addCallback(self._get_json_field, field)
+        return d
 
     def _get_json_field(self, response_json, field_name):
         """
