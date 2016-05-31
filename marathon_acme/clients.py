@@ -1,15 +1,11 @@
 import json
-import treq
 
-from twisted.internet import reactor
+from treq.client import HTTPClient
+
 from twisted.python import log
-from twisted.web import client
 from twisted.web.http import OK
 
 from uritools import uricompose, urisplit
-
-# Twisted's default HTTP11 client factory is way too verbose
-client._HTTP11ClientFactory.noisy = False
 
 
 def json_content(response):
@@ -20,17 +16,32 @@ def json_content(response):
     return d.addCallback(json.loads)
 
 
+def _default_agent(agent=None, reactor=None, pool=None):
+    """
+    Set up a default agent if one is not provided. Use a default reactor to do
+    so, unless one is not provided. The agent will set up a default
+    (non-persistent) connection pool if one is not provided.
+    """
+    if agent is None:
+        if reactor is None:
+            from twisted.internet import reactor
+
+        from twisted.web.client import Agent
+        agent = Agent(reactor, pool)
+
+    return agent
+
+
 class JsonClient(object):
     debug = False
     timeout = 5
 
-    def __init__(self, url=None, agent=None, clock=reactor):
+    def __init__(self, url=None, agent=None, reactor=None, pool=None):
         """
         Create a client with the specified default URL.
         """
         self.url = url
-        self._agent = agent
-        self._pool = client.HTTPConnectionPool(clock, persistent=False)
+        self._client = HTTPClient(_default_agent(agent, reactor, pool))
 
     def _log_request_response(self, response, method, path, data):
         log.msg('%s %s with %s returned: %s' % (
@@ -102,13 +113,11 @@ class JsonClient(object):
         request_kwargs = {
             'headers': headers,
             'data': data,
-            'pool': self._pool,
-            'agent': self._agent,
             'timeout': self.timeout
         }
         request_kwargs.update(kwargs)
 
-        d = treq.request(method, url, **request_kwargs)
+        d = self._client.request(method, url, **request_kwargs)
 
         if self.debug:
             d.addCallback(self._log_request_response, method, url, data)
