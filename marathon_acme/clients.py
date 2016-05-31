@@ -113,10 +113,9 @@ class JsonClient(object):
 
         # Take the userinfo out of the URL and pass as 'auth' to treq so it can
         # be used for HTTP basic auth headers
-        if 'auth' not in kwargs:
-            if userinfo is not None:
-                # treq expects a 2-tuple (username, password)
-                kwargs['auth'] = tuple(userinfo.split(':', 2))
+        if 'auth' not in kwargs and userinfo is not None:
+            # treq expects a 2-tuple (username, password)
+            kwargs['auth'] = tuple(userinfo.split(':', 2))
 
         return uricompose(**compose_kwargs)
 
