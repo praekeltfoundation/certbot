@@ -1,4 +1,4 @@
-from testtools.matchers import Equals, Is, MatchesDict, MatchesRegex
+from testtools.matchers import Equals, Is, MatchesDict
 
 from twisted.internet.defer import inlineCallbacks
 from twisted.protocols.loopback import _LoopbackAddress
@@ -9,7 +9,8 @@ from txfake import FakeServer
 from marathon_acme.clients import JsonClient, json_content
 from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
-from marathon_acme.tests.matchers import IsJsonResponseWithCode
+from marathon_acme.tests.matchers import (
+    IsJsonResponseWithCode, IsRecentMarathonTimestamp)
 
 
 class TestFakeMarathonAPI(TestCase):
@@ -206,8 +207,7 @@ class TestFakeMarathonAPI(TestCase):
             'eventType': Equals('subscribe_event'),
             'callbackUrl': Equals(callback_url),
             'clientIp': Is(None),  # FIXME: No clientIp in request
-            'timestamp': MatchesRegex(  # FIXME: Should we do it like this?
-                r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}?')
+            'timestamp': IsRecentMarathonTimestamp()
         }))
 
         # TODO: Assert that the event is received both in the response and in

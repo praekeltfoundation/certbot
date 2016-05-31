@@ -7,6 +7,14 @@ from uritools import urisplit
 from marathon_acme.server import write_request_json
 
 
+def marathon_timestamp(time=datetime.utcnow()):
+    """
+    Make a Marathon/JodaTime-like timestamp string in ISO8601 format with
+    milliseconds for the current time in UTC.
+    """
+    return time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
+
 class FakeMarathon(object):
     def __init__(self):
         self._apps = {}
@@ -57,10 +65,7 @@ class FakeMarathon(object):
     def trigger_event(self, event_type, **kwargs):
         event = {
             'eventType': event_type,
-            # FIXME: This isn't quite like Marathon's timestamp.
-            # Differences: this has microseconds instead of milliseconds,
-            # Marathon has a trailing 'Z'.
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': marathon_timestamp()
         }
         event.update(kwargs)
 
