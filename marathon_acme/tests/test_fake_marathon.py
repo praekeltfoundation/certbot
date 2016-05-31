@@ -210,6 +210,9 @@ class TestFakeMarathonAPI(TestCase):
                 r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}?')
         }))
 
+        # TODO: Assert that the event is received both in the response and in
+        # the event stream
+
         # Assert that the event subscription was actually added
         self.assertThat(self.marathon.get_event_subscriptions(),
                         Equals([callback_url]))

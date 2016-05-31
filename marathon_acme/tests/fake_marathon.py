@@ -47,9 +47,12 @@ class FakeMarathon(object):
     def get_event_subscriptions(self):
         return self._event_subscriptions
 
-    def add_event_subscription(self, callback_url):
+    def add_event_subscription(self, callback_url, client_ip=None):
         if callback_url not in self._event_subscriptions:
             self._event_subscriptions.append(callback_url)
+
+        return self.trigger_event(
+            'subscribe_event', callbackUrl=callback_url, clientIp=client_ip)
 
     def trigger_event(self, event_type, **kwargs):
         event = {
@@ -120,12 +123,8 @@ class FakeMarathonAPI(object):
         assert query['callbackUrl']
 
         callback_url = query['callbackUrl'][0]
-        self._marathon.add_event_subscription(callback_url)
-
-        # FIXME: Should this be triggered by add_event_subscription()?
-        event = self._marathon.trigger_event('subscribe_event',
-                                             clientIp=request.getClientIP(),
-                                             callbackUrl=callback_url)
+        event = self._marathon.add_event_subscription(
+            callback_url, request.getClientIP())
 
         request.setResponseCode(200)
         return self._json_response(request, event)
