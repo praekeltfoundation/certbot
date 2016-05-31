@@ -92,13 +92,31 @@ class JsonClient(object):
 
         compose_kwargs = {}
         if url is not None:
-            compose_kwargs.update(urisplit(url)._asdict())
+            split_result = urisplit(url)
+            compose_kwargs.update({
+                'scheme': split_result.scheme,
+                'host': split_result.host,
+                'port': split_result.port,
+                'path': split_result.path,
+                'query': split_result.query,
+                'fragment': split_result.fragment
+            })
+            userinfo = split_result.userinfo
 
-        compose_keys = ['scheme', 'authority', 'path', 'query', 'fragment',
-                        'userinfo', 'host', 'port']
-        for key in compose_keys:
+        # Override any things specified in kwargs
+        for key in ['scheme', 'path', 'fragment', 'host', 'port']:
             if key in kwargs:
                 compose_kwargs[key] = kwargs.pop(key)
+
+        if 'params' in kwargs:
+            compose_kwargs['query'] = kwargs.pop('params')
+
+        # Take the userinfo out of the URL and pass as 'auth' to treq so it can
+        # be used for HTTP basic auth headers
+        if 'auth' not in kwargs:
+            if userinfo is not None:
+                # treq expects a 2-tuple (username, password)
+                kwargs['auth'] = tuple(userinfo.split(':', 2))
 
         return uricompose(**compose_kwargs)
 
@@ -206,7 +224,7 @@ class MarathonClient(JsonClient):
         """
         d = self.request('POST',
                          path='/v2/eventSubscriptions',
-                         query={'callbackUrl': callback_url})
+                         params={'callbackUrl': callback_url})
         return d.addCallback(lambda response: response.code == OK)
 
     def delete_event_subscription(self, callback_url):
@@ -215,7 +233,7 @@ class MarathonClient(JsonClient):
         """
         d = self.request('DELETE',
                          path='/v2/eventSubscriptions',
-                         query={'callbackUrl': callback_url})
+                         params={'callbackUrl': callback_url})
         return d.addCallback(lambda response: response.code == OK)
 
     def get_apps(self):

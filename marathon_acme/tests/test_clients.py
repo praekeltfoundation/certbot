@@ -175,6 +175,130 @@ class JsonClientTest(JsonClientTestBase):
         self.assertThat(d, failed(WithErrorTypeAndMessage(
             HTTPError, '502 Server Error for url: %s' % self.uri('/hello'))))
 
+    @inlineCallbacks
+    def test_params(self):
+        """
+        When query parameters are specified as the params kwarg, those
+        parameters are reflected in the request.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', path='/hello', params={'from': 'earth'}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello'), query={'from': ['earth']}))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_url_query_as_params(self):
+        """
+        When query parameters are specified in the URL, those parameters are
+        reflected in the request.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', self.uri('/hello?from=earth')))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello'), query={'from': ['earth']}))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_params_precedence_over_url_query(self):
+        """
+        When query parameters are specified as both the params kwarg and in the
+        URL, the params kwarg takes precedence.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', self.uri('/hello?from=mars'), params={'from': 'earth'}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello'), query={'from': ['earth']}))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_auth(self):
+        """
+        When basic auth credentials are specified as the auth kwarg, the
+        encoded credentials are present in the request headers.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', path='/hello', auth=('user', 'pa$$word')))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(
+            request.requestHeaders,
+            HasHeader('Authorization', ['Basic dXNlcjpwYSQkd29yZA==']))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_url_userinfo_as_auth(self):
+        """
+        When basic auth credentials are specified in the URL, the encoded
+        credentials are present in the request headers.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', 'http://user:pa$$word@localhost:8000/hello'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(
+            request.requestHeaders,
+            HasHeader('Authorization', ['Basic dXNlcjpwYSQkd29yZA==']))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_auth_precedence_over_url_userinfo(self):
+        """
+        When basic auth credentials are specified as both the auth kwarg and in
+        the URL, the credentials in the auth kwarg take precedence.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', 'http://usernator:password@localhost:8000/hello',
+            auth=('user', 'pa$$word')))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(
+            request.requestHeaders,
+            HasHeader('Authorization', ['Basic dXNlcjpwYSQkd29yZA==']))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_url_overrides(self):
+        """
+        When URL parts are overridden via keyword arguments, those overrides
+        should be reflected in the request.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', 'http://example.com:8000/hello#section1',
+            scheme='https', host='example2.com', port='9000', path='/goodbye',
+            fragment='section2'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url='https://example2.com:9000/goodbye#section2'))
+
+        request.setResponseCode(200)
+        request.finish()
+
 
 class MarathonClientTest(JsonClientTestBase):
     def get_client(self, agent):

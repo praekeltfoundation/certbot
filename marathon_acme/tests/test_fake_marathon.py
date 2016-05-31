@@ -199,7 +199,7 @@ class TestFakeMarathonAPI(TestCase):
 
         response = yield self.client.request(
             'POST', '/v2/eventSubscriptions',
-            query={'callbackUrl': callback_url})
+            params={'callbackUrl': callback_url})
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield json_content(response)
@@ -228,7 +228,7 @@ class TestFakeMarathonAPI(TestCase):
 
         response = yield self.client.request(
             'POST', '/v2/eventSubscriptions',
-            query={'callbackUrl': callback_url})
+            params={'callbackUrl': callback_url})
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         self.assertThat(self.marathon.get_event_subscriptions(),
@@ -236,7 +236,7 @@ class TestFakeMarathonAPI(TestCase):
 
         response = yield self.client.request(
             'POST', '/v2/eventSubscriptions',
-            query={'callbackUrl': callback_url})
+            params={'callbackUrl': callback_url})
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         self.assertThat(self.marathon.get_event_subscriptions(),
@@ -254,7 +254,7 @@ class TestFakeMarathonAPI(TestCase):
 
         response = yield self.client.request(
             'DELETE', '/v2/eventSubscriptions',
-            query={'callbackUrl': callback_url})
+            params={'callbackUrl': callback_url})
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield json_content(response)
@@ -284,7 +284,7 @@ class TestFakeMarathonAPI(TestCase):
 
         response = yield self.client.request(
             'DELETE', '/v2/eventSubscriptions',
-            query={'callbackUrl': callback_url})
+            params={'callbackUrl': callback_url})
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         self.assertThat(self.marathon.get_event_subscriptions(),
@@ -292,7 +292,7 @@ class TestFakeMarathonAPI(TestCase):
 
         response = yield self.client.request(
             'DELETE', '/v2/eventSubscriptions',
-            query={'callbackUrl': callback_url})
+            params={'callbackUrl': callback_url})
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         self.assertThat(self.marathon.get_event_subscriptions(),
