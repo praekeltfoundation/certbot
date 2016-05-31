@@ -115,23 +115,6 @@ class JsonClientTest(JsonClientTestBase):
         request.finish()
 
     @inlineCallbacks
-    def test_get_json(self):
-        """
-        When the get_json method is called, a GET request should be made and
-        the response should be deserialized from JSON.
-        """
-        d = self.cleanup_d(self.client.get_json(path='/hello'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/hello')))
-
-        json_response(request, {'test': 'hello'})
-
-        res = yield d
-        self.assertThat(res, Equals({'test': 'hello'}))
-
-    @inlineCallbacks
     def test_client_error_response(self):
         """
         When a request is made and the raise_for_status callback is added and a

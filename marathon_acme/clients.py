@@ -165,13 +165,6 @@ class JsonClient(object):
 
         return d
 
-    def get_json(self, **kwargs):
-        """
-        Perform a GET request to the given path and return the JSON response.
-        """
-        d = self.request('GET', **kwargs)
-        return d.addCallback(json_content)
-
 
 class MarathonClient(JsonClient):
 
