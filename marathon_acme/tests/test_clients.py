@@ -39,7 +39,7 @@ class JsonClientTestBase(TestCase):
         raise NotImplementedError()
 
     def uri(self, path):
-        return '%s%s' % (self.client.endpoint.geturi(), path,)
+        return '%s%s' % (self.client.url, path,)
 
     def cleanup_d(self, d):
         self.addCleanup(lambda: d)
@@ -58,7 +58,7 @@ class JsonClientTest(JsonClientTestBase):
         address and headers, and should contain an empty body. The response
         should be returned.
         """
-        d = self.cleanup_d(self.client.request('GET', '/hello'))
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -83,7 +83,7 @@ class JsonClientTest(JsonClientTestBase):
         indicate this.
         """
         self.cleanup_d(self.client.request(
-            'GET', '/hello', json_data={'test': 'hello'}))
+            'GET', path='/hello', json_data={'test': 'hello'}))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -98,13 +98,13 @@ class JsonClientTest(JsonClientTestBase):
         request.finish()
 
     @inlineCallbacks
-    def test_request_endpoint(self):
+    def test_request_url(self):
         """
-        When a request is made with the endpoint parameter set, that parameter
-        should be used as the endpoint.
+        When a request is made with the url parameter set, that parameter
+        should be used as the base URL.
         """
         self.cleanup_d(self.client.request(
-            'GET', '/hello', endpoint='http://localhost:9000'))
+            'GET', path='/hello', url='http://localhost:9000'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -119,7 +119,7 @@ class JsonClientTest(JsonClientTestBase):
         When the get_json method is called, a GET request should be made and
         the response should be deserialized from JSON.
         """
-        d = self.cleanup_d(self.client.get_json('/hello'))
+        d = self.cleanup_d(self.client.get_json(path='/hello'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -138,7 +138,7 @@ class JsonClientTest(JsonClientTestBase):
         error.
         """
         d = self.cleanup_d(self.client.request(
-            'GET', '/hello', raise_for_status=True))
+            'GET', path='/hello', raise_for_status=True))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -160,7 +160,7 @@ class JsonClientTest(JsonClientTestBase):
         error.
         """
         d = self.cleanup_d(self.client.request(
-            'GET', '/hello', raise_for_status=True))
+            'GET', path='/hello', raise_for_status=True))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -180,7 +180,7 @@ class JsonClientTest(JsonClientTestBase):
         When raise_for_status is False and a request is made and a error
         response code is returned, no error should be raised.
         """
-        d = self.cleanup_d(self.client.request('GET', '/hello'))
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -208,7 +208,8 @@ class MarathonClientTest(JsonClientTestBase):
         deserialized from JSON and the value of the specified field is
         returned.
         """
-        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
+        d = self.cleanup_d(
+            self.client.get_json_field('field-key', path='/my-path'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -228,7 +229,8 @@ class MarathonClientTest(JsonClientTestBase):
         When get_json_field is used to make a request but the response code
         indicates an error, an HTTPError should be raised.
         """
-        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
+        d = self.cleanup_d(
+            self.client.get_json_field('field-key', path='/my-path'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -249,7 +251,8 @@ class MarathonClientTest(JsonClientTestBase):
         deserialized from JSON and if the specified field is missing, an error
         is raised.
         """
-        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
+        d = self.cleanup_d(
+            self.client.get_json_field('field-key', path='/my-path'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(

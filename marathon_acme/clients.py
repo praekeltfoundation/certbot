@@ -24,11 +24,11 @@ class JsonClient(object):
     debug = False
     timeout = 5
 
-    def __init__(self, endpoint, agent=None, clock=reactor):
+    def __init__(self, url=None, agent=None, clock=reactor):
         """
-        Create a client with the specified default endpoint.
+        Create a client with the specified default URL.
         """
-        self.endpoint = urisplit(endpoint)
+        self.url = url
         self._agent = agent
         self._pool = client.HTTPConnectionPool(clock, persistent=False)
 
@@ -41,8 +41,34 @@ class JsonClient(object):
         log.err(failure, 'Error performing request to %s' % (url,))
         return failure
 
-    def request(self, method, path, query=None, endpoint=None, json_data=None,
-                raise_for_status=False, **kwargs):
+    def _compose_url(self, url, kwargs):
+        """
+        Compose a URL starting with the given URL (or self.url if that URL is
+        None) and using the values in kwargs.
+
+        :param str url:
+            The base URL to use. If None, ``self.url`` will be used instead.
+        :param dict kwargs:
+            A dictionary of values to override in the base URL. Relevant keys
+            will be popped from the dictionary.
+        """
+        if url is None:
+            url = self.url
+
+        compose_kwargs = {}
+        if url is not None:
+            compose_kwargs.update(urisplit(url)._asdict())
+
+        compose_keys = ['scheme', 'authority', 'path', 'query', 'fragment',
+                        'userinfo', 'host', 'port']
+        for key in compose_keys:
+            if key in kwargs:
+                compose_kwargs[key] = kwargs.pop(key)
+
+        return uricompose(**compose_kwargs)
+
+    def request(self, method, url=None, json_data=None, raise_for_status=False,
+                **kwargs):
         """
         Perform a request. A number of basic defaults are set on the request
         that make using a JSON API easier. These defaults can be overridden by
@@ -50,14 +76,9 @@ class JsonClient(object):
 
         :param: method:
             The HTTP method to use (example is `GET`).
-        :param: path:
-            The URL path (example is `/v2/apps`).
-        :param: query:
-            The URL query parameters as a dict.
-        :param: endpoint:
-            The URL endpoint to use. The default value is the endpoint this
-            client was created with (`self.endpoint`) (example is
-            `http://localhost:8080`)
+        :param: url:
+            The URL to use. The default value is the URL this client was
+            created with (`self.url`) (example is `http://localhost:8080`)
         :param: json_data:
             A python data structure that will be converted to a JSON string
             using `json.dumps` and used as the request body.
@@ -65,13 +86,10 @@ class JsonClient(object):
             Whether to raise an error for a 4xx or 5xx response code.
         :param: kwargs:
             Any other parameters that will be passed to `treq.request`, for
-            example headers or parameters.
+            example headers. Or any URL parameters to override, for example
+            path, query or fragment.
         """
-        if endpoint is not None:
-            scheme, authority = urisplit(endpoint)[:2]
-        else:
-            scheme, authority = self.endpoint[:2]
-        url = uricompose(scheme, authority, path, query)
+        url = self._compose_url(url, kwargs)
 
         data = None
         headers = {'Accept': 'application/json'}
@@ -102,11 +120,11 @@ class JsonClient(object):
 
         return d
 
-    def get_json(self, path, query=None, **kwargs):
+    def get_json(self, **kwargs):
         """
         Perform a GET request to the given path and return the JSON response.
         """
-        d = self.request('GET', path, query, **kwargs)
+        d = self.request('GET', **kwargs)
         return d.addCallback(json_content)
 
     def _raise_for_status(self, response, url):
@@ -142,7 +160,7 @@ class HTTPError(IOError):
 
 class MarathonClient(JsonClient):
 
-    def get_json_field(self, path, field):
+    def get_json_field(self, field, **kwargs):
         """
         Perform a GET request and get the contents of the JSON response.
 
@@ -155,7 +173,7 @@ class MarathonClient(JsonClient):
         * There is an error response code
         * The field with the given name cannot be found
         """
-        return self.get_json(path, raise_for_status=True).addCallback(
+        return self.get_json(raise_for_status=True, **kwargs).addCallback(
             self._get_json_field, field)
 
     def _get_json_field(self, response_json, field_name):
@@ -180,22 +198,24 @@ class MarathonClient(JsonClient):
         callback URLs.
         """
         return self.get_json_field(
-            '/v2/eventSubscriptions', 'callbackUrls')
+            'callbackUrls', path='/v2/eventSubscriptions')
 
     def post_event_subscription(self, callback_url):
         """
         Post a new Marathon event subscription with the given callback URL.
         """
-        d = self.request(
-            'POST', '/v2/eventSubscriptions', {'callbackUrl': callback_url})
+        d = self.request('POST',
+                         path='/v2/eventSubscriptions',
+                         query={'callbackUrl': callback_url})
         return d.addCallback(lambda response: response.code == OK)
 
     def delete_event_subscription(self, callback_url):
         """
         Delete the Marathon event subscription with the given callback URL.
         """
-        d = self.request(
-            'DELETE', '/v2/eventSubscriptions', {'callbackUrl': callback_url})
+        d = self.request('DELETE',
+                         path='/v2/eventSubscriptions',
+                         query={'callbackUrl': callback_url})
         return d.addCallback(lambda response: response.code == OK)
 
     def get_apps(self):
@@ -203,17 +223,18 @@ class MarathonClient(JsonClient):
         Get the currently running Marathon apps, returning a list of app
         definitions.
         """
-        return self.get_json_field('/v2/apps', 'apps')
+        return self.get_json_field('apps', path='/v2/apps')
 
     def get_app(self, app_id):
         """
         Get information about the app with the given app ID.
         """
-        return self.get_json_field('/v2/apps%s' % (app_id,), 'app')
+        return self.get_json_field('app', path='/v2/apps%s' % (app_id,))
 
     def get_app_tasks(self, app_id):
         """
         Get the currently running tasks for the app with the given app ID,
         returning a list of task definitions.
         """
-        return self.get_json_field('/v2/apps%s/tasks' % (app_id,), 'tasks')
+        return self.get_json_field(
+            'tasks', path='/v2/apps%s/tasks' % (app_id,))
