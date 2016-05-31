@@ -53,7 +53,7 @@ def _default_agent(agent=None, reactor=None, pool=None):
         from twisted.web.client import Agent
         agent = Agent(reactor, pool)
 
-    return agent
+    return agent, reactor
 
 
 class JsonClient(object):
@@ -65,7 +65,10 @@ class JsonClient(object):
         Create a client with the specified default URL.
         """
         self.url = url
-        self._client = HTTPClient(_default_agent(agent, reactor, pool))
+        # Keep track of the reactor because treq uses it for timeouts in a
+        # clumsy way
+        agent, self._reactor = _default_agent(agent, reactor, pool)
+        self._client = HTTPClient(agent)
 
     def _log_request_response(self, response, method, path, data):
         log.msg('%s %s with %s returned: %s' % (
@@ -155,7 +158,8 @@ class JsonClient(object):
         }
         request_kwargs.update(kwargs)
 
-        d = self._client.request(method, url, **request_kwargs)
+        d = self._client.request(method, url, reactor=self._reactor,
+                                 **request_kwargs)
 
         if self.debug:
             d.addCallback(self._log_request_response, method, url, data)
