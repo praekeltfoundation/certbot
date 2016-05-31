@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 
 from testtools.matchers import (
-    AfterPreprocessing, Equals, IsInstance, MatchesAll, MatchesStructure,
-    Mismatch
+    AfterPreprocessing, Equals, GreaterThan, IsInstance, LessThan, MatchesAll,
+    MatchesAny, MatchesStructure, Mismatch
 )
 
 from uritools import urisplit
@@ -86,58 +86,14 @@ def HasRequestProperties(method=None, url=None, query={}):
     )
 
 
-class IsAroundTime(object):
-    """ Match if a timestamp is within a certain interval of a time. """
-    def __init__(self, time, before_delta=timedelta(0),
-                 after_delta=timedelta(0)):
-        self.time = time
-        self.before_delta = before_delta
-        self.after_delta = after_delta
-
-    def __str__(self):
-        return 'IsAroundTime(%s, %s, %s)' % (self.time, self.before_delta,
-                                             self.after_delta)
-
-    def match(self, actual):
-        if actual < self.time:
-            before_delta = self.time - actual
-            if before_delta > self.before_delta:
-                return IsAroundTimeMismatch(
-                    self.time, actual, self.before_delta, before_delta)
-        elif actual > self.time:
-            after_delta = actual - self.time
-            if after_delta > self.after_delta:
-                return IsAroundTimeMismatch(
-                    self.time, actual, self.after_delta, after_delta)
-
-        return None
-
-
-class IsAroundTimeMismatch(object):
-    def __init__(self, expected, actual, expected_td, actual_td):
-        self.expected = expected
-        self.actual = actual
-        self.expected_td = expected_td
-        self.actual_td = actual_td
-
-    def describe(self):
-        before_or_after = 'before' if self.actual < self.expected else 'after'
-        return '%s is not within %ss %s %s. It is %ss %s.' % (
-            self.actual.isoformat(),
-            self.expected_td.total_seconds(),
-            before_or_after,
-            self.expected.isoformat(),
-            self.actual_td.total_seconds(),
-            before_or_after
-        )
-
-    def details(self):
-        return {
-            'expected_datetime': self.expected,
-            'actual_datetime': self.actual,
-            'expected_timedelta': self.expected_td,
-            'actual_timedelta': self.actual_td
-        }
+def IsBetween(minimum, maximum):
+    """
+    Match if a value is greater than or equal to minimum or less than or equal
+    to maximum.
+    """
+    return MatchesAll(
+        MatchesAny(GreaterThan(minimum), Equals(minimum)),
+        MatchesAny(LessThan(maximum), Equals(maximum)))
 
 
 def IsRecentMarathonTimestamp():
@@ -147,5 +103,5 @@ def IsRecentMarathonTimestamp():
     """
     return AfterPreprocessing(
         lambda ts: datetime.strptime(ts, '%Y-%m-%dT%H:%M:%S.%fZ'),
-        IsAroundTime(datetime.utcnow(),
-                     before_delta=timedelta(seconds=1)))
+        IsBetween(datetime.utcnow() - timedelta(seconds=1),
+                  datetime.utcnow()))
