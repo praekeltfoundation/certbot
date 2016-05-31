@@ -344,6 +344,62 @@ class MarathonClientTest(JsonClientTestBase):
         self.assertThat(res, Equals(False))
 
     @inlineCallbacks
+    def test_delete_event_subscription(self):
+        """
+        When we delete an event subscription with a callback URL, we should
+        return True for a 200/OK response from Marathon.
+        """
+        d = self.cleanup_d(self.client.delete_event_subscription(
+            'http://localhost:7000/events?registration=localhost'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='DELETE',
+            url=self.uri('/v2/eventSubscriptions'),
+            query={
+                'callbackUrl': [
+                    'http://localhost:7000/events?registration=localhost'
+                ]
+            }
+        ))
+
+        json_response(request, {
+            # TODO: Add check that callbackUrl is correct
+            'callbackUrl':
+                'http://localhost:7000/events?registration=localhost',
+            'clientIp': '0:0:0:0:0:0:0:1',
+            'eventType': 'subscribe_event'
+        })
+
+        res = yield d
+        self.assertThat(res, Equals(True))
+
+    @inlineCallbacks
+    def test_delete_event_subscription_not_ok(self):
+        """
+        When we delete an event subscription with a callback URL, we should
+        return False for a non-200/OK response from Marathon.
+        """
+        d = self.cleanup_d(self.client.delete_event_subscription(
+            'http://localhost:7000/events?registration=localhost'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='DELETE',
+            url=self.uri('/v2/eventSubscriptions'),
+            query={
+                'callbackUrl': [
+                    'http://localhost:7000/events?registration=localhost'
+                ]
+            }
+        ))
+
+        json_response(request, {}, response_code=201)
+
+        res = yield d
+        self.assertThat(res, Equals(False))
+
+    @inlineCallbacks
     def test_get_apps(self):
         """
         When we request the list of apps from Marathon, we should receive the

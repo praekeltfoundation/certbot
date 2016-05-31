@@ -190,6 +190,14 @@ class MarathonClient(JsonClient):
             'POST', '/v2/eventSubscriptions', {'callbackUrl': callback_url})
         return d.addCallback(lambda response: response.code == OK)
 
+    def delete_event_subscription(self, callback_url):
+        """
+        Delete the Marathon event subscription with the given callback URL.
+        """
+        d = self.request(
+            'DELETE', '/v2/eventSubscriptions', {'callbackUrl': callback_url})
+        return d.addCallback(lambda response: response.code == OK)
+
     def get_apps(self):
         """
         Get the currently running Marathon apps, returning a list of app
