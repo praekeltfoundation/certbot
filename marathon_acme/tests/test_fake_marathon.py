@@ -220,7 +220,7 @@ class TestFakeMarathonAPI(TestCase):
     @inlineCallbacks
     def test_post_event_subscriptions_idempotent(self):
         """
-        Posting the same callback URL for an event subscription twice, succeeds
+        Posting the same callback URL for an event subscription twice succeeds
         both times and doesn't result in more than one callback URL being
         registered.
         """
@@ -241,3 +241,59 @@ class TestFakeMarathonAPI(TestCase):
 
         self.assertThat(self.marathon.get_event_subscriptions(),
                         Equals([callback_url]))
+
+    @inlineCallbacks
+    def test_delete_event_subscriptions(self):
+        """
+        When a callback URL is deleted for an event subscription, the
+        unsubscibe event should be returned and FakeMarathon should not have
+        the callback URL registered any more.
+        """
+        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+        self.marathon.add_event_subscription(callback_url)
+
+        response = yield self.client.request(
+            'DELETE', '/v2/eventSubscriptions',
+            query={'callbackUrl': callback_url})
+        self.assertThat(response, IsJsonResponseWithCode(200))
+
+        response_json = yield json_content(response)
+        self.assertThat(response_json, MatchesDict({
+            'eventType': Equals('unsubscribe_event'),
+            'callbackUrl': Equals(callback_url),
+            'clientIp': Is(None),  # FIXME: No clientIp in request
+            'timestamp': IsRecentMarathonTimestamp()
+        }))
+
+        # TODO: Assert that the event is received only in the response and not
+        # the event stream
+
+        # Assert that the event subscription was actually removed
+        self.assertThat(self.marathon.get_event_subscriptions(),
+                        Equals([]))
+
+    @inlineCallbacks
+    def test_delete_event_subscriptions_idempotent(self):
+        """
+        Deleting the same callback URL for an event subscription twice
+        succeeds both times and doesn't result in more than one callback URL
+        being deleted.
+        """
+        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+        self.marathon.add_event_subscription(callback_url)
+
+        response = yield self.client.request(
+            'DELETE', '/v2/eventSubscriptions',
+            query={'callbackUrl': callback_url})
+        self.assertThat(response, IsJsonResponseWithCode(200))
+
+        self.assertThat(self.marathon.get_event_subscriptions(),
+                        Equals([]))
+
+        response = yield self.client.request(
+            'DELETE', '/v2/eventSubscriptions',
+            query={'callbackUrl': callback_url})
+        self.assertThat(response, IsJsonResponseWithCode(200))
+
+        self.assertThat(self.marathon.get_event_subscriptions(),
+                        Equals([]))
