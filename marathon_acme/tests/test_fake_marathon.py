@@ -1,4 +1,4 @@
-from testtools.matchers import Equals
+from testtools.matchers import Equals, Is, MatchesDict
 
 from twisted.internet.defer import inlineCallbacks
 from twisted.protocols.loopback import _LoopbackAddress
@@ -9,7 +9,8 @@ from txfake import FakeServer
 from marathon_acme.clients import JsonClient, json_content
 from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
-from marathon_acme.tests.matchers import IsJsonResponseWithCode
+from marathon_acme.tests.matchers import (
+    IsJsonResponseWithCode, IsRecentMarathonTimestamp)
 
 
 class TestFakeMarathonAPI(TestCase):
@@ -186,3 +187,57 @@ class TestFakeMarathonAPI(TestCase):
         response_json = yield json_content(response)
         self.assertThat(response_json,
                         Equals({'callbackUrls': [callback_url]}))
+
+    @inlineCallbacks
+    def test_post_event_subscriptions(self):
+        """
+        When a callback URL is posted for an event subscription, the subscibe
+        event should be returned and FakeMarathon should now have the callback
+        URL registered.
+        """
+        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+
+        response = yield self.client.request(
+            'POST', '/v2/eventSubscriptions',
+            query={'callbackUrl': callback_url})
+        self.assertThat(response, IsJsonResponseWithCode(200))
+
+        response_json = yield json_content(response)
+        self.assertThat(response_json, MatchesDict({
+            'eventType': Equals('subscribe_event'),
+            'callbackUrl': Equals(callback_url),
+            'clientIp': Is(None),  # FIXME: No clientIp in request
+            'timestamp': IsRecentMarathonTimestamp()
+        }))
+
+        # TODO: Assert that the event is received both in the response and in
+        # the event stream
+
+        # Assert that the event subscription was actually added
+        self.assertThat(self.marathon.get_event_subscriptions(),
+                        Equals([callback_url]))
+
+    @inlineCallbacks
+    def test_post_event_subscriptions_idempotent(self):
+        """
+        Posting the same callback URL for an event subscription twice, succeeds
+        both times and doesn't result in more than one callback URL being
+        registered.
+        """
+        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+
+        response = yield self.client.request(
+            'POST', '/v2/eventSubscriptions',
+            query={'callbackUrl': callback_url})
+        self.assertThat(response, IsJsonResponseWithCode(200))
+
+        self.assertThat(self.marathon.get_event_subscriptions(),
+                        Equals([callback_url]))
+
+        response = yield self.client.request(
+            'POST', '/v2/eventSubscriptions',
+            query={'callbackUrl': callback_url})
+        self.assertThat(response, IsJsonResponseWithCode(200))
+
+        self.assertThat(self.marathon.get_event_subscriptions(),
+                        Equals([callback_url]))

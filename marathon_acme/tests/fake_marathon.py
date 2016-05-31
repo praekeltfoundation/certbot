@@ -1,6 +1,18 @@
-import json
+from datetime import datetime
 
 from klein import Klein
+
+from uritools import urisplit
+
+from marathon_acme.server import write_request_json
+
+
+def marathon_timestamp(time=datetime.utcnow()):
+    """
+    Make a Marathon/JodaTime-like timestamp string in ISO8601 format with
+    milliseconds for the current time in UTC.
+    """
+    return time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
 
 class FakeMarathon(object):
@@ -43,9 +55,23 @@ class FakeMarathon(object):
     def get_event_subscriptions(self):
         return self._event_subscriptions
 
-    def add_event_subscription(self, callback_url):
-        assert callback_url not in self._event_subscriptions
-        self._event_subscriptions.append(callback_url)
+    def add_event_subscription(self, callback_url, client_ip=None):
+        if callback_url not in self._event_subscriptions:
+            self._event_subscriptions.append(callback_url)
+
+        return self.trigger_event(
+            'subscribe_event', callbackUrl=callback_url, clientIp=client_ip)
+
+    def trigger_event(self, event_type, **kwargs):
+        event = {
+            'eventType': event_type,
+            'timestamp': marathon_timestamp()
+        }
+        event.update(kwargs)
+
+        # TODO: Send off event to subscribers
+
+        return event
 
 
 class FakeMarathonAPI(object):
@@ -60,31 +86,33 @@ class FakeMarathonAPI(object):
             'apps': self._marathon.get_apps()
         }
         request.setResponseCode(200)
-        return self._json_response(request, response)
+        write_request_json(request, response)
 
     @app.route('/v2/apps/<app_id>', methods=['GET'])
     def get_app(self, request, app_id):
         app = self._marathon.get_app('/' + app_id.rstrip('/'))
         if app is None:
-            return self._app_not_found(request, app_id)
+            self._app_not_found(request, app_id)
+            return
 
         response = {
             'app': app
         }
         request.setResponseCode(200)
-        return self._json_response(request, response)
+        write_request_json(request, response)
 
     @app.route('/v2/apps/<app_id>/tasks', methods=['GET'])
     def get_app_tasks(self, request, app_id):
         tasks = self._marathon.get_app_tasks('/' + app_id)
         if tasks is None:
-            return self._app_not_found(request, app_id)
+            self._app_not_found(request, app_id)
+            return
 
         response = {
             'tasks': tasks
         }
         request.setResponseCode(200)
-        return self._json_response(request, response)
+        write_request_json(request, response)
 
     @app.route('/v2/eventSubscriptions', methods=['GET'])
     def get_event_subscriptions(self, request):
@@ -92,14 +120,24 @@ class FakeMarathonAPI(object):
             'callbackUrls': self._marathon.get_event_subscriptions()
         }
         request.setResponseCode(200)
-        return self._json_response(request, response)
+        write_request_json(request, response)
 
-    def _json_response(self, request, json_obj):
-        request.setHeader('Content-Type', 'application/json')
-        return json.dumps(json_obj).encode('utf-8')
+    @app.route('/v2/eventSubscriptions', methods=['POST'])
+    def post_event_subscriptions(self, request):
+        query = urisplit(request.uri).getquerydict()
+
+        assert 'callbackUrl' in query
+        assert query['callbackUrl']
+
+        callback_url = query['callbackUrl'][0]
+        event = self._marathon.add_event_subscription(
+            callback_url, request.getClientIP())
+
+        request.setResponseCode(200)
+        write_request_json(request, event)
 
     def _app_not_found(self, request, app_id):
         request.setResponseCode(404)
-        return self._json_response(request, {
-            'message': 'App \'/%s\' does not exist' % (app_id,)
+        write_request_json(request, {
+            'message': "App '/%s' does not exist" % (app_id,)
         })

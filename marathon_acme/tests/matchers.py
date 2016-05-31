@@ -1,6 +1,8 @@
+from datetime import datetime, timedelta
+
 from testtools.matchers import (
-    AfterPreprocessing, Equals, IsInstance, MatchesAll, MatchesStructure,
-    Mismatch
+    AfterPreprocessing, Equals, GreaterThan, IsInstance, LessThan, MatchesAll,
+    MatchesAny, MatchesStructure, Mismatch
 )
 
 from uritools import urisplit
@@ -82,3 +84,24 @@ def HasRequestProperties(method=None, url=None, query={}):
         uri=AfterPreprocessing(lambda u: urisplit(u).getquerydict(),
                                Equals(query))
     )
+
+
+def IsBetween(minimum, maximum):
+    """
+    Match if a value is greater than or equal to minimum or less than or equal
+    to maximum.
+    """
+    return MatchesAll(
+        MatchesAny(GreaterThan(minimum), Equals(minimum)),
+        MatchesAny(LessThan(maximum), Equals(maximum)))
+
+
+def IsRecentMarathonTimestamp():
+    """
+    Match whether a Marathon timestamp string describes a time within the last
+    second.
+    """
+    return AfterPreprocessing(
+        lambda ts: datetime.strptime(ts, '%Y-%m-%dT%H:%M:%S.%fZ'),
+        IsBetween(datetime.utcnow() - timedelta(seconds=1),
+                  datetime.utcnow()))
