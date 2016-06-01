@@ -40,35 +40,38 @@ def raise_for_status(response):
     return response
 
 
-def _default_agent(agent=None, reactor=None, pool=None):
+def default_reactor(reactor):
+    if reactor is None:
+        from twisted.internet import reactor
+    return reactor
+
+
+def default_agent(agent, reactor):
     """
     Set up a default agent if one is not provided. Use a default reactor to do
     so, unless one is not provided. The agent will set up a default
     (non-persistent) connection pool if one is not provided.
     """
     if agent is None:
-        if reactor is None:
-            from twisted.internet import reactor
-
         from twisted.web.client import Agent
-        agent = Agent(reactor, pool)
+        agent = Agent(reactor)
 
-    return agent, reactor
+    return agent
 
 
 class JsonClient(object):
     debug = False
     timeout = 5
 
-    def __init__(self, url=None, agent=None, reactor=None, pool=None):
+    def __init__(self, url=None, agent=None, reactor=None):
         """
         Create a client with the specified default URL.
         """
         self.url = url
         # Keep track of the reactor because treq uses it for timeouts in a
         # clumsy way
-        agent, self._reactor = _default_agent(agent, reactor, pool)
-        self._client = HTTPClient(agent)
+        self._reactor = default_reactor(reactor)
+        self._client = HTTPClient(default_agent(agent, self._reactor))
 
     def _log_request_response(self, response, method, path, data):
         log.msg('%s %s with %s returned: %s' % (

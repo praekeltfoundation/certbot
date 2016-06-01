@@ -1,14 +1,20 @@
+import testtools
+
+from twisted.internet import reactor as _reactor
+from twisted.internet.task import Clock
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
+from twisted.web.client import Agent
 from twisted.web.server import NOT_DONE_YET
 
-from testtools.matchers import Equals
+from testtools.matchers import Equals, Is, IsInstance
 from testtools.twistedsupport import failed
 
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    HTTPError, JsonClient, MarathonClient, raise_for_status)
+    default_agent, default_reactor, HTTPError, JsonClient, MarathonClient,
+    raise_for_status)
 from marathon_acme.server import read_request_json, write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
@@ -20,6 +26,43 @@ def json_response(request, json_data, response_code=200):
     request.setResponseCode(response_code)
     write_request_json(request, json_data)
     request.finish()
+
+
+class DefaultReactorTest(testtools.TestCase):
+    def test_default_reactor(self):
+        """
+        When default_reactor is passed a reactor it should return that reactor.
+        """
+        reactor = Clock()
+
+        self.assertThat(default_reactor(reactor), Is(reactor))
+
+    def test_default_reactor_not_provided(self):
+        """
+        When default_reactor is not passed a reactor, it should return the
+        default reactor.
+        """
+        self.assertThat(default_reactor(None), Is(_reactor))
+
+
+class DefaultAgentTest(testtools.TestCase):
+    def test_default_agent(self):
+        """
+        When default_agent is passed an agent it should return that agent.
+        """
+        reactor = Clock()
+        agent = Agent(reactor)
+
+        self.assertThat(default_agent(agent, reactor), Is(agent))
+
+    def test_default_agent_not_provided(self):
+        """
+        When default_agent is not passed an agent, it should return a default
+        agent.
+        """
+        reactor = Clock()
+
+        self.assertThat(default_agent(None, reactor), IsInstance(Agent))
 
 
 class JsonClientTestBase(TestCase):
