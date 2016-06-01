@@ -1,13 +1,20 @@
+import testtools
+
+from twisted.internet import reactor
+from twisted.internet.task import Clock
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
+from twisted.web.client import Agent
 from twisted.web.server import NOT_DONE_YET
 
-from testtools.matchers import Equals
+from testtools.matchers import Equals, Is, IsInstance
 from testtools.twistedsupport import failed
 
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
-from marathon_acme.clients import HTTPError, JsonClient, MarathonClient
+from marathon_acme.clients import (
+    default_agent, default_reactor, HTTPError, JsonClient, MarathonClient,
+    raise_for_status)
 from marathon_acme.server import read_request_json, write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
@@ -19,6 +26,40 @@ def json_response(request, json_data, response_code=200):
     request.setResponseCode(response_code)
     write_request_json(request, json_data)
     request.finish()
+
+
+class DefaultReactorTest(testtools.TestCase):
+    def test_default_reactor(self):
+        """
+        When default_reactor is passed a reactor it should return that reactor.
+        """
+        clock = Clock()
+
+        self.assertThat(default_reactor(clock), Is(clock))
+
+    def test_default_reactor_not_provided(self):
+        """
+        When default_reactor is not passed a reactor, it should return the
+        default reactor.
+        """
+        self.assertThat(default_reactor(None), Is(reactor))
+
+
+class DefaultAgentTest(testtools.TestCase):
+    def test_default_agent(self):
+        """
+        When default_agent is passed an agent it should return that agent.
+        """
+        agent = Agent(reactor)
+
+        self.assertThat(default_agent(agent, reactor), Is(agent))
+
+    def test_default_agent_not_provided(self):
+        """
+        When default_agent is not passed an agent, it should return a default
+        agent.
+        """
+        self.assertThat(default_agent(None, reactor), IsInstance(Agent))
 
 
 class JsonClientTestBase(TestCase):
@@ -39,7 +80,7 @@ class JsonClientTestBase(TestCase):
         raise NotImplementedError()
 
     def uri(self, path):
-        return '%s%s' % (self.client.endpoint.geturi(), path,)
+        return '%s%s' % (self.client.url, path,)
 
     def cleanup_d(self, d):
         self.addCleanup(lambda: d)
@@ -58,7 +99,7 @@ class JsonClientTest(JsonClientTestBase):
         address and headers, and should contain an empty body. The response
         should be returned.
         """
-        d = self.cleanup_d(self.client.request('GET', '/hello'))
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -83,7 +124,7 @@ class JsonClientTest(JsonClientTestBase):
         indicate this.
         """
         self.cleanup_d(self.client.request(
-            'GET', '/hello', json_data={'test': 'hello'}))
+            'GET', path='/hello', json_data={'test': 'hello'}))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -98,13 +139,13 @@ class JsonClientTest(JsonClientTestBase):
         request.finish()
 
     @inlineCallbacks
-    def test_request_endpoint(self):
+    def test_request_url(self):
         """
-        When a request is made with the endpoint parameter set, that parameter
-        should be used as the endpoint.
+        When a request is made with the url parameter set, that parameter
+        should be used as the base URL.
         """
         self.cleanup_d(self.client.request(
-            'GET', '/hello', endpoint='http://localhost:9000'))
+            'GET', path='/hello', url='http://localhost:9000'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -114,31 +155,14 @@ class JsonClientTest(JsonClientTestBase):
         request.finish()
 
     @inlineCallbacks
-    def test_get_json(self):
-        """
-        When the get_json method is called, a GET request should be made and
-        the response should be deserialized from JSON.
-        """
-        d = self.cleanup_d(self.client.get_json('/hello'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/hello')))
-
-        json_response(request, {'test': 'hello'})
-
-        res = yield d
-        self.assertThat(res, Equals({'test': 'hello'}))
-
-    @inlineCallbacks
     def test_client_error_response(self):
         """
-        When raise_for_status is True and a request is made and a 4xx response
-        code is returned, a HTTPError should be raised to indicate a client
-        error.
+        When a request is made and the raise_for_status callback is added and a
+        4xx response code is returned, a HTTPError should be raised to indicate
+        a client error.
         """
-        d = self.cleanup_d(self.client.request(
-            'GET', '/hello', raise_for_status=True))
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
+        d.addCallback(raise_for_status)
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -155,12 +179,12 @@ class JsonClientTest(JsonClientTestBase):
     @inlineCallbacks
     def test_server_error_response(self):
         """
-        When raise_for_status is True and a request is made and a 5xx response
-        code is returned, a HTTPError should be raised to indicate a server
-        error.
+        When a request is made and the raise_for_status callback is added and a
+        5xx response code is returned, a HTTPError should be raised to indicate
+        a server error.
         """
-        d = self.cleanup_d(self.client.request(
-            'GET', '/hello', raise_for_status=True))
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
+        d.addCallback(raise_for_status)
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -175,26 +199,128 @@ class JsonClientTest(JsonClientTestBase):
             HTTPError, '502 Server Error for url: %s' % self.uri('/hello'))))
 
     @inlineCallbacks
-    def test_unraised_error_response(self):
+    def test_params(self):
         """
-        When raise_for_status is False and a request is made and a error
-        response code is returned, no error should be raised.
+        When query parameters are specified as the params kwarg, those
+        parameters are reflected in the request.
         """
-        d = self.cleanup_d(self.client.request('GET', '/hello'))
+        self.cleanup_d(self.client.request(
+            'GET', path='/hello', params={'from': 'earth'}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello'), query={'from': ['earth']}))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_url_query_as_params(self):
+        """
+        When query parameters are specified in the URL, those parameters are
+        reflected in the request.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', self.uri('/hello?from=earth')))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello'), query={'from': ['earth']}))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_params_precedence_over_url_query(self):
+        """
+        When query parameters are specified as both the params kwarg and in the
+        URL, the params kwarg takes precedence.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', self.uri('/hello?from=mars'), params={'from': 'earth'}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello'), query={'from': ['earth']}))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_auth(self):
+        """
+        When basic auth credentials are specified as the auth kwarg, the
+        encoded credentials are present in the request headers.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', path='/hello', auth=('user', 'pa$$word')))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/hello')))
+        self.assertThat(
+            request.requestHeaders,
+            HasHeader('Authorization', ['Basic dXNlcjpwYSQkd29yZA==']))
 
-        request.setResponseCode(503)
-        request.write(b'Service unavailable\n')
+        request.setResponseCode(200)
         request.finish()
 
-        response = yield d
-        self.assertThat(response.code, Equals(503))
+    @inlineCallbacks
+    def test_url_userinfo_as_auth(self):
+        """
+        When basic auth credentials are specified in the URL, the encoded
+        credentials are present in the request headers.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', 'http://user:pa$$word@localhost:8000/hello'))
 
-        response_text = yield response.text()
-        self.assertThat(response_text, Equals('Service unavailable\n'))
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(
+            request.requestHeaders,
+            HasHeader('Authorization', ['Basic dXNlcjpwYSQkd29yZA==']))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_auth_precedence_over_url_userinfo(self):
+        """
+        When basic auth credentials are specified as both the auth kwarg and in
+        the URL, the credentials in the auth kwarg take precedence.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', 'http://usernator:password@localhost:8000/hello',
+            auth=('user', 'pa$$word')))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(
+            request.requestHeaders,
+            HasHeader('Authorization', ['Basic dXNlcjpwYSQkd29yZA==']))
+
+        request.setResponseCode(200)
+        request.finish()
+
+    @inlineCallbacks
+    def test_url_overrides(self):
+        """
+        When URL parts are overridden via keyword arguments, those overrides
+        should be reflected in the request.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', 'http://example.com:8000/hello#section1',
+            scheme='https', host='example2.com', port='9000', path='/goodbye',
+            fragment='section2'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url='https://example2.com:9000/goodbye#section2'))
+
+        request.setResponseCode(200)
+        request.finish()
 
 
 class MarathonClientTest(JsonClientTestBase):
@@ -208,7 +334,8 @@ class MarathonClientTest(JsonClientTestBase):
         deserialized from JSON and the value of the specified field is
         returned.
         """
-        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
+        d = self.cleanup_d(
+            self.client.get_json_field('field-key', path='/my-path'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -228,7 +355,8 @@ class MarathonClientTest(JsonClientTestBase):
         When get_json_field is used to make a request but the response code
         indicates an error, an HTTPError should be raised.
         """
-        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
+        d = self.cleanup_d(
+            self.client.get_json_field('field-key', path='/my-path'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
@@ -249,7 +377,8 @@ class MarathonClientTest(JsonClientTestBase):
         deserialized from JSON and if the specified field is missing, an error
         is raised.
         """
-        d = self.cleanup_d(self.client.get_json_field('/my-path', 'field-key'))
+        d = self.cleanup_d(
+            self.client.get_json_field('field-key', path='/my-path'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(

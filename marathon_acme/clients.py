@@ -1,15 +1,13 @@
 import json
-import treq
 
-from twisted.internet import reactor
+from requests.exceptions import HTTPError
+
+from treq.client import HTTPClient
+
 from twisted.python import log
-from twisted.web import client
 from twisted.web.http import OK
 
-from uritools import uricompose, urisplit
-
-# Twisted's default HTTP11 client factory is way too verbose
-client._HTTP11ClientFactory.noisy = False
+from uritools import uricompose, uridecode, urisplit
 
 
 def json_content(response):
@@ -20,17 +18,60 @@ def json_content(response):
     return d.addCallback(json.loads)
 
 
+def raise_for_status(response):
+    """
+    Raises a `requests.exceptions.HTTPError` if the response did not succeed.
+    Adapted from the Requests library:
+    https://github.com/kennethreitz/requests/blob/v2.8.1/requests/models.py#L825-L837
+    """
+    http_error_msg = ''
+
+    if 400 <= response.code < 500:
+        http_error_msg = '%s Client Error for url: %s' % (
+            response.code, uridecode(response.request.absoluteURI))
+
+    elif 500 <= response.code < 600:
+        http_error_msg = '%s Server Error for url: %s' % (
+            response.code, uridecode(response.request.absoluteURI))
+
+    if http_error_msg:
+        raise HTTPError(http_error_msg, response=response)
+
+    return response
+
+
+def default_reactor(reactor):
+    if reactor is None:
+        from twisted.internet import reactor
+    return reactor
+
+
+def default_agent(agent, reactor):
+    """
+    Set up a default agent if one is not provided. Use a default reactor to do
+    so, unless one is not provided. The agent will set up a default
+    (non-persistent) connection pool if one is not provided.
+    """
+    if agent is None:
+        from twisted.web.client import Agent
+        agent = Agent(reactor)
+
+    return agent
+
+
 class JsonClient(object):
     debug = False
     timeout = 5
 
-    def __init__(self, endpoint, agent=None, clock=reactor):
+    def __init__(self, url=None, agent=None, reactor=None):
         """
-        Create a client with the specified default endpoint.
+        Create a client with the specified default URL.
         """
-        self.endpoint = urisplit(endpoint)
-        self._agent = agent
-        self._pool = client.HTTPConnectionPool(clock, persistent=False)
+        self.url = url
+        # Keep track of the reactor because treq uses it for timeouts in a
+        # clumsy way
+        self._reactor = default_reactor(reactor)
+        self._client = HTTPClient(default_agent(agent, self._reactor))
 
     def _log_request_response(self, response, method, path, data):
         log.msg('%s %s with %s returned: %s' % (
@@ -41,8 +82,46 @@ class JsonClient(object):
         log.err(failure, 'Error performing request to %s' % (url,))
         return failure
 
-    def request(self, method, path, query=None, endpoint=None, json_data=None,
-                raise_for_status=False, **kwargs):
+    def _compose_url(self, url, kwargs):
+        """
+        Compose a URL starting with the given URL (or self.url if that URL is
+        None) and using the values in kwargs.
+
+        :param str url:
+            The base URL to use. If None, ``self.url`` will be used instead.
+        :param dict kwargs:
+            A dictionary of values to override in the base URL. Relevant keys
+            will be popped from the dictionary.
+        """
+        if url is None:
+            url = self.url
+
+        if url is not None:
+            split_result = urisplit(url)
+            userinfo = split_result.userinfo
+
+        # Build up the kwargs to pass to uricompose
+        compose_kwargs = {}
+        for key in ['scheme', 'host', 'port', 'path', 'fragment']:
+            if key in kwargs:
+                compose_kwargs[key] = kwargs.pop(key)
+            elif split_result is not None:
+                compose_kwargs[key] = getattr(split_result, key)
+
+        if 'params' in kwargs:
+            compose_kwargs['query'] = kwargs.pop('params')
+        elif split_result is not None:
+            compose_kwargs['query'] = split_result.query
+
+        # Take the userinfo out of the URL and pass as 'auth' to treq so it can
+        # be used for HTTP basic auth headers
+        if 'auth' not in kwargs and userinfo is not None:
+            # treq expects a 2-tuple (username, password)
+            kwargs['auth'] = tuple(userinfo.split(':', 2))
+
+        return uricompose(**compose_kwargs)
+
+    def request(self, method, url=None, json_data=None, **kwargs):
         """
         Perform a request. A number of basic defaults are set on the request
         that make using a JSON API easier. These defaults can be overridden by
@@ -50,28 +129,18 @@ class JsonClient(object):
 
         :param: method:
             The HTTP method to use (example is `GET`).
-        :param: path:
-            The URL path (example is `/v2/apps`).
-        :param: query:
-            The URL query parameters as a dict.
-        :param: endpoint:
-            The URL endpoint to use. The default value is the endpoint this
-            client was created with (`self.endpoint`) (example is
-            `http://localhost:8080`)
+        :param: url:
+            The URL to use. The default value is the URL this client was
+            created with (`self.url`) (example is `http://localhost:8080`)
         :param: json_data:
             A python data structure that will be converted to a JSON string
             using `json.dumps` and used as the request body.
-        :param: raise_for_status:
-            Whether to raise an error for a 4xx or 5xx response code.
         :param: kwargs:
             Any other parameters that will be passed to `treq.request`, for
-            example headers or parameters.
+            example headers. Or any URL parameters to override, for example
+            path, query or fragment.
         """
-        if endpoint is not None:
-            scheme, authority = urisplit(endpoint)[:2]
-        else:
-            scheme, authority = self.endpoint[:2]
-        url = uricompose(scheme, authority, path, query)
+        url = self._compose_url(url, kwargs)
 
         data = None
         headers = {'Accept': 'application/json'}
@@ -84,65 +153,24 @@ class JsonClient(object):
         request_kwargs = {
             'headers': headers,
             'data': data,
-            'pool': self._pool,
-            'agent': self._agent,
             'timeout': self.timeout
         }
         request_kwargs.update(kwargs)
 
-        d = treq.request(method, url, **request_kwargs)
+        d = self._client.request(method, url, reactor=self._reactor,
+                                 **request_kwargs)
 
         if self.debug:
             d.addCallback(self._log_request_response, method, url, data)
 
         d.addErrback(self._log_request_error, url)
 
-        if raise_for_status:
-            d.addCallback(self._raise_for_status, url)
-
         return d
-
-    def get_json(self, path, query=None, **kwargs):
-        """
-        Perform a GET request to the given path and return the JSON response.
-        """
-        d = self.request('GET', path, query, **kwargs)
-        return d.addCallback(json_content)
-
-    def _raise_for_status(self, response, url):
-        """
-        Raises an `HTTPError` if the response did not succeed.
-        Adapted from the Requests library:
-        https://github.com/kennethreitz/requests/blob/v2.8.1/requests/models.py#L825-L837
-        """
-        http_error_msg = ''
-
-        if 400 <= response.code < 500:
-            http_error_msg = '%s Client Error for url: %s' % (response.code,
-                                                              url)
-
-        elif 500 <= response.code < 600:
-            http_error_msg = '%s Server Error for url: %s' % (response.code,
-                                                              url)
-
-        if http_error_msg:
-            raise HTTPError(http_error_msg, response)
-
-        return response
-
-
-class HTTPError(IOError):
-    """
-    Error raised for 4xx and 5xx response codes.
-    """
-    def __init__(self, message, response):
-        self.response = response
-        super(HTTPError, self).__init__(message)
 
 
 class MarathonClient(JsonClient):
 
-    def get_json_field(self, path, field):
+    def get_json_field(self, field, **kwargs):
         """
         Perform a GET request and get the contents of the JSON response.
 
@@ -155,8 +183,11 @@ class MarathonClient(JsonClient):
         * There is an error response code
         * The field with the given name cannot be found
         """
-        return self.get_json(path, raise_for_status=True).addCallback(
-            self._get_json_field, field)
+        d = self.request('GET', **kwargs)
+        d.addCallback(raise_for_status)
+        d.addCallback(json_content)
+        d.addCallback(self._get_json_field, field)
+        return d
 
     def _get_json_field(self, response_json, field_name):
         """
@@ -180,22 +211,24 @@ class MarathonClient(JsonClient):
         callback URLs.
         """
         return self.get_json_field(
-            '/v2/eventSubscriptions', 'callbackUrls')
+            'callbackUrls', path='/v2/eventSubscriptions')
 
     def post_event_subscription(self, callback_url):
         """
         Post a new Marathon event subscription with the given callback URL.
         """
-        d = self.request(
-            'POST', '/v2/eventSubscriptions', {'callbackUrl': callback_url})
+        d = self.request('POST',
+                         path='/v2/eventSubscriptions',
+                         params={'callbackUrl': callback_url})
         return d.addCallback(lambda response: response.code == OK)
 
     def delete_event_subscription(self, callback_url):
         """
         Delete the Marathon event subscription with the given callback URL.
         """
-        d = self.request(
-            'DELETE', '/v2/eventSubscriptions', {'callbackUrl': callback_url})
+        d = self.request('DELETE',
+                         path='/v2/eventSubscriptions',
+                         params={'callbackUrl': callback_url})
         return d.addCallback(lambda response: response.code == OK)
 
     def get_apps(self):
@@ -203,17 +236,18 @@ class MarathonClient(JsonClient):
         Get the currently running Marathon apps, returning a list of app
         definitions.
         """
-        return self.get_json_field('/v2/apps', 'apps')
+        return self.get_json_field('apps', path='/v2/apps')
 
     def get_app(self, app_id):
         """
         Get information about the app with the given app ID.
         """
-        return self.get_json_field('/v2/apps%s' % (app_id,), 'app')
+        return self.get_json_field('app', path='/v2/apps%s' % (app_id,))
 
     def get_app_tasks(self, app_id):
         """
         Get the currently running tasks for the app with the given app ID,
         returning a list of task definitions.
         """
-        return self.get_json_field('/v2/apps%s/tasks' % (app_id,), 'tasks')
+        return self.get_json_field(
+            'tasks', path='/v2/apps%s/tasks' % (app_id,))
