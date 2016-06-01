@@ -1,6 +1,6 @@
 import testtools
 
-from twisted.internet import reactor as _reactor
+from twisted.internet import reactor
 from twisted.internet.task import Clock
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.web.client import Agent
@@ -33,16 +33,16 @@ class DefaultReactorTest(testtools.TestCase):
         """
         When default_reactor is passed a reactor it should return that reactor.
         """
-        reactor = Clock()
+        clock = Clock()
 
-        self.assertThat(default_reactor(reactor), Is(reactor))
+        self.assertThat(default_reactor(clock), Is(clock))
 
     def test_default_reactor_not_provided(self):
         """
         When default_reactor is not passed a reactor, it should return the
         default reactor.
         """
-        self.assertThat(default_reactor(None), Is(_reactor))
+        self.assertThat(default_reactor(None), Is(reactor))
 
 
 class DefaultAgentTest(testtools.TestCase):
@@ -50,7 +50,6 @@ class DefaultAgentTest(testtools.TestCase):
         """
         When default_agent is passed an agent it should return that agent.
         """
-        reactor = Clock()
         agent = Agent(reactor)
 
         self.assertThat(default_agent(agent, reactor), Is(agent))
@@ -60,8 +59,6 @@ class DefaultAgentTest(testtools.TestCase):
         When default_agent is not passed an agent, it should return a default
         agent.
         """
-        reactor = Clock()
-
         self.assertThat(default_agent(None, reactor), IsInstance(Agent))
 
 
