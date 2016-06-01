@@ -93,26 +93,22 @@ class JsonClient(object):
         if url is None:
             url = self.url
 
-        compose_kwargs = {}
         if url is not None:
             split_result = urisplit(url)
-            compose_kwargs.update({
-                'scheme': split_result.scheme,
-                'host': split_result.host,
-                'port': split_result.port,
-                'path': split_result.path,
-                'query': split_result.query,
-                'fragment': split_result.fragment
-            })
             userinfo = split_result.userinfo
 
-        # Override any things specified in kwargs
-        for key in ['scheme', 'path', 'fragment', 'host', 'port']:
+        # Build up the kwargs to pass to uricompose
+        compose_kwargs = {}
+        for key in ['scheme', 'host', 'port', 'path', 'fragment']:
             if key in kwargs:
                 compose_kwargs[key] = kwargs.pop(key)
+            elif split_result is not None:
+                compose_kwargs[key] = getattr(split_result, key)
 
         if 'params' in kwargs:
             compose_kwargs['query'] = kwargs.pop('params')
+        elif split_result is not None:
+            compose_kwargs['query'] = split_result.query
 
         # Take the userinfo out of the URL and pass as 'auth' to treq so it can
         # be used for HTTP basic auth headers
