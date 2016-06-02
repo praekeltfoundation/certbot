@@ -58,6 +58,24 @@ class FakeMarathon(object):
 
         return [self._tasks[task_id] for task_id in task_ids]
 
+    def update_task_status(self, task_id, status):
+        assert task_id in self._tasks
+        task = self._tasks[task_id]
+
+        # Update the task status
+        task['status'] = status
+
+        # Trigger an event
+        self.trigger_event(
+            'status_update_event',
+            taskId=task_id,
+            taskStatus=status,
+            appId=task['appId'],
+            slaveId=task['slaveId'],
+            host=task['host'],
+            ports=task['ports'],
+            version=task['version'])
+
     def get_event_subscriptions(self):
         return self.event_subscriptions
 
