@@ -1,24 +1,31 @@
 from testtools.matchers import Equals, Is, MatchesDict
 
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.protocols.loopback import _LoopbackAddress
-from twisted.web.server import Site
+from twisted.web.server import Site, NOT_DONE_YET
 
-from txfake import FakeServer
+from txfake import FakeHttpServer, FakeServer
 
 from marathon_acme.clients import JsonClient, json_content
+from marathon_acme.server import read_request_json
 from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
 from marathon_acme.tests.matchers import (
-    IsJsonResponseWithCode, IsRecentMarathonTimestamp)
+    HasRequestProperties, IsJsonResponseWithCode, IsRecentMarathonTimestamp)
 
 
 class TestFakeMarathonAPI(TestCase):
+    event_requests = DeferredQueue()
 
     def setUp(self):
         super(TestFakeMarathonAPI, self).setUp()
 
-        self.marathon = FakeMarathon()
+        def handle_event_request(request):
+            self.event_requests.put(request)
+            return NOT_DONE_YET
+        fake_server = FakeHttpServer(handle_event_request)
+
+        self.marathon = FakeMarathon(fake_server.get_agent())
         self.marathon_api = FakeMarathonAPI(self.marathon)
 
         # FIXME: Current released version (15.3.1) of Klein expects the host to
@@ -30,6 +37,13 @@ class TestFakeMarathonAPI(TestCase):
         fake_server = FakeServer(Site(self.marathon_api.app.resource()))
         fake_agent = FakeServerAgent(fake_server.endpoint)
         self.client = JsonClient('http://www.example.com', agent=fake_agent)
+
+    def respond_to_event_request(self):
+        """ Respond 200/OK to a waiting event request. """
+        def response_ok(request):
+            request.setResponseCode(200)
+            request.finish()
+        return self.event_requests.get().addCallback(response_ok)
 
     @inlineCallbacks
     def test_get_apps_empty(self):
@@ -179,7 +193,7 @@ class TestFakeMarathonAPI(TestCase):
         subscribers should be returned.
         """
         callback_url = 'http://marathon-acme.marathon.mesos:7000'
-        self.marathon.add_event_subscription(callback_url)
+        self.marathon.event_subscriptions = [callback_url]
 
         response = yield self.client.request('GET', '/v2/eventSubscriptions')
         self.assertThat(response, IsJsonResponseWithCode(200))
@@ -210,8 +224,16 @@ class TestFakeMarathonAPI(TestCase):
             'timestamp': IsRecentMarathonTimestamp()
         }))
 
-        # TODO: Assert that the event is received both in the response and in
-        # the event stream
+        # Check we also receive the event on the event bus
+        event_request = yield self.event_requests.get()
+        self.assertThat(event_request,
+                        HasRequestProperties(method='POST', url=callback_url))
+
+        event_request_json = read_request_json(event_request)
+        self.assertThat(event_request_json, Equals(response_json))
+
+        event_request.setResponseCode(200)
+        event_request.finish()
 
         # Assert that the event subscription was actually added
         self.assertThat(self.marathon.get_event_subscriptions(),
@@ -234,6 +256,8 @@ class TestFakeMarathonAPI(TestCase):
         self.assertThat(self.marathon.get_event_subscriptions(),
                         Equals([callback_url]))
 
+        yield self.respond_to_event_request()
+
         response = yield self.client.request(
             'POST', '/v2/eventSubscriptions',
             params={'callbackUrl': callback_url})
@@ -242,35 +266,48 @@ class TestFakeMarathonAPI(TestCase):
         self.assertThat(self.marathon.get_event_subscriptions(),
                         Equals([callback_url]))
 
+        yield self.respond_to_event_request()
+
     @inlineCallbacks
     def test_delete_event_subscriptions(self):
         """
         When a callback URL is deleted for an event subscription, the
-        unsubscibe event should be returned and FakeMarathon should not have
-        the callback URL registered any more.
+        unsubscibe event should be returned, other event subscribers should be
+        notified, and FakeMarathon should not have the callback URL registered
+        any more.
         """
-        callback_url = 'http://marathon-acme.marathon.mesos:7000'
-        self.marathon.add_event_subscription(callback_url)
+        callback_url_1 = 'http://marathon-acme.marathon.mesos:7000'
+        callback_url_2 = 'http://consular.marathon.mesos:5000'
+        self.marathon.event_subscriptions = [callback_url_1, callback_url_2]
 
         response = yield self.client.request(
             'DELETE', '/v2/eventSubscriptions',
-            params={'callbackUrl': callback_url})
+            params={'callbackUrl': callback_url_1})
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield json_content(response)
         self.assertThat(response_json, MatchesDict({
             'eventType': Equals('unsubscribe_event'),
-            'callbackUrl': Equals(callback_url),
+            'callbackUrl': Equals(callback_url_1),
             'clientIp': Is(None),  # FIXME: No clientIp in request
             'timestamp': IsRecentMarathonTimestamp()
         }))
 
-        # TODO: Assert that the event is received only in the response and not
-        # the event stream
+        # Event should be received at second callback URL
+        event_request = yield self.event_requests.get()
+        self.assertThat(event_request,
+                        HasRequestProperties(method='POST',
+                                             url=callback_url_2))
+
+        event_request_json = read_request_json(event_request)
+        self.assertThat(event_request_json, Equals(response_json))
+
+        event_request.setResponseCode(200)
+        event_request.finish()
 
         # Assert that the event subscription was actually removed
         self.assertThat(self.marathon.get_event_subscriptions(),
-                        Equals([]))
+                        Equals([callback_url_2]))
 
     @inlineCallbacks
     def test_delete_event_subscriptions_idempotent(self):
@@ -280,7 +317,7 @@ class TestFakeMarathonAPI(TestCase):
         being deleted.
         """
         callback_url = 'http://marathon-acme.marathon.mesos:7000'
-        self.marathon.add_event_subscription(callback_url)
+        self.marathon.event_subscriptions = [callback_url]
 
         response = yield self.client.request(
             'DELETE', '/v2/eventSubscriptions',
