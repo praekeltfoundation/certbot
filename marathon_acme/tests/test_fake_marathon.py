@@ -14,11 +14,11 @@ from marathon_acme.tests.matchers import (
     HasRequestProperties, IsJsonResponseWithCode, IsRecentMarathonTimestamp)
 
 
-class TestFakeMarathonAPI(TestCase):
+class TestFakeMarathonBase(TestCase):
     event_requests = DeferredQueue()
 
     def setUp(self):
-        super(TestFakeMarathonAPI, self).setUp()
+        super(TestFakeMarathonBase, self).setUp()
 
         def handle_event_request(request):
             self.event_requests.put(request)
@@ -26,6 +26,71 @@ class TestFakeMarathonAPI(TestCase):
         fake_server = FakeHttpServer(handle_event_request)
 
         self.marathon = FakeMarathon(fake_server.get_agent())
+
+    def respond_to_event_request(self):
+        """ Respond 200/OK to a waiting event request. """
+        def response_ok(request):
+            request.setResponseCode(200)
+            request.finish()
+        return self.event_requests.get().addCallback(response_ok)
+
+
+class TestFakeMarathon(TestFakeMarathonBase):
+    @inlineCallbacks
+    def test_update_task_status(self):
+        """
+        When a task's status is updated in FakeMarathon, an event should be
+        triggered with the new status and some information about the task.
+        """
+        # Add an app and its task to Marathon
+        app = {
+            'id': '/my-app_1',
+            'cmd': 'sleep 50'
+        }
+        task = {
+            'id': 'my-app_1-1396592790353',
+            'status': 'TASK_RUNNING',
+            'appId': '/my-app_1',
+            'slaveId': '20140909-054127-177048842-5050-1494-0',
+            'host': 'host1.local',
+            'ports': [31263],
+            'version': '2014-04-04T06:26:23.051Z'
+        }
+        self.marathon.add_app(app, [task])
+
+        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+        self.marathon.event_subscriptions = [callback_url]
+
+        # Update the task status
+        task_id = task['id']
+        new_task_status = 'TASK_KILLED'
+        self.marathon.update_task_status(task_id, new_task_status)
+
+        # Ensure an event is sent off with the expected fields
+        event_request = yield self.event_requests.get()
+        self.assertThat(event_request,
+                        HasRequestProperties(method='POST', url=callback_url))
+
+        event_request_json = read_request_json(event_request)
+        self.assertThat(event_request_json, MatchesDict({
+            'eventType': Equals('status_update_event'),
+            'timestamp': IsRecentMarathonTimestamp(),
+            'taskStatus': Equals(new_task_status),
+            'taskId': Equals(task_id),
+            'appId': Equals(task['appId']),
+            'slaveId': Equals(task['slaveId']),
+            'host': Equals(task['host']),
+            'ports': Equals(task['ports']),
+            'version': Equals(task['version'])
+        }))
+
+        event_request.setResponseCode(200)
+        event_request.finish()
+
+
+class TestFakeMarathonAPI(TestFakeMarathonBase):
+    def setUp(self):
+        super(TestFakeMarathonAPI, self).setUp()
         self.marathon_api = FakeMarathonAPI(self.marathon)
 
         # FIXME: Current released version (15.3.1) of Klein expects the host to
@@ -37,13 +102,6 @@ class TestFakeMarathonAPI(TestCase):
         fake_server = FakeServer(Site(self.marathon_api.app.resource()))
         fake_agent = FakeServerAgent(fake_server.endpoint)
         self.client = JsonClient('http://www.example.com', agent=fake_agent)
-
-    def respond_to_event_request(self):
-        """ Respond 200/OK to a waiting event request. """
-        def response_ok(request):
-            request.setResponseCode(200)
-            request.finish()
-        return self.event_requests.get().addCallback(response_ok)
 
     @inlineCallbacks
     def test_get_apps_empty(self):
