@@ -23,7 +23,7 @@ install:
   - pip install -r requirements-dev.txt
   - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:
-  - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov marathon_acme"; else COVERAGE_OPT=""; fi
+  - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
   - py.test marathon_acme $COVERAGE_OPT
   - flake8 .
 after_success:
