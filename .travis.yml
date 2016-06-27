@@ -6,8 +6,8 @@ matrix:
     - python: "pypy"
       env: PYPY_VERSION="5.3.1" NO_COVERAGE=1 PYTHON_BUILD_CACHE_PATH="$HOME/pyenv-cache"
 cache:
-  directories:
-    - $HOME/.cache/pip
+  - pip
+  - directories:
     - $HOME/pyenv-cache
 
 before_install:
