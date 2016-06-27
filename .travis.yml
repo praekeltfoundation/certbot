@@ -4,23 +4,27 @@ matrix:
     - python: "2.7"
     - python: "3.5"
     - python: "pypy"
-      env: PYPY_VERSION="5.1.1" NO_COVERAGE=1 PYTHON_BUILD_CACHE_PATH="$HOME/pyenv-cache"
+      env: PYPY_VERSION="5.3" NO_COVERAGE=1 PYTHON_BUILD_CACHE_PATH="$HOME/pyenv-cache"
 cache:
-  directories:
-    - $HOME/.cache/pip
+  - pip
+  - directories:
     - $HOME/pyenv-cache
 
 before_install:
-  # If necessary, set up an appropriate version of pypy.
-  - if [[ -n "$PYPY_VERSION" ]]; then source setup-pypy-travis.sh; fi
-  - if [[ -n "$PYPY_VERSION" ]]; then python --version 2>&1 | fgrep "PyPy $PYPY_VERSION"; fi
+  # If necessary, set up an appropriate version of pypy. Also, double check that
+  # Python version is correct (fgrep returns 1 if not and Travis halts).
+  - |
+      if [[ -n "$PYPY_VERSION" ]]; then
+        source .travis/setup-pypy.sh
+        python --version 2>&1 | fgrep "PyPy $PYPY_VERSION"
+      fi
 install:
   - pip install --upgrade pip # Upgrade pip to get wheel caching
   - pip install -e .
   - pip install -r requirements-dev.txt
   - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:
-  - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov marathon_acme"; else COVERAGE_OPT=""; fi
+  - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
   - py.test marathon_acme $COVERAGE_OPT
   - flake8 .
 after_success:

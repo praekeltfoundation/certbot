@@ -19,12 +19,16 @@ setup(
         'uritools>=1.0.0'
     ],
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 2 - Pre-Alpha',
+        'Framework :: Twisted',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
-        'Operating System :: POSIX',
+        'Natural Language :: English',
+        'Programming Language :: Python',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: Implementation :: PyPy'
     ],
     entry_points={
         'console_scripts': ['marathon-acme = marathon_acme.cli:main'],
