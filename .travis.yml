@@ -11,7 +11,8 @@ cache:
     - $HOME/pyenv-cache
 
 before_install:
-  # If necessary, set up an appropriate version of pypy.
+  # If necessary, set up an appropriate version of pypy. Also, double check that
+  # Python version is correct (fgrep returns 1 if not and Travis halts).
   - |
       if [[ -n "$PYPY_VERSION" ]]; then
         source .travis/setup-pypy.sh
