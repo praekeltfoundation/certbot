@@ -2,14 +2,18 @@ import cgi
 
 from requests.exceptions import HTTPError
 
-from twisted.protocols.basic import LineReceiver
+from twisted.internet import error
+from twisted.internet.protocol import Protocol
 
 
-class EventSourceProtocol(LineReceiver):
+class EventSourceProtocol(Protocol):
     """
     A protocol for Server-Sent Events (SSE).
     https://html.spec.whatwg.org/multipage/comms.html#server-sent-events
     """
+
+    _buffer = b''
+    MAX_LENGTH = 16384
 
     def __init__(self, finished, callbacks):
         """
@@ -29,6 +33,29 @@ class EventSourceProtocol(LineReceiver):
         self.event = 'message'
         self.data = ''
 
+    def dataReceived(self, data):
+        """
+        Translates bytes into lines, and calls lineReceived.
+
+        Copied from ``twisted.protocols.basic.LineOnlyReceiver`` but using
+        str.splitlines() to split on ``\r\n``, ``\n``, and ``\r``.
+        """
+        lines = (self._buffer + data).splitlines()
+        self._buffer = lines.pop(-1)
+        for line in lines:
+            if self.transport.disconnecting:
+                # this is necessary because the transport may be told to lose
+                # the connection by a line within a larger packet, and it is
+                # important to disregard all the lines in that packet following
+                # the one that told it to close.
+                return
+            if len(line) > self.MAX_LENGTH:
+                return self.lineLengthExceeded(line)
+            else:
+                self.lineReceived(line)
+        if len(self._buffer) > self.MAX_LENGTH:
+            return self.lineLengthExceeded(self._buffer)
+
     def lineReceived(self, line):
         line = line.decode('utf-8')
 
@@ -38,6 +65,13 @@ class EventSourceProtocol(LineReceiver):
 
         field, value = _parse_field_value(line)
         self._handle_field_value(field, value)
+
+    def lineLengthExceeded(self, line):
+        """
+        Called when the maximum line length has been reached.
+        Copied from ``twisted.protocols.basic.LineOnlyReceiver``.
+        """
+        return error.ConnectionLost('Line length exceeded')
 
     def _handle_field_value(self, field, value):
         """ Handle the field, value pair. """
