@@ -46,7 +46,7 @@ class SseProtocol(Protocol):
         # If this chunk of data ended with a newline character then the line is
         # complete and the buffer can be cleared, else the buffer should hold
         # the last incomplete line
-        if data.endswith('\n') or data.endswith('\r'):
+        if data.endswith(b'\n') or data.endswith(b'\r'):
             self._buffer = b''
         else:
             self._buffer = lines.pop(-1)
