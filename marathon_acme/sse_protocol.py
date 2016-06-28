@@ -6,7 +6,7 @@ from twisted.internet import error
 from twisted.internet.protocol import Protocol
 
 
-class EventSourceProtocol(Protocol):
+class SseProtocol(Protocol):
     """
     A protocol for Server-Sent Events (SSE).
     https://html.spec.whatwg.org/multipage/comms.html#server-sent-events
@@ -139,7 +139,7 @@ def _parse_field_value(line):
     return field, value
 
 
-def raise_for_es_status(response):
+def raise_for_sse_status(response):
     """
     Raise an HTTPError if the response's status code is not 200 or the
     Content-Type header is not text/event-stream.

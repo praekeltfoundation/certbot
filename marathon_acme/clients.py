@@ -10,8 +10,7 @@ from twisted.web.http import OK
 
 from uritools import uricompose, uridecode, urisplit
 
-from marathon_acme.sse_client import (
-    EventSourceProtocol, raise_for_es_status)
+from marathon_acme.sse_protocol import SseProtocol, raise_for_sse_status
 
 
 def json_content(response):
@@ -185,13 +184,13 @@ class MarathonClient(JsonClient):
             'Accept': 'text/event-stream',
             'Cache-Control': 'no-store'
         })
-        d.addCallback(raise_for_es_status)
+        d.addCallback(raise_for_sse_status)
         d.addCallback(self.cb_event_source, callbacks)
         return d
 
     def cb_event_source(self, response, callbacks):
         finished = Deferred()
-        response.deliverBody(EventSourceProtocol(finished, callbacks))
+        response.deliverBody(SseProtocol(finished, callbacks))
         return finished
 
     def get_json_field(self, field, **kwargs):
