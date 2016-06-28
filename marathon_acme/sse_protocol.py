@@ -15,7 +15,7 @@ class SseProtocol(Protocol):
     _buffer = b''
     MAX_LENGTH = 16384
 
-    def __init__(self, finished, callbacks):
+    def __init__(self):
         """
         Initialize the protocol.
 
@@ -24,14 +24,20 @@ class SseProtocol(Protocol):
         :param callbacks:
             A dict mapping event types to functions that will handle their data
         """
-        self.finished = finished
-        self.callbacks = callbacks
+        self.finished = None
+        self.callbacks = {}
 
         self._reset_event_data()
 
     def _reset_event_data(self):
         self.event = 'message'
         self.data = ''
+
+    def set_finished_deferred(self, d):
+        self.finished = d
+
+    def add_callback(self, event, callback):
+        self.callbacks[event] = callback
 
     def dataReceived(self, data):
         """
@@ -41,7 +47,14 @@ class SseProtocol(Protocol):
         str.splitlines() to split on ``\r\n``, ``\n``, and ``\r``.
         """
         lines = (self._buffer + data).splitlines()
-        self._buffer = lines.pop(-1)
+        # If this chunk of data ended with a newline character then the line is
+        # complete and the buffer can be cleared, else the buffer should hold
+        # the last incomplete line
+        if data.endswith('\n') or data.endswith('\r'):
+            self._buffer = b''
+        else:
+            self._buffer = lines.pop(-1)
+
         for line in lines:
             if self.transport.disconnecting:
                 # this is necessary because the transport may be told to lose
@@ -116,7 +129,8 @@ class SseProtocol(Protocol):
         return data
 
     def connectionLost(self, reason):
-        self.finished.callback(None)
+        if self.finished is not None:
+            self.finished.callback(None)
 
 
 def _parse_field_value(line):
@@ -134,7 +148,7 @@ def _parse_field_value(line):
         field = line[:colon_index]
         value = line[colon_index + 1:]
         # If value starts with a space, remove it.
-        value[1:] if value.startswith(' ') else value
+        value = value[1:] if value.startswith(' ') else value
 
     return field, value
 
