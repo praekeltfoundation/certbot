@@ -4,13 +4,10 @@ from requests.exceptions import HTTPError
 
 from treq.client import HTTPClient
 
-from twisted.internet.defer import Deferred
 from twisted.python import log
 from twisted.web.http import OK
 
 from uritools import uricompose, uridecode, urisplit
-
-from marathon_acme.sse_protocol import SseProtocol, raise_for_sse_status
 
 
 def json_content(response):
@@ -172,26 +169,6 @@ class JsonClient(object):
 
 
 class MarathonClient(JsonClient):
-
-    def get_events(self, callbacks):
-        """
-        Attach to Marathon's event stream using Server-Sent Events (SSE).
-
-        :param callbacks:
-            A dict mapping event types to functions that handle the event data
-        """
-        d = self.request('GET', path='/v2/events', headers={
-            'Accept': 'text/event-stream',
-            'Cache-Control': 'no-store'
-        })
-        d.addCallback(raise_for_sse_status)
-        d.addCallback(self.cb_event_source, callbacks)
-        return d
-
-    def cb_event_source(self, response, callbacks):
-        finished = Deferred()
-        response.deliverBody(SseProtocol(finished, callbacks))
-        return finished
 
     def get_json_field(self, field, **kwargs):
         """

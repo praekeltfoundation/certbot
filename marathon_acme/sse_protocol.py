@@ -1,7 +1,3 @@
-import cgi
-
-from requests.exceptions import HTTPError
-
 from twisted.internet import error
 from twisted.internet.protocol import Protocol
 
@@ -151,24 +147,3 @@ def _parse_field_value(line):
         value = value[1:] if value.startswith(' ') else value
 
     return field, value
-
-
-def raise_for_sse_status(response):
-    """
-    Raise an HTTPError if the response's status code is not 200 or the
-    Content-Type header is not text/event-stream.
-    """
-    if response.code != 200:
-        raise HTTPError(
-            'Non-200 (%d) response code for EventSource' % (response.code,))
-
-    # Content-Type must be text/event-stream
-    content_types = response.headers.getRawHeaders('Content-Type')
-    if content_types is None:
-        raise HTTPError('No Content-Type header in response')
-
-    # Respect the last content-type header
-    content_type, _ = cgi.parse_header(content_types[-1])
-    if content_type != 'text/event-stream':
-        raise HTTPError('Expected content-type "text/event-stream" got "%s" '
-                        'instead' % (content_type,))
