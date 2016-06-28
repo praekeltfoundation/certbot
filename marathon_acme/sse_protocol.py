@@ -12,14 +12,6 @@ class SseProtocol(Protocol):
     MAX_LENGTH = 16384
 
     def __init__(self):
-        """
-        Initialize the protocol.
-
-        :param finished:
-            A deferred that will be called when the connection is closed
-        :param callbacks:
-            A dict mapping event types to functions that will handle their data
-        """
         self.finished = None
         self.callbacks = {}
 
