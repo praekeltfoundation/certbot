@@ -88,9 +88,9 @@ class TestSseProtocol(TestCase):
 
     def test_space_before_value_strip_only_first_space(self):
         """
-        When a field/value pair is received, and there is a space before the
-        value, the leading space should be stripped and the other spaces left
-        intact.
+        When a field/value pair is received, and there are multiple spaces at
+        the start of the value, the leading space should be stripped and the
+        other spaces left intact.
         """
         data = []
         self.protocol.set_callback('message', data.append)
