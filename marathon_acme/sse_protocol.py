@@ -35,9 +35,11 @@ class SseProtocol(Protocol):
         str.splitlines() to split on ``\r\n``, ``\n``, and ``\r``.
         """
         lines = (self._buffer + data).splitlines()
-        # If this chunk of data ended with a newline character then the line is
-        # complete and the buffer can be cleared, else the buffer should hold
-        # the last incomplete line
+
+        # str.splitlines() doesn't split the string after a trailing newline
+        # character so we must check if there is a trailing newline and, if so,
+        # clear the buffer as the line is "complete". Else, the line is
+        # incomplete and we keep the last line in the buffer.
         if data.endswith(b'\n') or data.endswith(b'\r'):
             self._buffer = b''
         else:
