@@ -25,7 +25,7 @@ class TestSseProtocol(TestCase):
         'message', should be called with the data.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
 
         self.assertThat(data, Equals(['hello']))
@@ -37,7 +37,7 @@ class TestSseProtocol(TestCase):
         separating them.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\r\ndata:world\r\n\r\n')
 
         self.assertThat(data, Equals(['hello\nworld']))
@@ -48,7 +48,7 @@ class TestSseProtocol(TestCase):
         on those characters.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\ndata:world\r\r\n')
 
         self.assertThat(data, Equals(['hello\nworld']))
@@ -59,7 +59,7 @@ class TestSseProtocol(TestCase):
         callback should receive an empty string.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:\r\n\r\n')
 
         self.assertThat(data, Equals(['']))
@@ -70,7 +70,7 @@ class TestSseProtocol(TestCase):
         callback should not be called.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'\r\n')
 
         self.assertThat(data, Equals([]))
@@ -81,7 +81,7 @@ class TestSseProtocol(TestCase):
         value, the leading space should be stripped.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data: hello\r\n\r\n')
 
         self.assertThat(data, Equals(['hello']))
@@ -93,7 +93,7 @@ class TestSseProtocol(TestCase):
         intact.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:%s\r\n\r\n' % (b' ' * 4,))
 
         self.assertThat(data, Equals([' ' * 3]))
@@ -104,7 +104,7 @@ class TestSseProtocol(TestCase):
         be called.
         """
         data = []
-        self.protocol.add_callback('my_event', data.append)
+        self.protocol.set_callback('my_event', data.append)
         self.protocol.dataReceived(b'event:my_event\r\n')
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
 
@@ -115,7 +115,7 @@ class TestSseProtocol(TestCase):
         When the id field is included in an event, it should be ignored.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\r\n')
         self.protocol.dataReceived(b'id:123\r\n\r\n')
 
@@ -126,7 +126,7 @@ class TestSseProtocol(TestCase):
         When the retry field is included in an event, it should be ignored.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\r\n')
         self.protocol.dataReceived(b'retry:123\r\n\r\n')
 
@@ -138,7 +138,7 @@ class TestSseProtocol(TestCase):
         ignored.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\r\n')
         self.protocol.dataReceived(b'somefield:123\r\n\r\n')
 
@@ -150,7 +150,7 @@ class TestSseProtocol(TestCase):
         be ignored.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\r\n')
         self.protocol.dataReceived(b':123abc\r\n\r\n')
 
@@ -163,7 +163,7 @@ class TestSseProtocol(TestCase):
         string.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data\r\n')
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
 
@@ -175,7 +175,7 @@ class TestSseProtocol(TestCase):
         should be stripped before the data is passed to the callback.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:\r')
         self.protocol.dataReceived(b'data:\n')
         self.protocol.dataReceived(b'data:\r\n\r\n')
@@ -188,7 +188,7 @@ class TestSseProtocol(TestCase):
         to form the lines of the event.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:')
         self.protocol.dataReceived(b' hello\r\n')
         self.protocol.dataReceived(b'\r\n')
@@ -201,7 +201,7 @@ class TestSseProtocol(TestCase):
         be decoded correctly.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(u'data:hëlló\r\n\r\n'.encode('utf-8'))
 
         self.assertThat(data, Equals([u'hëlló']))
@@ -212,7 +212,7 @@ class TestSseProtocol(TestCase):
         ``dataReceived`` should return a ``ConnectionLost`` error.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         err = self.protocol.dataReceived(b'data:%s\r\n\r\n' % (b'x' * 16385,))
 
         self.assertThat(err, IsInstance(ConnectionLost))
@@ -224,7 +224,7 @@ class TestSseProtocol(TestCase):
         length, ``dataReceived`` should return a ``ConnectionLost`` error.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         err = self.protocol.dataReceived(b'data:%s' % (b'x' * 16385,))
 
         self.assertThat(err, IsInstance(ConnectionLost))
@@ -236,7 +236,7 @@ class TestSseProtocol(TestCase):
         be halted.
         """
         data = []
-        self.protocol.add_callback('message', data.append)
+        self.protocol.set_callback('message', data.append)
         self.transport.disconnecting = True
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
 
@@ -267,10 +267,10 @@ class TestSseProtocol(TestCase):
         receive further messages without a specified event type.
         """
         message_data = []
-        self.protocol.add_callback('message', message_data.append)
+        self.protocol.set_callback('message', message_data.append)
 
         status_data = []
-        self.protocol.add_callback('status', status_data.append)
+        self.protocol.set_callback('status', status_data.append)
 
         # Event 1
         self.protocol.dataReceived(b'event:status\r\n')

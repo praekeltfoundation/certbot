@@ -24,7 +24,7 @@ class SseProtocol(Protocol):
     def set_finished_deferred(self, d):
         self.finished = d
 
-    def add_callback(self, event, callback):
+    def set_callback(self, event, callback):
         self.callbacks[event] = callback
 
     def dataReceived(self, data):
