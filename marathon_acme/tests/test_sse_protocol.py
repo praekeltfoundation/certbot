@@ -134,8 +134,7 @@ class TestSseProtocol(TestCase):
 
     def test_unknown_field_ignored(self):
         """
-        When the an unknown field is included in an event, it should be
-        ignored.
+        When an unknown field is included in an event, it should be ignored.
         """
         data = []
         self.protocol.set_callback('message', data.append)
