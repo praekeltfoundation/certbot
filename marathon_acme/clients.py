@@ -1,3 +1,4 @@
+import cgi
 import json
 
 from requests.exceptions import HTTPError
@@ -10,7 +11,23 @@ from twisted.web.http import OK
 from uritools import uricompose, uridecode, urisplit
 
 
+def get_content_type(headers):
+    """
+    Parse the Content-Type header value from the given headers.
+    """
+    content_types = headers.getRawHeaders('Content-Type')
+    if content_types is None:
+        return None
+
+    # Take the final Content-Type header as the authorative
+    content_type, _ = cgi.parse_header(content_types[-1])
+    return content_type
+
+
 def json_content(response):
+    # Raise if content type is not application/json
+    raise_for_content_type(response, 'application/json')
+
     # Workaround for treq not treating JSON as UTF-8 by default (RFC7158)
     # https://github.com/twisted/treq/pull/126
     # See this discussion: http://stackoverflow.com/q/9254891
@@ -36,6 +53,19 @@ def raise_for_status(response):
 
     if http_error_msg:
         raise HTTPError(http_error_msg, response=response)
+
+    return response
+
+
+def raise_for_content_type(response, expected):
+    content_type = get_content_type(response.headers)
+    if content_type is None:
+        raise HTTPError('Expected content type "%s" but could not determine '
+                        'content type of response' % (expected,))
+
+    if content_type != expected:
+        raise HTTPError('Expected content type "%s" but got "%s" instead' % (
+            expected, content_type,))
 
     return response
 
