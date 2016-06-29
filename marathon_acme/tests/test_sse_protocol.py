@@ -8,14 +8,16 @@ from twisted.internet.error import ConnectionLost
 from marathon_acme.sse_protocol import SseProtocol
 
 
+class DummyTransport(object):
+    disconnecting = False
+
+
 class TestSseProtocol(TestCase):
 
     def setUp(self):
         super(TestSseProtocol, self).setUp()
         self.protocol = SseProtocol()
 
-        class DummyTransport(object):
-            disconnecting = False
         self.transport = DummyTransport()
         self.protocol.transport = self.transport
 
