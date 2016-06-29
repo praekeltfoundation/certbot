@@ -19,7 +19,7 @@ class SseProtocol(Protocol):
 
     def _reset_event_data(self):
         self.event = 'message'
-        self.data = ''
+        self.data_lines = []
 
     def set_finished_deferred(self, d):
         self.finished = d
@@ -81,7 +81,7 @@ class SseProtocol(Protocol):
         if field == 'event':
             self.event = value
         elif field == 'data':
-            self.data += (value + '\n')
+            self.data_lines.append(value)
         elif field == 'id':
             # Not implemented
             pass
@@ -104,19 +104,14 @@ class SseProtocol(Protocol):
 
     def _prepare_data(self):
         """
-        Prepare the data to be delivered. Remove a trailing LF character if
-        present. Return the prepared data.
+        Join the data lines into a single string for delivery to the callback.
         """
-        data = self.data
-
         # If the data is empty, abort
-        if not data:
+        if not self.data_lines:
             return None
 
-        # If last character is an LF, strip it.
-        if data.endswith('\n'):
-            data = data[:-1]
-        return data
+        # Add a newline character between lines
+        return '\n'.join(self.data_lines)
 
     def connectionLost(self, reason):
         if self.finished is not None:
