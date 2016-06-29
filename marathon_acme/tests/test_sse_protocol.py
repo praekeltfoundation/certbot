@@ -212,7 +212,8 @@ class TestSseProtocol(TestCase):
         """
         data = []
         self.protocol.set_callback('message', data.append)
-        err = self.protocol.dataReceived(b'data:%s\r\n\r\n' % (b'x' * 16385,))
+        err = self.protocol.dataReceived(b'data:%s\r\n\r\n' % (
+            b'x' * (self.protocol.MAX_LENGTH + 1),))
 
         self.assertThat(err, IsInstance(ConnectionLost))
         self.assertThat(str(err), Contains('Line length exceeded'))
@@ -224,7 +225,8 @@ class TestSseProtocol(TestCase):
         """
         data = []
         self.protocol.set_callback('message', data.append)
-        err = self.protocol.dataReceived(b'data:%s' % (b'x' * 16385,))
+        err = self.protocol.dataReceived(b'data:%s' % (
+            b'x' * (self.protocol.MAX_LENGTH + 1),))
 
         self.assertThat(err, IsInstance(ConnectionLost))
         self.assertThat(str(err), Contains('Line length exceeded'))
