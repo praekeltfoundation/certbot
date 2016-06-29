@@ -125,19 +125,18 @@ class SseProtocol(Protocol):
 
 def _parse_field_value(line):
     """ Parse the field and value from a line. """
-    colon_index = line.find(':')
-    if colon_index == 0:
-        # Ignore if line starts with colon
-        field, value = None, None
-    elif colon_index == -1:
-        # Colon not found, treat whole line as field
-        field = line
-        value = ''
-    else:
-        # Colon found, field is before it, value is after it
-        field = line[:colon_index]
-        value = line[colon_index + 1:]
-        # If value starts with a space, remove it.
-        value = value[1:] if value.startswith(' ') else value
+    if line.startswith(':'):
+        # Ignore the line
+        return None, None
+
+    if ':' not in line:
+        # Treat the entire line as the field, use empty string as value
+        return line, ''
+
+    # Else field is before the ':' and value is after
+    field, value = line.split(':', 1)
+
+    # If value starts with a space, remove it.
+    value = value[1:] if value.startswith(' ') else value
 
     return field, value
