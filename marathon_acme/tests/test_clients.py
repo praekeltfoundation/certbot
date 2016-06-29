@@ -1,9 +1,12 @@
+import json
+
 import testtools
 
 from twisted.internet import reactor
 from twisted.internet.task import Clock
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.web.client import Agent
+from twisted.web.http_headers import Headers
 from twisted.web.server import NOT_DONE_YET
 
 from testtools.matchers import Equals, Is, IsInstance
@@ -13,8 +16,8 @@ from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    default_agent, default_reactor, HTTPError, JsonClient, MarathonClient,
-    raise_for_status)
+    default_agent, default_reactor, get_content_type, HTTPError, json_content,
+    JsonClient, MarathonClient, raise_for_status)
 from marathon_acme.server import read_request_json, write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
@@ -26,6 +29,31 @@ def json_response(request, json_data, response_code=200):
     request.setResponseCode(response_code)
     write_request_json(request, json_data)
     request.finish()
+
+
+class TestGetContentType(testtools.TestCase):
+    def test_single_content_type(self):
+        headers = Headers({'Content-Type': ['application/json']})
+        content_type = get_content_type(headers)
+
+        self.assertThat(content_type, Equals('application/json'))
+
+    def test_multiple_content_types(self):
+        headers = Headers({'Content-Type': [
+            'application/json',
+            'text/event-stream',
+            'text/html'
+        ]})
+        content_type = get_content_type(headers)
+
+        self.assertThat(content_type, Equals('text/html'))
+
+    def test_content_type_with_params(self):
+        headers = Headers({'Content-Type':
+                           ['application/json; charset=utf-8']})
+        content_type = get_content_type(headers)
+
+        self.assertThat(content_type, Equals('application/json'))
 
 
 class DefaultReactorTest(testtools.TestCase):
@@ -321,6 +349,85 @@ class JsonClientTest(JsonClientTestBase):
 
         request.setResponseCode(200)
         request.finish()
+
+    @inlineCallbacks
+    def test_json_content(self):
+        """
+        When a request is made with the json_content callback and the
+        'application/json' content type is set in the response headers then the
+        JSON should be successfully parsed.
+        """
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
+        d.addCallback(json_content)
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'application/json')
+        request.write(json.dumps({}).encode('utf-8'))
+        request.finish()
+
+        response = yield d
+        self.assertThat(response, Equals({}))
+
+    @inlineCallbacks
+    def test_json_content_incorrect_content_type(self):
+        """
+        When a request is made with the json_content callback and the
+        content-type header is set to a value other than 'application/json' in
+        the response headers then an error should be raised.
+        """
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
+        d.addCallback(json_content)
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'application/octet-stream')
+        request.write(json.dumps({}).encode('utf-8'))
+        request.finish()
+
+        yield wait0()
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, 'Expected content type "application/json" but got '
+                       '"application/octet-stream" instead')))
+
+    @inlineCallbacks
+    def test_json_content_missing_content_type(self):
+        """
+        When a request is made with the json_content callback and the
+        content-type header is not set in the response headers then an error
+        should be raised.
+        """
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
+        d.addCallback(json_content)
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
+
+        request.setResponseCode(200)
+        # Twisted will set the content type to "text/html" by default but this
+        # can be disabled by setting the default content type to None:
+        # https://twistedmatrix.com/documents/current/api/twisted.web.server.Request.html#defaultContentType
+        request.defaultContentType = None
+        request.write(json.dumps({}).encode('utf-8'))
+        request.finish()
+
+        yield wait0()
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, 'Expected content type "application/json" but could '
+                       'not determine content type of response')))
 
 
 class MarathonClientTest(JsonClientTestBase):
