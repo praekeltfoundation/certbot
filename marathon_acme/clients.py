@@ -7,8 +7,11 @@ from treq.client import HTTPClient
 
 from twisted.python import log
 from twisted.web.http import OK
+from twisted.internet.defer import Deferred
 
 from uritools import uricompose, uridecode, urisplit
+
+from marathon_acme.sse_protocol import SseProtocol
 
 
 def get_content_type(headers):
@@ -198,6 +201,46 @@ class JsonClient(object):
         return d
 
 
+def raise_for_not_ok_status(response):
+    """
+    Raises a `requests.exceptions.HTTPError` if the response has a non-200
+    status code.
+    """
+    if response.code != OK:
+        raise HTTPError('Non-200 response code (%s) for url: %s' % (
+            response.code, uridecode(response.request.absoluteURI)))
+
+    return response
+
+
+def sse_content(response, callbacks):
+    """
+    Callback to collect the Server-Sent Events content of a response. Callbacks
+    passed will receive event data.
+
+    :param response:
+        The response from the SSE request.
+    :param callbacks:
+        A dict mapping event type to callback functions that will be called
+        with the event data when it is received.
+    """
+    # An SSE response must be 200/OK and have content-type 'text/event-stream'
+    raise_for_not_ok_status(response)
+    raise_for_content_type(response, 'text/event-stream')
+
+    protocol = SseProtocol()
+
+    finished = Deferred()
+    protocol.set_finished_deferred(finished)
+
+    for event, callback in callbacks.items():
+        protocol.set_callback(event, callback)
+
+    response.deliverBody(protocol)
+
+    return finished
+
+
 class MarathonClient(JsonClient):
 
     def get_json_field(self, field, **kwargs):
@@ -281,3 +324,26 @@ class MarathonClient(JsonClient):
         """
         return self.get_json_field(
             'tasks', path='/v2/apps%s/tasks' % (app_id,))
+
+    def get_events(self, callbacks):
+        """
+        Attach to Marathon's event stream using Server-Sent Events (SSE).
+
+        :param callbacks:
+            A dict mapping event types to functions that handle the event data
+        """
+        d = self.request('GET', path='/v2/events', headers={
+            'Accept': 'text/event-stream',
+            'Cache-Control': 'no-store'
+        })
+
+        # We know to expect JSON event data from Marathon, so wrap the
+        # callbacks in a step that decodes the JSON.
+        wrapped_cbs = {e: _wrap_json_callback(c) for e, c in callbacks.items()}
+
+        d.addCallback(sse_content, wrapped_cbs)
+        return d
+
+
+def _wrap_json_callback(callback):
+    return lambda data: callback(json.loads(data))

@@ -99,6 +99,10 @@ class JsonClientTestBase(TestCase):
 
         self.client = self.get_client(fake_server.get_agent())
 
+        # Spin the reactor once at the end of each test to clean up any
+        # cancelled deferreds
+        self.addCleanup(wait0)
+
     def handle_request(self, request):
         self.requests.put(request)
         return NOT_DONE_YET
@@ -808,3 +812,174 @@ class MarathonClientTest(JsonClientTestBase):
 
         res = yield d
         self.assertThat(res, Equals(tasks['tasks']))
+
+    @inlineCallbacks
+    def test_get_events(self):
+        """
+        When a request is made to Marathon's event stream, a callback should
+        receive JSON-decoded data before the connection is closed.
+        """
+        data = []
+        d = self.cleanup_d(self.client.get_events({'test': data.append}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/events')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['text/event-stream']))
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'text/event-stream')
+
+        json_data = {'hello': 'world'}
+        request.write(b'event: test\n')
+        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
+        request.write(b'\n')
+
+        yield wait0()
+        self.assertThat(data, Equals([json_data]))
+
+        request.finish()
+        yield d
+
+    @inlineCallbacks
+    def test_get_events_multiple_events(self):
+        """
+        When a request is made to Marathon's event stream, and there are
+        multiple events for a single callback, that callback should receive
+        JSON-decoded data for each event.
+        """
+        data = []
+        d = self.cleanup_d(self.client.get_events({'test': data.append}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/events')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['text/event-stream']))
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'text/event-stream')
+
+        json_data1 = {'hello': 'world'}
+        request.write(b'event: test\n')
+        request.write(b'data: %s\n' % (json.dumps(json_data1).encode('utf-8')))
+        request.write(b'\n')
+
+        json_data2 = {'hi': 'planet'}
+        request.write(b'data: %s\n' % (json.dumps(json_data2).encode('utf-8')))
+        request.write(b'event: test\n')
+        request.write(b'\n')
+
+        yield wait0()
+        self.assertThat(data, Equals([json_data1, json_data2]))
+
+        request.finish()
+        yield d
+
+    @inlineCallbacks
+    def test_get_events_multiple_callbacks(self):
+        """
+        When a request is made to Marathon's event stream, and there are
+        events for multiple callbacks, those callbacks should receive
+        JSON-decoded data for each event.
+        """
+        data1 = []
+        data2 = []
+        d = self.cleanup_d(self.client.get_events({
+            'test1': data1.append,
+            'test2': data2.append
+        }))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/events')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['text/event-stream']))
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'text/event-stream')
+
+        json_data1 = {'hello': 'world'}
+        request.write(b'event: test1\n')
+        request.write(b'data: %s\n' % (json.dumps(json_data1).encode('utf-8')))
+        request.write(b'\n')
+
+        json_data2 = {'hello': 'computer'}
+        request.write(b'event: test2\n')
+        request.write(b'data: %s\n' % (json.dumps(json_data2).encode('utf-8')))
+        request.write(b'\n')
+
+        yield wait0()
+        self.assertThat(data1, Equals([json_data1]))
+        self.assertThat(data2, Equals([json_data2]))
+
+        request.finish()
+        yield d
+
+    @inlineCallbacks
+    def test_get_events_non_200(self):
+        """
+        When a request is made to Marathon's event stream, and a non-200
+        response code is returned, an error should be raised.
+        """
+        data = []
+        d = self.cleanup_d(self.client.get_events({'test': data.append}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/events')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['text/event-stream']))
+
+        request.setResponseCode(202)
+        request.setHeader('Content-Type', 'text/event-stream')
+
+        json_data = {'hello': 'world'}
+        request.write(b'event: test\n')
+        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
+        request.write(b'\n')
+
+        yield wait0()
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, 'Non-200 response code (202) for url: '
+                       'http://localhost:8080/v2/events')))
+
+        self.assertThat(data, Equals([]))
+
+        request.finish()
+        yield d
+
+    @inlineCallbacks
+    def test_get_events_incorrect_content_type(self):
+        """
+        When a request is made to Marathon's event stream, and the content-type
+        header value returned is not "text/event-stream", an error should be
+        raised.
+        """
+        data = []
+        d = self.cleanup_d(self.client.get_events({'test': data.append}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/events')))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['text/event-stream']))
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'application/json')
+
+        json_data = {'hello': 'world'}
+        request.write(b'event: test\n')
+        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
+        request.write(b'\n')
+
+        yield wait0()
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, 'Expected content type "text/event-stream" but got '
+                       '"application/json" instead')))
+
+        self.assertThat(data, Equals([]))
+
+        request.finish()
+        yield d

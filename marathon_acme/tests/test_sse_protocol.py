@@ -112,6 +112,24 @@ class TestSseProtocol(TestCase):
 
         self.assertThat(data, Equals(['hello']))
 
+    def test_multiple_events(self):
+        """
+        If a multiple different event types are received, the callbacks for
+        each of those events should be called.
+        """
+        data1 = []
+        data2 = []
+        self.protocol.set_callback('test1', data1.append)
+        self.protocol.set_callback('test2', data2.append)
+
+        self.protocol.dataReceived(b'event:test1\r\n')
+        self.protocol.dataReceived(b'data:hello\r\n\r\n')
+        self.protocol.dataReceived(b'event:test2\r\n')
+        self.protocol.dataReceived(b'data:world\r\n\r\n')
+
+        self.assertThat(data1, Equals(['hello']))
+        self.assertThat(data2, Equals(['world']))
+
     def test_id_ignored(self):
         """
         When the id field is included in an event, it should be ignored.
