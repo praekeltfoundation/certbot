@@ -339,11 +339,9 @@ class MarathonClient(JsonClient):
 
         # We know to expect JSON event data from Marathon, so wrap the
         # callbacks in a step that decodes the JSON.
-        wrapped_callbacks = {}
-        for event, callback in callbacks.items():
-            wrapped_callbacks[event] = _wrap_json_callback(callback)
+        wrapped_cbs = {e: _wrap_json_callback(c) for e, c in callbacks.items()}
 
-        d.addCallback(sse_content, wrapped_callbacks)
+        d.addCallback(sse_content, wrapped_cbs)
         return d
 
 
