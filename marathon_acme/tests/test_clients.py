@@ -99,6 +99,10 @@ class JsonClientTestBase(TestCase):
 
         self.client = self.get_client(fake_server.get_agent())
 
+        # Spin the reactor once at the end of each test to clean up any
+        # cancelled deferreds
+        self.addCleanup(wait0)
+
     def handle_request(self, request):
         self.requests.put(request)
         return NOT_DONE_YET
