@@ -78,7 +78,7 @@ class TestGetSingleHeader(testtools.TestCase):
         self.assertThat(content_type, Is(None))
 
 
-class DefaultReactorTest(testtools.TestCase):
+class TestDefaultReactor(testtools.TestCase):
     def test_default_reactor(self):
         """
         When default_reactor is passed a reactor it should return that reactor.
@@ -95,7 +95,7 @@ class DefaultReactorTest(testtools.TestCase):
         self.assertThat(default_reactor(None), Is(reactor))
 
 
-class DefaultAgentTest(testtools.TestCase):
+class TestDefaultAgent(testtools.TestCase):
     def test_default_agent(self):
         """
         When default_agent is passed an agent it should return that agent.
@@ -112,9 +112,9 @@ class DefaultAgentTest(testtools.TestCase):
         self.assertThat(default_agent(None, reactor), IsInstance(Agent))
 
 
-class JsonClientTestBase(TestCase):
+class TestJsonClientBase(TestCase):
     def setUp(self):
-        super(JsonClientTestBase, self).setUp()
+        super(TestJsonClientBase, self).setUp()
 
         self.requests = DeferredQueue()
         fake_server = FakeHttpServer(self.handle_request)
@@ -141,7 +141,7 @@ class JsonClientTestBase(TestCase):
         return d
 
 
-class JsonClientTest(JsonClientTestBase):
+class TestJsonClient(TestJsonClientBase):
 
     def get_client(self, agent):
         return JsonClient('http://localhost:8000', agent=agent)
@@ -457,7 +457,7 @@ class JsonClientTest(JsonClientTestBase):
                        '"application/json" but header not found in response')))
 
 
-class MarathonClientTest(JsonClientTestBase):
+class TestMarathonClient(TestJsonClientBase):
     def get_client(self, agent):
         return MarathonClient('http://localhost:8080', agent=agent)
 
