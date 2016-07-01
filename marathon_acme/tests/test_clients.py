@@ -16,7 +16,7 @@ from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    default_agent, default_reactor, get_content_type, HTTPError, json_content,
+    default_agent, default_reactor, get_single_header, HTTPError, json_content,
     JsonClient, MarathonClient, raise_for_status)
 from marathon_acme.server import read_request_json, write_request_json
 from marathon_acme.tests.helpers import TestCase
@@ -31,29 +31,51 @@ def json_response(request, json_data, response_code=200):
     request.finish()
 
 
-class TestGetContentType(testtools.TestCase):
-    def test_single_content_type(self):
+class TestGetSingleHeader(testtools.TestCase):
+    def test_single_value(self):
+        """
+        When a single value is set for a header key and we use
+        get_single_header to get that value, the correct value is returned.
+        """
         headers = Headers({'Content-Type': ['application/json']})
-        content_type = get_content_type(headers)
+        content_type = get_single_header(headers, 'Content-Type')
 
         self.assertThat(content_type, Equals('application/json'))
 
-    def test_multiple_content_types(self):
+    def test_multiple_values(self):
+        """
+        When multiple values are set for a header key and we use
+        get_single_header to get the value, the last value is returned.
+        """
         headers = Headers({'Content-Type': [
             'application/json',
             'text/event-stream',
             'text/html'
         ]})
-        content_type = get_content_type(headers)
+        content_type = get_single_header(headers, 'Content-Type')
 
         self.assertThat(content_type, Equals('text/html'))
 
-    def test_content_type_with_params(self):
-        headers = Headers({'Content-Type':
-                           ['application/json; charset=utf-8']})
-        content_type = get_content_type(headers)
+    def test_value_with_params(self):
+        """
+        When the value set for a header key include parameters and we use
+        get_single_header to get the value, the value without the parameters
+        is returned.
+        """
+        headers = Headers({'Accept': ['application/json; charset=utf-8']})
+        accept = get_single_header(headers, 'Accept')
 
-        self.assertThat(content_type, Equals('application/json'))
+        self.assertThat(accept, Equals('application/json'))
+
+    def test_value_missing(self):
+        """
+        When the requested header key is not present in the set of headers,
+        get_single_header returns None.
+        """
+        headers = Headers({'Content-Type': ['application/json']})
+        content_type = get_single_header(headers, 'Accept')
+
+        self.assertThat(content_type, Is(None))
 
 
 class DefaultReactorTest(testtools.TestCase):
@@ -401,8 +423,9 @@ class JsonClientTest(JsonClientTestBase):
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
-            HTTPError, 'Expected content type "application/json" but got '
-                       '"application/octet-stream" instead')))
+            HTTPError,
+            'Expected header "Content-Type" to be "application/json" but '
+            'found "application/octet-stream" instead')))
 
     @inlineCallbacks
     def test_json_content_missing_content_type(self):
@@ -430,8 +453,8 @@ class JsonClientTest(JsonClientTestBase):
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
-            HTTPError, 'Expected content type "application/json" but could '
-                       'not determine content type of response')))
+            HTTPError, 'Expected header "Content-Type" to be '
+                       '"application/json" but header not found in response')))
 
 
 class MarathonClientTest(JsonClientTestBase):
@@ -976,8 +999,9 @@ class MarathonClientTest(JsonClientTestBase):
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
-            HTTPError, 'Expected content type "text/event-stream" but got '
-                       '"application/json" instead')))
+            HTTPError,
+            'Expected header "Content-Type" to be "text/event-stream" but '
+            'found "application/json" instead')))
 
         self.assertThat(data, Equals([]))
 

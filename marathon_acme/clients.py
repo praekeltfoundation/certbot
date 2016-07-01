@@ -14,22 +14,27 @@ from uritools import uricompose, uridecode, urisplit
 from marathon_acme.sse_protocol import SseProtocol
 
 
-def get_content_type(headers):
+def get_single_header(headers, key):
     """
-    Parse the Content-Type header value from the given headers.
+    Get a single value for the given key out of the given set of headers.
+
+    :param twisted.web.http_headers.Headers headers:
+        The set of headers in which to look for the header value
+    :param str key:
+        The header key
     """
-    content_types = headers.getRawHeaders('Content-Type')
-    if content_types is None:
+    raw_headers = headers.getRawHeaders(key)
+    if raw_headers is None:
         return None
 
-    # Take the final Content-Type header as the authorative
-    content_type, _ = cgi.parse_header(content_types[-1])
-    return content_type
+    # Take the final header as the authorative
+    header, _ = cgi.parse_header(raw_headers[-1])
+    return header
 
 
 def json_content(response):
     # Raise if content type is not application/json
-    raise_for_content_type(response, 'application/json')
+    raise_for_header(response, 'Content-Type', 'application/json')
 
     # Workaround for treq not treating JSON as UTF-8 by default (RFC7158)
     # https://github.com/twisted/treq/pull/126
@@ -60,15 +65,15 @@ def raise_for_status(response):
     return response
 
 
-def raise_for_content_type(response, expected):
-    content_type = get_content_type(response.headers)
-    if content_type is None:
-        raise HTTPError('Expected content type "%s" but could not determine '
-                        'content type of response' % (expected,))
+def raise_for_header(response, key, expected):
+    header = get_single_header(response.headers, key)
+    if header is None:
+        raise HTTPError('Expected header "%s" to be "%s" but header not found '
+                        'in response' % (key, expected,))
 
-    if content_type != expected:
-        raise HTTPError('Expected content type "%s" but got "%s" instead' % (
-            expected, content_type,))
+    if header != expected:
+        raise HTTPError('Expected header "%s" to be "%s" but found "%s" '
+                        'instead' % (key, expected, header,))
 
     return response
 
@@ -226,7 +231,7 @@ def sse_content(response, callbacks):
     """
     # An SSE response must be 200/OK and have content-type 'text/event-stream'
     raise_for_not_ok_status(response)
-    raise_for_content_type(response, 'text/event-stream')
+    raise_for_header(response, 'Content-Type', 'text/event-stream')
 
     protocol = SseProtocol()
 
