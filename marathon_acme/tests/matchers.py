@@ -51,6 +51,17 @@ def IsJsonResponseWithCode(code):
     )
 
 
+def IsSseResponse():
+    """
+    Match a status code of 200 on a treq.response object and check that a
+    header is set to indicate that the content type is an event stream.
+    """
+    return MatchesStructure(
+        code=Equals(200),
+        headers=HasHeader('Content-Type', ['text/event-stream'])
+    )
+
+
 def WithErrorTypeAndMessage(error_type, message):
     """
     Check that a Twisted failure was caused by a certain error type with a

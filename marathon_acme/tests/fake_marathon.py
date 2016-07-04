@@ -1,12 +1,10 @@
+import json
+
 from datetime import datetime
 
 from klein import Klein
 
-from twisted.internet.defer import DeferredQueue
-
-from uritools import urisplit
-
-from marathon_acme.clients import JsonClient
+from marathon_acme.clients import get_single_header
 from marathon_acme.server import write_request_json
 
 
@@ -19,14 +17,11 @@ def marathon_timestamp(time=datetime.utcnow()):
 
 
 class FakeMarathon(object):
-    def __init__(self, agent):
+    def __init__(self):
         self._apps = {}
         self._tasks = {}
         self._app_tasks = {}
-        self.event_subscriptions = []
-
-        self._event_bus_client = JsonClient(agent=agent)
-        self.event_bus_requests = DeferredQueue()
+        self.event_callbacks = []
 
     def add_app(self, app, tasks):
         # Store the app
@@ -58,22 +53,21 @@ class FakeMarathon(object):
 
         return [self._tasks[task_id] for task_id in task_ids]
 
-    def get_event_subscriptions(self):
-        return self.event_subscriptions
+    def attach_event_stream(self, callback, remote_address=None):
+        assert callback not in self.event_callbacks
 
-    def add_event_subscription(self, callback_url, client_ip=None):
-        if callback_url not in self.event_subscriptions:
-            self.event_subscriptions.append(callback_url)
+        print('attaching event stream')
+        self.event_callbacks.append(callback)
+        self.trigger_event('event_stream_attached',
+                           remoteAddress=remote_address)
 
-        return self.trigger_event(
-            'subscribe_event', callbackUrl=callback_url, clientIp=client_ip)
+    def detach_event_stream(self, callback, remote_address=None):
+        assert callback in self.event_callbacks
 
-    def remove_event_subscription(self, callback_url, client_ip=None):
-        if callback_url in self.event_subscriptions:
-            self.event_subscriptions.remove(callback_url)
-
-        return self.trigger_event(
-            'unsubscribe_event', callbackUrl=callback_url, clientIp=client_ip)
+        print('detaching event stream')
+        self.event_callbacks.remove(callback)
+        self.trigger_event('event_stream_detached',
+                           remoteAddress=remote_address)
 
     def trigger_event(self, event_type, **kwargs):
         event = {
@@ -82,12 +76,8 @@ class FakeMarathon(object):
         }
         event.update(kwargs)
 
-        # Notify event subscribers
-        for callback_url in self.event_subscriptions:
-            self.event_bus_requests.put(self._event_bus_client.request(
-                'POST', callback_url, json_data=event))
-
-        return event
+        for callback in self.event_callbacks:
+            callback(event)
 
 
 class FakeMarathonAPI(object):
@@ -130,44 +120,34 @@ class FakeMarathonAPI(object):
         request.setResponseCode(200)
         write_request_json(request, response)
 
-    @app.route('/v2/eventSubscriptions', methods=['GET'])
-    def get_event_subscriptions(self, request):
-        response = {
-            'callbackUrls': self._marathon.get_event_subscriptions()
-        }
-        request.setResponseCode(200)
-        write_request_json(request, response)
-
-    @app.route('/v2/eventSubscriptions', methods=['POST'])
-    def post_event_subscriptions(self, request):
-        query = urisplit(request.uri).getquerydict()
-
-        assert 'callbackUrl' in query
-        assert query['callbackUrl']
-
-        callback_url = query['callbackUrl'][0]
-        event = self._marathon.add_event_subscription(
-            callback_url, request.getClientIP())
-
-        request.setResponseCode(200)
-        write_request_json(request, event)
-
-    @app.route('/v2/eventSubscriptions', methods=['DELETE'])
-    def delete_event_subscriptions(self, request):
-        query = urisplit(request.uri).getquerydict()
-
-        assert 'callbackUrl' in query
-        assert query['callbackUrl']
-
-        callback_url = query['callbackUrl'][0]
-        event = self._marathon.remove_event_subscription(
-            callback_url, request.getClientIP())
-
-        request.setResponseCode(200)
-        write_request_json(request, event)
-
     def _app_not_found(self, request, app_id):
         request.setResponseCode(404)
         write_request_json(request, {
             'message': "App '/%s' does not exist" % (app_id,)
         })
+
+    @app.route('/v2/events', methods=['GET'])
+    def get_events(self, request):
+        assert (get_single_header(request.requestHeaders, 'Accept') ==
+                'text/event-stream')
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'text/event-stream')
+
+        def callback(event):
+            _write_request_event(request, event)
+        self._marathon.attach_event_stream(callback, request.getClientIP())
+
+        finished = request.notifyFinish()
+        finished.addErrback(
+            lambda _: self._marathon.detach_event_stream(
+                callback, request.getClientIP()))
+
+        return finished
+
+
+def _write_request_event(request, event):
+    event_type = event['eventType']
+    request.write(b'event: %s\n' % (event_type.encode('utf-8'),))
+    request.write(b'data: %s\n' % (json.dumps(event).encode('utf-8'),))
+    request.write(b'\n')

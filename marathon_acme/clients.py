@@ -218,6 +218,25 @@ def raise_for_not_ok_status(response):
     return response
 
 
+def sse_content_with_protocol(response, callbacks):
+    """
+    *INTERNAL USE ONLY*
+    Sometimes we need the protocol object so that we can manipulate the
+    underlying transport in tests.
+    """
+    protocol = SseProtocol()
+
+    finished = Deferred()
+    protocol.set_finished_deferred(finished)
+
+    for event, callback in callbacks.items():
+        protocol.set_callback(event, callback)
+
+    response.deliverBody(protocol)
+
+    return finished, protocol
+
+
 def sse_content(response, callbacks):
     """
     Callback to collect the Server-Sent Events content of a response. Callbacks
@@ -233,16 +252,7 @@ def sse_content(response, callbacks):
     raise_for_not_ok_status(response)
     raise_for_header(response, 'Content-Type', 'text/event-stream')
 
-    protocol = SseProtocol()
-
-    finished = Deferred()
-    protocol.set_finished_deferred(finished)
-
-    for event, callback in callbacks.items():
-        protocol.set_callback(event, callback)
-
-    response.deliverBody(protocol)
-
+    finished, _ = sse_content_with_protocol(response, callbacks)
     return finished
 
 
