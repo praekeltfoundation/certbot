@@ -56,7 +56,6 @@ class FakeMarathon(object):
     def attach_event_stream(self, callback, remote_address=None):
         assert callback not in self.event_callbacks
 
-        print('attaching event stream')
         self.event_callbacks.append(callback)
         self.trigger_event('event_stream_attached',
                            remoteAddress=remote_address)
@@ -64,7 +63,6 @@ class FakeMarathon(object):
     def detach_event_stream(self, callback, remote_address=None):
         assert callback in self.event_callbacks
 
-        print('detaching event stream')
         self.event_callbacks.remove(callback)
         self.trigger_event('event_stream_detached',
                            remoteAddress=remote_address)
