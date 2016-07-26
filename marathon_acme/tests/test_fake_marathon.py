@@ -1,17 +1,20 @@
-from testtools.matchers import Equals, Is, MatchesDict
+import json
+
+from testtools.matchers import Equals, Is
 
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.protocols.loopback import _LoopbackAddress
-from twisted.web.server import Site, NOT_DONE_YET
+from twisted.web.server import Site
 
-from txfake import FakeHttpServer, FakeServer
+from txfake import FakeServer
+from txfake.fake_connection import wait0
 
-from marathon_acme.clients import JsonClient, json_content
-from marathon_acme.server import read_request_json
+from marathon_acme.clients import (
+    JsonClient, json_content, sse_content, sse_content_with_protocol)
 from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
 from marathon_acme.tests.matchers import (
-    HasRequestProperties, IsJsonResponseWithCode, IsRecentMarathonTimestamp)
+    IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
 
 
 class TestFakeMarathonAPI(TestCase):
@@ -20,12 +23,7 @@ class TestFakeMarathonAPI(TestCase):
     def setUp(self):
         super(TestFakeMarathonAPI, self).setUp()
 
-        def handle_event_request(request):
-            self.event_requests.put(request)
-            return NOT_DONE_YET
-        fake_server = FakeHttpServer(handle_event_request)
-
-        self.marathon = FakeMarathon(fake_server.get_agent())
+        self.marathon = FakeMarathon()
         self.marathon_api = FakeMarathonAPI(self.marathon)
 
         # FIXME: Current released version (15.3.1) of Klein expects the host to
@@ -37,13 +35,6 @@ class TestFakeMarathonAPI(TestCase):
         fake_server = FakeServer(Site(self.marathon_api.app.resource()))
         fake_agent = FakeServerAgent(fake_server.endpoint)
         self.client = JsonClient('http://www.example.com', agent=fake_agent)
-
-    def respond_to_event_request(self):
-        """ Respond 200/OK to a waiting event request. """
-        def response_ok(request):
-            request.setResponseCode(200)
-            request.finish()
-        return self.event_requests.get().addCallback(response_ok)
 
     @inlineCallbacks
     def test_get_apps_empty(self):
@@ -187,150 +178,104 @@ class TestFakeMarathonAPI(TestCase):
                         Equals({'message': "App '/my-app_1' does not exist"}))
 
     @inlineCallbacks
-    def test_get_event_subscriptions(self):
+    def test_get_events(self):
         """
-        When the event subscriptions are requested, the callback URLs for
-        subscribers should be returned.
+        When a request is made to the event stream endpoint, an SSE stream
+        should be received in response and an event should be fired that
+        indicates that the stream was attached to.
         """
-        callback_url = 'http://marathon-acme.marathon.mesos:7000'
-        self.marathon.event_subscriptions = [callback_url]
+        response = yield self.client.request('GET', '/v2/events', headers={
+            'Accept': 'text/event-stream'
+        })
+        self.assertThat(response, IsSseResponse())
 
-        response = yield self.client.request('GET', '/v2/eventSubscriptions')
-        self.assertThat(response, IsJsonResponseWithCode(200))
+        data = []
+        sse_content(response, {'event_stream_attached': data.append})
 
-        response_json = yield json_content(response)
-        self.assertThat(response_json,
-                        Equals({'callbackUrls': [callback_url]}))
+        yield wait0()
+
+        self.assertThat(len(data), Equals(1))
+
+        data_json = json.loads(data[0])
+        # FIXME: No clientIp in request
+        self.assertThat(data_json, IsMarathonEvent(
+            'event_stream_attached', remoteAddress=Is(None)))
 
     @inlineCallbacks
-    def test_post_event_subscriptions(self):
+    def test_get_events_lost_connection(self):
         """
-        When a callback URL is posted for an event subscription, the subscibe
-        event should be returned and FakeMarathon should now have the callback
-        URL registered.
+        When two connections are made the the event stream, the first
+        connection should receive events for both connections attaching to the
+        stream. Then, when the first connection is disconnected, the second
+        should receive a detach event for the first.
         """
-        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+        response1 = yield self.client.request('GET', '/v2/events', headers={
+            'Accept': 'text/event-stream'
+        })
+        self.assertThat(response1, IsSseResponse())
 
-        response = yield self.client.request(
-            'POST', '/v2/eventSubscriptions',
-            params={'callbackUrl': callback_url})
-        self.assertThat(response, IsJsonResponseWithCode(200))
+        attach_data1 = []
+        detach_data1 = []
+        finished, protocol = sse_content_with_protocol(response1, {
+            'event_stream_attached': attach_data1.append,
+            'event_stream_detached': detach_data1.append
+        })
 
-        response_json = yield json_content(response)
-        self.assertThat(response_json, MatchesDict({
-            'eventType': Equals('subscribe_event'),
-            'callbackUrl': Equals(callback_url),
-            'clientIp': Is(None),  # FIXME: No clientIp in request
-            'timestamp': IsRecentMarathonTimestamp()
-        }))
+        response2 = yield self.client.request('GET', '/v2/events', headers={
+            'Accept': 'text/event-stream'
+        })
+        self.assertThat(response2, IsSseResponse())
 
-        # Check we also receive the event on the event bus
-        event_request = yield self.event_requests.get()
-        self.assertThat(event_request,
-                        HasRequestProperties(method='POST', url=callback_url))
+        attach_data2 = []
+        detach_data2 = []
+        sse_content(response2, {
+            'event_stream_attached': attach_data2.append,
+            'event_stream_detached': detach_data2.append
+        })
 
-        event_request_json = read_request_json(event_request)
-        self.assertThat(event_request_json, Equals(response_json))
+        # Close request 1's connection
+        # FIXME: Currently the only way to get the underlying transport so that
+        # we can simulate a lost connection is to get the transport that the
+        # SseProtocol receives. This transport is actually a
+        # TransportProxyProducer (because that's what HTTP11ClientProtocol
+        # gives our protocol). Get the actual wrapped transport from the
+        # _producer attribute.
+        transport = protocol.transport._producer
+        yield transport.loseConnection()
+        yield finished
 
-        event_request.setResponseCode(200)
-        event_request.finish()
+        # Spin the reactor to fire all the callbacks
+        yield wait0()
 
-        # Assert that the event subscription was actually added
-        self.assertThat(self.marathon.get_event_subscriptions(),
-                        Equals([callback_url]))
+        # Assert request 1's response data
+        self.assertThat(len(attach_data1), Equals(2))
 
-    @inlineCallbacks
-    def test_post_event_subscriptions_idempotent(self):
-        """
-        Posting the same callback URL for an event subscription twice succeeds
-        both times and doesn't result in more than one callback URL being
-        registered.
-        """
-        callback_url = 'http://marathon-acme.marathon.mesos:7000'
+        # First attach event on request 1 from itself connecting
+        data0_json = json.loads(attach_data1[0])
+        # FIXME: No clientIp in request
+        self.assertThat(data0_json, IsMarathonEvent(
+            'event_stream_attached', remoteAddress=Is(None)))
 
-        response = yield self.client.request(
-            'POST', '/v2/eventSubscriptions',
-            params={'callbackUrl': callback_url})
-        self.assertThat(response, IsJsonResponseWithCode(200))
+        # Second attach event on request 1 from request 2 connecting
+        data1_json = json.loads(attach_data1[1])
+        # FIXME: No clientIp in request
+        self.assertThat(data1_json, IsMarathonEvent(
+            'event_stream_attached', remoteAddress=Is(None)))
 
-        self.assertThat(self.marathon.get_event_subscriptions(),
-                        Equals([callback_url]))
+        # Request 1 shouldn't receive any detach events
+        self.assertThat(detach_data1, Equals([]))
 
-        yield self.respond_to_event_request()
+        # Now look at request 2's events
+        # Attach event only for itself
+        self.assertThat(len(attach_data2), Equals(1))
+        attach_data_json = json.loads(attach_data2[0])
+        # FIXME: No clientIp in request
+        self.assertThat(attach_data_json, IsMarathonEvent(
+            'event_stream_attached', remoteAddress=Is(None)))
 
-        response = yield self.client.request(
-            'POST', '/v2/eventSubscriptions',
-            params={'callbackUrl': callback_url})
-        self.assertThat(response, IsJsonResponseWithCode(200))
-
-        self.assertThat(self.marathon.get_event_subscriptions(),
-                        Equals([callback_url]))
-
-        yield self.respond_to_event_request()
-
-    @inlineCallbacks
-    def test_delete_event_subscriptions(self):
-        """
-        When a callback URL is deleted for an event subscription, the
-        unsubscibe event should be returned, other event subscribers should be
-        notified, and FakeMarathon should not have the callback URL registered
-        any more.
-        """
-        callback_url_1 = 'http://marathon-acme.marathon.mesos:7000'
-        callback_url_2 = 'http://consular.marathon.mesos:5000'
-        self.marathon.event_subscriptions = [callback_url_1, callback_url_2]
-
-        response = yield self.client.request(
-            'DELETE', '/v2/eventSubscriptions',
-            params={'callbackUrl': callback_url_1})
-        self.assertThat(response, IsJsonResponseWithCode(200))
-
-        response_json = yield json_content(response)
-        self.assertThat(response_json, MatchesDict({
-            'eventType': Equals('unsubscribe_event'),
-            'callbackUrl': Equals(callback_url_1),
-            'clientIp': Is(None),  # FIXME: No clientIp in request
-            'timestamp': IsRecentMarathonTimestamp()
-        }))
-
-        # Event should be received at second callback URL
-        event_request = yield self.event_requests.get()
-        self.assertThat(event_request,
-                        HasRequestProperties(method='POST',
-                                             url=callback_url_2))
-
-        event_request_json = read_request_json(event_request)
-        self.assertThat(event_request_json, Equals(response_json))
-
-        event_request.setResponseCode(200)
-        event_request.finish()
-
-        # Assert that the event subscription was actually removed
-        self.assertThat(self.marathon.get_event_subscriptions(),
-                        Equals([callback_url_2]))
-
-    @inlineCallbacks
-    def test_delete_event_subscriptions_idempotent(self):
-        """
-        Deleting the same callback URL for an event subscription twice
-        succeeds both times and doesn't result in more than one callback URL
-        being deleted.
-        """
-        callback_url = 'http://marathon-acme.marathon.mesos:7000'
-        self.marathon.event_subscriptions = [callback_url]
-
-        response = yield self.client.request(
-            'DELETE', '/v2/eventSubscriptions',
-            params={'callbackUrl': callback_url})
-        self.assertThat(response, IsJsonResponseWithCode(200))
-
-        self.assertThat(self.marathon.get_event_subscriptions(),
-                        Equals([]))
-
-        response = yield self.client.request(
-            'DELETE', '/v2/eventSubscriptions',
-            params={'callbackUrl': callback_url})
-        self.assertThat(response, IsJsonResponseWithCode(200))
-
-        self.assertThat(self.marathon.get_event_subscriptions(),
-                        Equals([]))
+        # Detach event for request 1
+        self.assertThat(len(detach_data2), Equals(1))
+        detach_data_json = json.loads(detach_data2[0])
+        # FIXME: No clientIp in request
+        self.assertThat(detach_data_json, IsMarathonEvent(
+            'event_stream_detached', remoteAddress=Is(None)))
