@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from testtools.matchers import (
     AfterPreprocessing, Equals, GreaterThan, IsInstance, LessThan, MatchesAll,
-    MatchesAny, MatchesStructure, Mismatch
+    MatchesAny, MatchesDict, MatchesStructure, Mismatch
 )
 
 from uritools import urisplit
@@ -116,3 +116,19 @@ def IsRecentMarathonTimestamp():
         lambda ts: datetime.strptime(ts, '%Y-%m-%dT%H:%M:%S.%fZ'),
         IsBetween(datetime.utcnow() - timedelta(seconds=1),
                   datetime.utcnow()))
+
+
+def IsMarathonEvent(event_type, **kwargs):
+    """
+    Match a dict (deserialized from JSON) as a Marathon event. Matches the
+    event type and checks for a recent timestamp.
+
+    :param event_type: The event type ('eventType' field value)
+    :param kwargs: Any other matchers to apply to the dict
+    """
+    matching_dict = {
+        'eventType': Equals(event_type),
+        'timestamp': IsRecentMarathonTimestamp()
+    }
+    matching_dict.update(kwargs)
+    return MatchesDict(matching_dict)

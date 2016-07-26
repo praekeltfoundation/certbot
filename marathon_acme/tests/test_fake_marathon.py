@@ -1,6 +1,6 @@
 import json
 
-from testtools.matchers import Equals, Is, MatchesDict
+from testtools.matchers import Equals, Is
 
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.protocols.loopback import _LoopbackAddress
@@ -14,7 +14,7 @@ from marathon_acme.clients import (
 from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
 from marathon_acme.tests.matchers import (
-    IsJsonResponseWithCode, IsRecentMarathonTimestamp, IsSseResponse)
+    IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
 
 
 class TestFakeMarathonAPI(TestCase):
@@ -197,11 +197,9 @@ class TestFakeMarathonAPI(TestCase):
         self.assertThat(len(data), Equals(1))
 
         data_json = json.loads(data[0])
-        self.assertThat(data_json, MatchesDict({
-            'eventType': Equals('event_stream_attached'),
-            'remoteAddress': Is(None),  # FIXME: No clientIp in request
-            'timestamp': IsRecentMarathonTimestamp()
-        }))
+        # FIXME: No clientIp in request
+        self.assertThat(data_json, IsMarathonEvent(
+            'event_stream_attached', remoteAddress=Is(None)))
 
     @inlineCallbacks
     def test_get_events_lost_connection(self):
@@ -254,19 +252,15 @@ class TestFakeMarathonAPI(TestCase):
 
         # First attach event on request 1 from itself connecting
         data0_json = json.loads(attach_data1[0])
-        self.assertThat(data0_json, MatchesDict({
-            'eventType': Equals('event_stream_attached'),
-            'remoteAddress': Is(None),  # FIXME: No clientIp in request
-            'timestamp': IsRecentMarathonTimestamp()
-        }))
+        # FIXME: No clientIp in request
+        self.assertThat(data0_json, IsMarathonEvent(
+            'event_stream_attached', remoteAddress=Is(None)))
 
         # Second attach event on request 1 from request 2 connecting
         data1_json = json.loads(attach_data1[1])
-        self.assertThat(data1_json, MatchesDict({
-            'eventType': Equals('event_stream_attached'),
-            'remoteAddress': Is(None),  # FIXME: No clientIp in request
-            'timestamp': IsRecentMarathonTimestamp()
-        }))
+        # FIXME: No clientIp in request
+        self.assertThat(data1_json, IsMarathonEvent(
+            'event_stream_attached', remoteAddress=Is(None)))
 
         # Request 1 shouldn't receive any detach events
         self.assertThat(detach_data1, Equals([]))
@@ -275,17 +269,13 @@ class TestFakeMarathonAPI(TestCase):
         # Attach event only for itself
         self.assertThat(len(attach_data2), Equals(1))
         attach_data_json = json.loads(attach_data2[0])
-        self.assertThat(attach_data_json, MatchesDict({
-            'eventType': Equals('event_stream_attached'),
-            'remoteAddress': Is(None),  # FIXME: No clientIp in request
-            'timestamp': IsRecentMarathonTimestamp()
-        }))
+        # FIXME: No clientIp in request
+        self.assertThat(attach_data_json, IsMarathonEvent(
+            'event_stream_attached', remoteAddress=Is(None)))
 
         # Detach event for request 1
         self.assertThat(len(detach_data2), Equals(1))
         detach_data_json = json.loads(detach_data2[0])
-        self.assertThat(detach_data_json, MatchesDict({
-            'eventType': Equals('event_stream_detached'),
-            'remoteAddress': Is(None),  # FIXME: No clientIp in request
-            'timestamp': IsRecentMarathonTimestamp()
-        }))
+        # FIXME: No clientIp in request
+        self.assertThat(detach_data_json, IsMarathonEvent(
+            'event_stream_detached', remoteAddress=Is(None)))
