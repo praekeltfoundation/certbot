@@ -16,15 +16,6 @@ import sys
 @click.option('--marathon', default='http://marathon.mesos:8080',
               help='The address for the Marathon HTTP API',
               show_default=True)
-@click.option('--listen',
-              help=("The address of the interface and port to bind to to "
-                    "receive Marathon's event stream"),
-              default='0.0.0.0:7000',
-              show_default=True)
-@click.option('--advertise', default='http://marathon-acme.marathon.mesos',
-              help=('The address to advertise to Marathon when registering '
-                    'for the event stream'),
-              show_default=True)
 @click.option('--poll',
               help=("Periodically check Marathon's state every _n_ seconds "
                     "[default: disabled]"),
@@ -36,9 +27,9 @@ import sys
 @click.option('--debug',
               help='Log debug output',
               is_flag=True)
-def main(acme, email, storage_dir,           # ACME
-         marathon, listen, advertise, poll,  # Marathon
-         logfile, debug):                    # Logging
+def main(acme, email, storage_dir,  # ACME/certificates
+         marathon, poll,            # Marathon
+         logfile, debug):           # Logging
     """
     A tool to automatically request, renew and distribute Let's Encrypt
     certificates for apps running on Seed Stack.
