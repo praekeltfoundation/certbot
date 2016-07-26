@@ -18,10 +18,14 @@ from txfake.fake_connection import wait0
 from marathon_acme.clients import (
     default_agent, default_reactor, get_single_header, HTTPError, json_content,
     JsonClient, MarathonClient, raise_for_status)
-from marathon_acme.server import read_request_json, write_request_json
+from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
+
+
+def read_request_json(request):
+    return json.loads(request.content.read().decode('utf-8'))
 
 
 def json_response(request, json_data, response_code=200):
