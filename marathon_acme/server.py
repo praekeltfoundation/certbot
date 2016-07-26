@@ -1,14 +1,9 @@
 import json
 
 from twisted.python import log
-from twisted.web.http import (
-    OK, INTERNAL_SERVER_ERROR, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE)
+from twisted.web.http import OK, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE
 
 from klein import Klein
-
-
-def read_request_json(request):
-    return json.loads(request.content.read().decode('utf-8'))
 
 
 def write_request_json(request, json_obj):
@@ -16,23 +11,10 @@ def write_request_json(request, json_obj):
     request.write(json.dumps(json_obj).encode('utf-8'))
 
 
-class MarathonEventServer(object):
+class HealthServer(object):
 
     app = Klein()
-    event_dispatch = {}
     health_handler = None
-
-    def add_handler(self, event_type, event_handler):
-        """
-        Add a handler for a certain event type.
-
-        :param event_type:
-            The type of event for which this handler should be invoked.
-        :param event_handler:
-            The handler for the given event type. This must be a callable that
-            returns a Deferred.
-        """
-        self.event_dispatch[event_type] = event_handler
 
     def set_health_handler(self, health_handler):
         """
@@ -58,51 +40,10 @@ class MarathonEventServer(object):
         """
         self.app.run(host, port, log_file)
 
-    def _ok_response(self, json_obj, request):
-        """ Return a 200/OK response with a JSON object. """
-        request.setResponseCode(OK)
-        write_request_json(request, json_obj)
-
-    def _error_response(self, failure, request):
-        """ Return a 503 response with a JSON object. """
-        request.setResponseCode(INTERNAL_SERVER_ERROR)
-        write_request_json(request, {'error': failure.getErrorMessage()})
-
-    @app.route('/')
-    def index(self, request):
-        return self._ok_response({}, request)
-
-    @app.route('/events')
-    def events(self, request):
-        """
-        Listens to incoming events from Marathon on ``/events``.
-
-        :param klein.app.KleinRequest request:
-            The Klein HTTP request
-        """
-        event = read_request_json(request)
-        handler = self.event_dispatch.get(event.get('eventType'))
-        if handler is None:
-            return self._handle_unknown_event(request, event)
-
-        d = handler(event)
-        d.addCallback(self._ok_response, request)
-        d.addErrback(self._error_response, request)
-
-        return d
-
-    def _handle_unknown_event(self, request, event):
-        event_type = event.get('eventType')
-        log.msg('Not handling event type: %s' % (event_type,))
-        request.setResponseCode(NOT_IMPLEMENTED)
-        return write_request_json(request, {
-            'error': 'Event type %s not supported.' % (event_type,)
-        })
-
-    @app.route('/health')
+    @app.route('/health', methods=['GET'])
     def health(self, request):
         """
-        Listens to incoming pings from Marathon on ``/events``.
+        Listens to incoming pings from Marathon on ``/health``.
 
         :param klein.app.KleinRequest request:
             The Klein HTTP request
