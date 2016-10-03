@@ -360,5 +360,26 @@ class MarathonClient(JsonClient):
         return d
 
 
+class MarathonLbClient(JsonClient):
+    """
+    Very basic client for accessing the ``/_mlb_signal`` endpoints on
+    marathon-lb.
+    """
+
+    def mlb_signal_hup(self):
+        """
+        Trigger a SIGHUP signal to be sent to marathon-lb. Causes a full reload
+        of the config as though a relevant event was received from Marathon.
+        """
+        return self.request('POST', path='/_mlb_signal/hup')
+
+    def mlb_signal_usr1(self):
+        """
+        Trigger a SIGUSR1 signal to be sent to marathon-lb. Causes the existing
+        config to be reloaded, whether it has changed or not.
+        """
+        return self.request('POST', path='/_mlb_signal/usr1')
+
+
 def _wrap_json_callback(callback):
     return lambda data: callback(json.loads(data))

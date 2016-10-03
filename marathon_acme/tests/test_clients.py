@@ -17,7 +17,7 @@ from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
     default_agent, default_reactor, get_single_header, HTTPError, json_content,
-    JsonClient, MarathonClient, raise_for_status)
+    JsonClient, MarathonClient, MarathonLbClient, raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
@@ -1011,3 +1011,64 @@ class TestMarathonClient(TestJsonClientBase):
 
         request.finish()
         yield d
+
+
+class TestMarathonLbClient(TestJsonClientBase):
+    def get_client(self, agent):
+        return MarathonLbClient('http://localhost:9090', agent=agent)
+
+    @inlineCallbacks
+    def test_mlb_signal_hup(self):
+        """
+        When the marathon-lb client is used to send a SIGHUP signal to
+        marathon-lb, the correct API endpoint is called.
+        """
+        d = self.cleanup_d(self.client.mlb_signal_hup())
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='POST', url=self.uri('/_mlb_signal/hup')))
+
+        request.setResponseCode(200)
+        request.setHeader('content-type', 'text/plain')
+        request.write(b'Sent SIGHUP signal to marathon-lb')
+        request.finish()
+
+        yield wait0()
+
+        response = yield d
+        self.assertThat(response.code, Equals(200))
+        self.assertThat(response.headers, HasHeader(
+            'content-type', ['text/plain']))
+
+        response_text = yield response.text()
+        self.assertThat(response_text,
+                        Equals('Sent SIGHUP signal to marathon-lb'))
+
+    @inlineCallbacks
+    def test_mlb_signal_usr1(self):
+        """
+        When the marathon-lb client is used to send a SIGUSR1 signal to
+        marathon-lb, the correct API endpoint is called.
+        """
+        d = self.cleanup_d(self.client.mlb_signal_usr1())
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='POST', url=self.uri('/_mlb_signal/usr1')))
+
+        request.setResponseCode(200)
+        request.setHeader('content-type', 'text/plain')
+        request.write(b'Sent SIGUSR1 signal to marathon-lb')
+        request.finish()
+
+        yield wait0()
+
+        response = yield d
+        self.assertThat(response.code, Equals(200))
+        self.assertThat(response.headers, HasHeader(
+            'content-type', ['text/plain']))
+
+        response_text = yield response.text()
+        self.assertThat(response_text,
+                        Equals('Sent SIGUSR1 signal to marathon-lb'))
