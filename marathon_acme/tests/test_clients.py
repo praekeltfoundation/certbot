@@ -9,6 +9,7 @@ from twisted.web.client import Agent
 from twisted.web.http_headers import Headers
 from twisted.web.server import NOT_DONE_YET
 
+from testtools import ExpectedException
 from testtools.matchers import Equals, Is, IsInstance
 from testtools.twistedsupport import failed
 
@@ -16,8 +17,9 @@ from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    default_agent, default_reactor, get_single_header, HTTPError, json_content,
-    JsonClient, MarathonClient, MarathonLbClient, raise_for_status)
+    default_agent, default_reactor, get_single_header, HTTPClient, HTTPError,
+    json_content, JsonClient, MarathonClient, MarathonLbClient,
+    raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
@@ -116,9 +118,9 @@ class TestDefaultAgent(testtools.TestCase):
         self.assertThat(default_agent(None, reactor), IsInstance(Agent))
 
 
-class TestJsonClientBase(TestCase):
+class TestHTTPClientBase(TestCase):
     def setUp(self):
-        super(TestJsonClientBase, self).setUp()
+        super(TestHTTPClientBase, self).setUp()
 
         self.requests = DeferredQueue()
         fake_server = FakeHttpServer(self.handle_request)
@@ -145,10 +147,9 @@ class TestJsonClientBase(TestCase):
         return d
 
 
-class TestJsonClient(TestJsonClientBase):
-
+class TestHTTPClient(TestHTTPClientBase):
     def get_client(self, agent):
-        return JsonClient('http://localhost:8000', agent=agent)
+        return HTTPClient('http://localhost:8000', agent=agent)
 
     @inlineCallbacks
     def test_request(self):
@@ -162,8 +163,6 @@ class TestJsonClient(TestJsonClientBase):
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/hello')))
-        self.assertThat(request.requestHeaders,
-                        HasHeader('accept', ['application/json']))
         self.assertThat(request.content.read(), Equals(b''))
 
         request.setResponseCode(200)
@@ -175,26 +174,27 @@ class TestJsonClient(TestJsonClientBase):
         self.assertThat(text, Equals('hi\n'))
 
     @inlineCallbacks
-    def test_request_json_data(self):
+    def test_request_debug_log(self):
         """
-        When a request is made with the json_data parameter set, that data
-        should be sent as JSON and the content-type header should be set to
-        indicate this.
+        When a request is made in debug mode, things should run smoothly.
+        (Don't really want to check the log output here, just that things don't
+        break.)
         """
-        self.cleanup_d(self.client.request(
-            'GET', path='/hello', json_data={'test': 'hello'}))
+        self.client.debug = True
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/hello')))
-        self.assertThat(request.requestHeaders, HasHeader(
-            'content-type', ['application/json']))
-        self.assertThat(request.requestHeaders,
-                        HasHeader('accept', ['application/json']))
-        self.assertThat(read_request_json(request), Equals({'test': 'hello'}))
+        self.assertThat(request.content.read(), Equals(b''))
 
         request.setResponseCode(200)
+        request.write(b'hi\n')
         request.finish()
+
+        response = yield d
+        text = yield response.text()
+        self.assertThat(text, Equals('hi\n'))
 
     @inlineCallbacks
     def test_request_url(self):
@@ -380,6 +380,34 @@ class TestJsonClient(TestJsonClientBase):
         request.setResponseCode(200)
         request.finish()
 
+
+class TestJsonClient(TestHTTPClientBase):
+
+    def get_client(self, agent):
+        return JsonClient('http://localhost:8000', agent=agent)
+
+    @inlineCallbacks
+    def test_request_json_data(self):
+        """
+        When a request is made with the json_data parameter set, that data
+        should be sent as JSON and the content-type header should be set to
+        indicate this.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', path='/hello', json_data={'test': 'hello'}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(request.requestHeaders, HasHeader(
+            'content-type', ['application/json']))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
+        self.assertThat(read_request_json(request), Equals({'test': 'hello'}))
+
+        request.setResponseCode(200)
+        request.finish()
+
     @inlineCallbacks
     def test_json_content(self):
         """
@@ -460,8 +488,18 @@ class TestJsonClient(TestJsonClientBase):
             HTTPError, 'Expected header "Content-Type" to be '
                        '"application/json" but header not found in response')))
 
+    def test_json_data_and_data_not_allowed(self):
+        """
+        When both ``data`` and ``json_data`` keyword arguments are provided
+        when making a request, an exception should be raised.
+        """
+        with ExpectedException(ValueError, "Cannot specify both 'data' and "
+                                           "'json_data' keyword arguments"):
+            self.client.request(
+                'GET', path='/hello', json_data={'hi': 'bye'}, data='somedata')
 
-class TestMarathonClient(TestJsonClientBase):
+
+class TestMarathonClient(TestHTTPClientBase):
     def get_client(self, agent):
         return MarathonClient('http://localhost:8080', agent=agent)
 
@@ -532,141 +570,6 @@ class TestMarathonClient(TestJsonClientBase):
         )))
 
     @inlineCallbacks
-    def test_get_event_subscription(self):
-        """
-        When we request event subscriptions from Marathon, we should receive a
-        list of callback URLs.
-        """
-        d = self.cleanup_d(self.client.get_event_subscriptions())
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/v2/eventSubscriptions')))
-
-        json_response(request, {
-            'callbackUrls': [
-                'http://localhost:7000/events?registration=localhost'
-            ]
-        })
-
-        res = yield d
-        self.assertThat(res, Equals([
-            'http://localhost:7000/events?registration=localhost'
-        ]))
-
-    @inlineCallbacks
-    def test_post_event_subscription(self):
-        """
-        When we post an event subscription with a callback URL, we should
-        return True for a 200/OK response from Marathon.
-        """
-        d = self.cleanup_d(self.client.post_event_subscription(
-            'http://localhost:7000/events?registration=localhost'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='POST',
-            url=self.uri('/v2/eventSubscriptions'),
-            query={
-                'callbackUrl': [
-                    'http://localhost:7000/events?registration=localhost'
-                ]
-            }
-        ))
-
-        json_response(request, {
-            # TODO: Add check that callbackUrl is correct
-            'callbackUrl':
-                'http://localhost:7000/events?registration=localhost',
-            'clientIp': '0:0:0:0:0:0:0:1',
-            'eventType': 'subscribe_event'
-        })
-
-        res = yield d
-        self.assertThat(res, Equals(True))
-
-    @inlineCallbacks
-    def test_post_event_subscription_not_ok(self):
-        """
-        When we post an event subscription with a callback URL, we should
-        return False for a non-200/OK response from Marathon.
-        """
-        d = self.cleanup_d(self.client.post_event_subscription(
-            'http://localhost:7000/events?registration=localhost'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='POST',
-            url=self.uri('/v2/eventSubscriptions'),
-            query={
-                'callbackUrl': [
-                    'http://localhost:7000/events?registration=localhost'
-                ]
-            }
-        ))
-
-        json_response(request, {}, response_code=201)
-
-        res = yield d
-        self.assertThat(res, Equals(False))
-
-    @inlineCallbacks
-    def test_delete_event_subscription(self):
-        """
-        When we delete an event subscription with a callback URL, we should
-        return True for a 200/OK response from Marathon.
-        """
-        d = self.cleanup_d(self.client.delete_event_subscription(
-            'http://localhost:7000/events?registration=localhost'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='DELETE',
-            url=self.uri('/v2/eventSubscriptions'),
-            query={
-                'callbackUrl': [
-                    'http://localhost:7000/events?registration=localhost'
-                ]
-            }
-        ))
-
-        json_response(request, {
-            # TODO: Add check that callbackUrl is correct
-            'callbackUrl':
-                'http://localhost:7000/events?registration=localhost',
-            'clientIp': '0:0:0:0:0:0:0:1',
-            'eventType': 'subscribe_event'
-        })
-
-        res = yield d
-        self.assertThat(res, Equals(True))
-
-    @inlineCallbacks
-    def test_delete_event_subscription_not_ok(self):
-        """
-        When we delete an event subscription with a callback URL, we should
-        return False for a non-200/OK response from Marathon.
-        """
-        d = self.cleanup_d(self.client.delete_event_subscription(
-            'http://localhost:7000/events?registration=localhost'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='DELETE',
-            url=self.uri('/v2/eventSubscriptions'),
-            query={
-                'callbackUrl': [
-                    'http://localhost:7000/events?registration=localhost'
-                ]
-            }
-        ))
-
-        json_response(request, {}, response_code=201)
-
-        res = yield d
-        self.assertThat(res, Equals(False))
-
-    @inlineCallbacks
     def test_get_apps(self):
         """
         When we request the list of apps from Marathon, we should receive the
@@ -716,129 +619,6 @@ class TestMarathonClient(TestJsonClientBase):
 
         res = yield d
         self.assertThat(res, Equals(apps['apps']))
-
-    @inlineCallbacks
-    def test_get_app(self):
-        """
-        When we request information on a specific app from Marathon, we should
-        receive information on that app.
-        """
-        d = self.cleanup_d(self.client.get_app('/my-app'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/v2/apps/my-app')))
-
-        app = {
-            'app': {
-                'args': None,
-                'backoffFactor': 1.15,
-                'backoffSeconds': 1,
-                'maxLaunchDelaySeconds': 3600,
-                'cmd': 'python toggle.py $PORT0',
-                'constraints': [],
-                'container': None,
-                'cpus': 0.2,
-                'dependencies': [],
-                'deployments': [
-                    {
-                        'id': '44c4ed48-ee53-4e0f-82dc-4df8b2a69057'
-                    }
-                ],
-                'disk': 0.0,
-                'env': {},
-                'executor': '',
-                'healthChecks': [
-                    {
-                        'command': None,
-                        'gracePeriodSeconds': 5,
-                        'intervalSeconds': 10,
-                        'maxConsecutiveFailures': 3,
-                        'path': '/health',
-                        'portIndex': 0,
-                        'protocol': 'HTTP',
-                        'timeoutSeconds': 10
-                    },
-                    {
-                        'command': None,
-                        'gracePeriodSeconds': 5,
-                        'intervalSeconds': 10,
-                        'maxConsecutiveFailures': 6,
-                        'path': '/machinehealth',
-                        'overridePort': 3333,
-                        'protocol': 'HTTP',
-                        'timeoutSeconds': 10
-                    }
-                ],
-                'id': '/my-app',
-                'instances': 2,
-                'mem': 32.0,
-                'ports': [
-                    10000
-                ],
-                'requirePorts': False,
-                'storeUrls': [],
-                'upgradeStrategy': {
-                    'minimumHealthCapacity': 1.0
-                },
-                'uris': [
-                    'http://downloads.mesosphere.com/misc/toggle.tgz'
-                ],
-                'user': None,
-                'version': '2014-09-12T23:28:21.737Z',
-                'versionInfo': {
-                    'lastConfigChangeAt': '2014-09-11T02:26:01.135Z',
-                    'lastScalingAt': '2014-09-12T23:28:21.737Z'
-                }
-            }
-        }
-        json_response(request, app)
-
-        res = yield d
-        self.assertThat(res, Equals(app['app']))
-
-    @inlineCallbacks
-    def test_get_app_tasks(self):
-        """
-        When we request the list of tasks for an app from Marathon, we should
-        receive a list of app tasks.
-        """
-        d = self.cleanup_d(self.client.get_app_tasks('/my-app'))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/v2/apps/my-app/tasks')))
-
-        tasks = {
-            'tasks': [
-                {
-                    'host': 'agouti.local',
-                    'id': 'my-app_1-1396592790353',
-                    'ports': [
-                        31336,
-                        31337
-                    ],
-                    'stagedAt': '2014-04-04T06:26:30.355Z',
-                    'startedAt': '2014-04-04T06:26:30.860Z',
-                    'version': '2014-04-04T06:26:23.051Z'
-                },
-                {
-                    'host': 'agouti.local',
-                    'id': 'my-app_0-1396592784349',
-                    'ports': [
-                        31382,
-                        31383
-                    ],
-                    'stagedAt': '2014-04-04T06:26:24.351Z',
-                    'startedAt': '2014-04-04T06:26:24.919Z',
-                    'version': '2014-04-04T06:26:23.051Z'
-                }
-            ]
-        }
-        json_response(request, tasks)
-
-        res = yield d
-        self.assertThat(res, Equals(tasks['tasks']))
 
     @inlineCallbacks
     def test_get_events(self):
@@ -1013,7 +793,7 @@ class TestMarathonClient(TestJsonClientBase):
         yield d
 
 
-class TestMarathonLbClient(TestJsonClientBase):
+class TestMarathonLbClient(TestHTTPClientBase):
     def get_client(self, agent):
         return MarathonLbClient('http://localhost:9090', agent=agent)
 
