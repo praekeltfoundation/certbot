@@ -300,20 +300,6 @@ class MarathonClient(JsonClient):
         """
         return self.get_json_field('apps', path='/v2/apps')
 
-    def get_app(self, app_id):
-        """
-        Get information about the app with the given app ID.
-        """
-        return self.get_json_field('app', path='/v2/apps%s' % (app_id,))
-
-    def get_app_tasks(self, app_id):
-        """
-        Get the currently running tasks for the app with the given app ID,
-        returning a list of task definitions.
-        """
-        return self.get_json_field(
-            'tasks', path='/v2/apps%s/tasks' % (app_id,))
-
     def get_events(self, callbacks):
         """
         Attach to Marathon's event stream using Server-Sent Events (SSE).
