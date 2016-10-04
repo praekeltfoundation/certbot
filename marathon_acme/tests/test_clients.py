@@ -9,6 +9,7 @@ from twisted.web.client import Agent
 from twisted.web.http_headers import Headers
 from twisted.web.server import NOT_DONE_YET
 
+from testtools import ExpectedException
 from testtools.matchers import Equals, Is, IsInstance
 from testtools.twistedsupport import failed
 
@@ -16,8 +17,8 @@ from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    default_agent, default_reactor, get_single_header, HTTPError, json_content,
-    JsonClient, MarathonClient, raise_for_status)
+    default_agent, default_reactor, get_single_header, HTTPClient, HTTPError,
+    json_content, JsonClient, MarathonClient, raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
@@ -116,9 +117,9 @@ class TestDefaultAgent(testtools.TestCase):
         self.assertThat(default_agent(None, reactor), IsInstance(Agent))
 
 
-class TestJsonClientBase(TestCase):
+class TestHTTPClientBase(TestCase):
     def setUp(self):
-        super(TestJsonClientBase, self).setUp()
+        super(TestHTTPClientBase, self).setUp()
 
         self.requests = DeferredQueue()
         fake_server = FakeHttpServer(self.handle_request)
@@ -145,10 +146,9 @@ class TestJsonClientBase(TestCase):
         return d
 
 
-class TestJsonClient(TestJsonClientBase):
-
+class TestHTTPClient(TestHTTPClientBase):
     def get_client(self, agent):
-        return JsonClient('http://localhost:8000', agent=agent)
+        return HTTPClient('http://localhost:8000', agent=agent)
 
     @inlineCallbacks
     def test_request(self):
@@ -162,8 +162,6 @@ class TestJsonClient(TestJsonClientBase):
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/hello')))
-        self.assertThat(request.requestHeaders,
-                        HasHeader('accept', ['application/json']))
         self.assertThat(request.content.read(), Equals(b''))
 
         request.setResponseCode(200)
@@ -175,26 +173,27 @@ class TestJsonClient(TestJsonClientBase):
         self.assertThat(text, Equals('hi\n'))
 
     @inlineCallbacks
-    def test_request_json_data(self):
+    def test_request_debug_log(self):
         """
-        When a request is made with the json_data parameter set, that data
-        should be sent as JSON and the content-type header should be set to
-        indicate this.
+        When a request is made in debug mode, things should run smoothly.
+        (Don't really want to check the log output here, just that things don't
+        break.)
         """
-        self.cleanup_d(self.client.request(
-            'GET', path='/hello', json_data={'test': 'hello'}))
+        self.client.debug = True
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
             method='GET', url=self.uri('/hello')))
-        self.assertThat(request.requestHeaders, HasHeader(
-            'content-type', ['application/json']))
-        self.assertThat(request.requestHeaders,
-                        HasHeader('accept', ['application/json']))
-        self.assertThat(read_request_json(request), Equals({'test': 'hello'}))
+        self.assertThat(request.content.read(), Equals(b''))
 
         request.setResponseCode(200)
+        request.write(b'hi\n')
         request.finish()
+
+        response = yield d
+        text = yield response.text()
+        self.assertThat(text, Equals('hi\n'))
 
     @inlineCallbacks
     def test_request_url(self):
@@ -380,6 +379,34 @@ class TestJsonClient(TestJsonClientBase):
         request.setResponseCode(200)
         request.finish()
 
+
+class TestJsonClient(TestHTTPClientBase):
+
+    def get_client(self, agent):
+        return JsonClient('http://localhost:8000', agent=agent)
+
+    @inlineCallbacks
+    def test_request_json_data(self):
+        """
+        When a request is made with the json_data parameter set, that data
+        should be sent as JSON and the content-type header should be set to
+        indicate this.
+        """
+        self.cleanup_d(self.client.request(
+            'GET', path='/hello', json_data={'test': 'hello'}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(request.requestHeaders, HasHeader(
+            'content-type', ['application/json']))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['application/json']))
+        self.assertThat(read_request_json(request), Equals({'test': 'hello'}))
+
+        request.setResponseCode(200)
+        request.finish()
+
     @inlineCallbacks
     def test_json_content(self):
         """
@@ -460,8 +487,18 @@ class TestJsonClient(TestJsonClientBase):
             HTTPError, 'Expected header "Content-Type" to be '
                        '"application/json" but header not found in response')))
 
+    def test_json_data_and_data_not_allowed(self):
+        """
+        When both ``data`` and ``json_data`` keyword arguments are provided
+        when making a request, an exception should be raised.
+        """
+        with ExpectedException(ValueError, "Cannot specify both 'data' and "
+                                           "'json_data' keyword arguments"):
+            self.client.request(
+                'GET', path='/hello', json_data={'hi': 'bye'}, data='somedata')
 
-class TestMarathonClient(TestJsonClientBase):
+
+class TestMarathonClient(TestHTTPClientBase):
     def get_client(self, agent):
         return MarathonClient('http://localhost:8080', agent=agent)
 

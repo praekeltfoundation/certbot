@@ -3,7 +3,7 @@ import json
 
 from requests.exceptions import HTTPError
 
-from treq.client import HTTPClient
+from treq.client import HTTPClient as treq_HTTPClient
 
 from twisted.python import log
 from twisted.web.http import OK
@@ -97,7 +97,7 @@ def default_agent(agent, reactor):
     return agent
 
 
-class JsonClient(object):
+class HTTPClient(object):
     debug = False
     timeout = 5
 
@@ -109,11 +109,11 @@ class JsonClient(object):
         # Keep track of the reactor because treq uses it for timeouts in a
         # clumsy way
         self._reactor = default_reactor(reactor)
-        self._client = HTTPClient(default_agent(agent, self._reactor))
+        self._client = treq_HTTPClient(default_agent(agent, self._reactor))
 
-    def _log_request_response(self, response, method, path, data):
-        log.msg('%s %s with %s returned: %s' % (
-            method, path, data, response.code))
+    def _log_request_response(self, response, method, path, kwargs):
+        log.msg('%s %s with args %s returned: %s' % (
+            method, path, kwargs, response.code))
         return response
 
     def _log_request_error(self, failure, url):
@@ -159,20 +159,15 @@ class JsonClient(object):
 
         return uricompose(**compose_kwargs)
 
-    def request(self, method, url=None, json_data=None, **kwargs):
+    def request(self, method, url=None, **kwargs):
         """
-        Perform a request. A number of basic defaults are set on the request
-        that make using a JSON API easier. These defaults can be overridden by
-        setting the parameters in the keyword args.
+        Perform a request.
 
         :param: method:
             The HTTP method to use (example is `GET`).
         :param: url:
             The URL to use. The default value is the URL this client was
             created with (`self.url`) (example is `http://localhost:8080`)
-        :param: json_data:
-            A python data structure that will be converted to a JSON string
-            using `json.dumps` and used as the request body.
         :param: kwargs:
             Any other parameters that will be passed to `treq.request`, for
             example headers. Or any URL parameters to override, for example
@@ -180,30 +175,47 @@ class JsonClient(object):
         """
         url = self._compose_url(url, kwargs)
 
-        data = None
-        headers = {'Accept': 'application/json'}
+        kwargs.setdefault('timeout', self.timeout)
 
-        # Add JSON body if there is JSON data
-        if json_data is not None:
-            data = json.dumps(json_data).encode('utf-8')
-            headers['Content-Type'] = 'application/json'
-
-        request_kwargs = {
-            'headers': headers,
-            'data': data,
-            'timeout': self.timeout
-        }
-        request_kwargs.update(kwargs)
-
-        d = self._client.request(method, url, reactor=self._reactor,
-                                 **request_kwargs)
+        d = self._client.request(method, url, reactor=self._reactor, **kwargs)
 
         if self.debug:
-            d.addCallback(self._log_request_response, method, url, data)
+            d.addCallback(self._log_request_response, method, url, kwargs)
 
         d.addErrback(self._log_request_error, url)
 
         return d
+
+
+class JsonClient(HTTPClient):
+    def request(self, method, url=None, json_data=None, **kwargs):
+        """
+        Make a request to an API that speaks JSON. A number of basic defaults
+        are set on the request that make using a JSON API easier. These
+        defaults can be overridden by setting the parameters in the keyword
+        args.
+
+        :param: json_data:
+            A python data structure that will be converted to a JSON string
+            using `json.dumps` and used as the request body.
+        """
+        data = kwargs.get('data')
+        headers = kwargs.get('headers', {}).copy()
+        headers.setdefault('Accept', 'application/json')
+
+        # Add JSON body if there is JSON data
+        if json_data is not None:
+            if data is not None:
+                raise ValueError("Cannot specify both 'data' and 'json_data' "
+                                 'keyword arguments')
+
+            data = json.dumps(json_data).encode('utf-8')
+            headers.setdefault('Content-Type', 'application/json')
+
+        kwargs['headers'] = headers
+        kwargs['data'] = data
+
+        return super(JsonClient, self).request(method, url, **kwargs)
 
 
 def raise_for_not_ok_status(response):
