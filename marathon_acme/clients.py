@@ -7,7 +7,7 @@ from treq.client import HTTPClient as treq_HTTPClient
 
 from twisted.python import log
 from twisted.web.http import OK
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, gatherResults
 
 from uritools import uricompose, uridecode, urisplit
 
@@ -337,6 +337,22 @@ class MarathonLbClient(HTTPClient):
     Very basic client for accessing the ``/_mlb_signal`` endpoints on
     marathon-lb.
     """
+
+    def __init__(self, endpoints, *args, **kwargs):
+        """
+        :param endpoints:
+        The list of marathon-lb endpoints. All marathon-lb endpoints will be
+        called at once for any request.
+        """
+        super(MarathonLbClient, self).__init__(*args, **kwargs)
+        self.endpoints = endpoints
+
+    def request(self, *args, **kwargs):
+        requests = []
+        for endpoint in self.endpoints:
+            requests.append(super(MarathonLbClient, self).request(
+                *args, url=endpoint, **kwargs))
+        return gatherResults(requests)
 
     def mlb_signal_hup(self):
         """
