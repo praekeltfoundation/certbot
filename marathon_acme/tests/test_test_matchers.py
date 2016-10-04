@@ -1,4 +1,5 @@
 from testtools import TestCase
+from testtools.content import text_content
 from testtools.matchers import Equals, Is
 
 from twisted.web.http_headers import Headers
@@ -23,12 +24,14 @@ class TestHasHeader(TestCase):
         with the correct description and some details.
         """
         matcher = HasHeader('test', ['abc'])
-        match = matcher.match(Headers({'Something else': ['abc']}))
+        headers = Headers({'Something else': ['abc']})
+        match = matcher.match(headers)
 
         self.assertThat(match.describe(),
                         Equals('The response does not have a "test" header'))
+        headers_content = text_content(repr(dict(headers.getAllRawHeaders())))
         self.assertThat(match.get_details(),
-                        Equals({'raw headers': {b'Something else': [b'abc']}}))
+                        Equals({'raw headers': headers_content}))
 
     def test_header_value_mismatch(self):
         """

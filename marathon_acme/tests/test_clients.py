@@ -18,7 +18,8 @@ from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
     default_agent, default_reactor, get_single_header, HTTPClient, HTTPError,
-    json_content, JsonClient, MarathonClient, raise_for_status)
+    json_content, JsonClient, MarathonClient, MarathonLbClient,
+    raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
@@ -790,3 +791,67 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request.finish()
         yield d
+
+
+class TestMarathonLbClient(TestHTTPClientBase):
+    def get_client(self, agent):
+        return MarathonLbClient(['http://lb1:9090', 'http://lb2:9090'],
+                                agent=agent)
+
+    @inlineCallbacks
+    def test_mlb_signal_hup(self):
+        """
+        When the marathon-lb client is used to send a SIGHUP signal to
+        marathon-lb, all the correct API endpoints are called.
+        """
+        d = self.cleanup_d(self.client.mlb_signal_hup())
+
+        for lb in ['lb1', 'lb2']:
+            request = yield self.requests.get()
+            self.assertThat(request, HasRequestProperties(
+                method='POST', url='http://%s:9090/_mlb_signal/hup' % (lb,)))
+
+            request.setResponseCode(200)
+            request.setHeader('content-type', 'text/plain')
+            request.write(b'Sent SIGHUP signal to marathon-lb')
+            request.finish()
+
+        responses = yield d
+        self.assertThat(len(responses), Equals(2))
+        for response in responses:
+            self.assertThat(response.code, Equals(200))
+            self.assertThat(response.headers, HasHeader(
+                'content-type', ['text/plain']))
+
+            response_text = yield response.text()
+            self.assertThat(response_text,
+                            Equals('Sent SIGHUP signal to marathon-lb'))
+
+    @inlineCallbacks
+    def test_mlb_signal_usr1(self):
+        """
+        When the marathon-lb client is used to send a SIGUSR1 signal to
+        marathon-lb, all the correct API endpoint is called.
+        """
+        d = self.cleanup_d(self.client.mlb_signal_usr1())
+
+        for lb in ['lb1', 'lb2']:
+            request = yield self.requests.get()
+            self.assertThat(request, HasRequestProperties(
+                method='POST', url='http://%s:9090/_mlb_signal/usr1' % (lb,)))
+
+            request.setResponseCode(200)
+            request.setHeader('content-type', 'text/plain')
+            request.write(b'Sent SIGUSR1 signal to marathon-lb')
+            request.finish()
+
+        responses = yield d
+        self.assertThat(len(responses), Equals(2))
+        for response in responses:
+            self.assertThat(response.code, Equals(200))
+            self.assertThat(response.headers, HasHeader(
+                'content-type', ['text/plain']))
+
+            response_text = yield response.text()
+            self.assertThat(response_text,
+                            Equals('Sent SIGUSR1 signal to marathon-lb'))

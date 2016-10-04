@@ -7,7 +7,7 @@ from treq.client import HTTPClient as treq_HTTPClient
 
 from twisted.python import log
 from twisted.web.http import OK
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, gatherResults
 
 from uritools import uricompose, uridecode, urisplit
 
@@ -330,6 +330,43 @@ class MarathonClient(JsonClient):
 
         d.addCallback(sse_content, wrapped_cbs)
         return d
+
+
+class MarathonLbClient(HTTPClient):
+    """
+    Very basic client for accessing the ``/_mlb_signal`` endpoints on
+    marathon-lb.
+    """
+
+    def __init__(self, endpoints, *args, **kwargs):
+        """
+        :param endpoints:
+        The list of marathon-lb endpoints. All marathon-lb endpoints will be
+        called at once for any request.
+        """
+        super(MarathonLbClient, self).__init__(*args, **kwargs)
+        self.endpoints = endpoints
+
+    def request(self, *args, **kwargs):
+        requests = []
+        for endpoint in self.endpoints:
+            requests.append(super(MarathonLbClient, self).request(
+                *args, url=endpoint, **kwargs))
+        return gatherResults(requests)
+
+    def mlb_signal_hup(self):
+        """
+        Trigger a SIGHUP signal to be sent to marathon-lb. Causes a full reload
+        of the config as though a relevant event was received from Marathon.
+        """
+        return self.request('POST', path='/_mlb_signal/hup')
+
+    def mlb_signal_usr1(self):
+        """
+        Trigger a SIGUSR1 signal to be sent to marathon-lb. Causes the existing
+        config to be reloaded, whether it has changed or not.
+        """
+        return self.request('POST', path='/_mlb_signal/usr1')
 
 
 def _wrap_json_callback(callback):

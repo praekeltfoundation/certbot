@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from testtools.content import text_content
 from testtools.matchers import (
     AfterPreprocessing, Equals, GreaterThan, IsInstance, LessThan, MatchesAll,
     MatchesAny, MatchesDict, MatchesStructure, Mismatch
@@ -32,9 +33,11 @@ class HasHeader(Equals):
             The response or request headers object.
         """
         if not headers.hasHeader(self.key):
+            headers_content = text_content(
+                repr(dict(headers.getAllRawHeaders())))
             return Mismatch(
                 'The response does not have a "%s" header' % (self.key,),
-                details={'raw headers': dict(headers.getAllRawHeaders())})
+                details={'raw headers': headers_content})
 
         raw_values = headers.getRawHeaders(self.key)
         return super(HasHeader, self).match(raw_values)
