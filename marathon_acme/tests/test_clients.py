@@ -173,6 +173,29 @@ class TestHTTPClient(TestHTTPClientBase):
         self.assertThat(text, Equals('hi\n'))
 
     @inlineCallbacks
+    def test_request_debug_log(self):
+        """
+        When a request is made in debug mode, things should run smoothly.
+        (Don't really want to check the log output here, just that things don't
+        break.)
+        """
+        self.client.debug = True
+        d = self.cleanup_d(self.client.request('GET', path='/hello'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/hello')))
+        self.assertThat(request.content.read(), Equals(b''))
+
+        request.setResponseCode(200)
+        request.write(b'hi\n')
+        request.finish()
+
+        response = yield d
+        text = yield response.text()
+        self.assertThat(text, Equals('hi\n'))
+
+    @inlineCallbacks
     def test_request_url(self):
         """
         When a request is made with the url parameter set, that parameter
