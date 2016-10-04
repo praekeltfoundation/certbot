@@ -293,32 +293,6 @@ class MarathonClient(JsonClient):
 
         return response_json[field_name]
 
-    def get_event_subscriptions(self):
-        """
-        Get the current Marathon event subscriptions, returning a list of
-        callback URLs.
-        """
-        return self.get_json_field(
-            'callbackUrls', path='/v2/eventSubscriptions')
-
-    def post_event_subscription(self, callback_url):
-        """
-        Post a new Marathon event subscription with the given callback URL.
-        """
-        d = self.request('POST',
-                         path='/v2/eventSubscriptions',
-                         params={'callbackUrl': callback_url})
-        return d.addCallback(lambda response: response.code == OK)
-
-    def delete_event_subscription(self, callback_url):
-        """
-        Delete the Marathon event subscription with the given callback URL.
-        """
-        d = self.request('DELETE',
-                         path='/v2/eventSubscriptions',
-                         params={'callbackUrl': callback_url})
-        return d.addCallback(lambda response: response.code == OK)
-
     def get_apps(self):
         """
         Get the currently running Marathon apps, returning a list of app
