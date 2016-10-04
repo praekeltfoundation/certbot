@@ -56,126 +56,27 @@ class TestFakeMarathonAPI(TestCase):
         """
         app = {
             'id': '/my-app_1',
-            'cmd': 'sleep 50'
+            'cmd': 'sleep 50',
+            'tasks': [
+                {
+                    "host": "host1.local",
+                    "id": "my-app_1-1396592790353",
+                    "ports": []
+                },
+                {
+                    "host": "host2.local",
+                    "id": "my-app_1-1396592784349",
+                    "ports": []
+                }
+            ]
         }
-        tasks = [
-            {
-                "host": "host1.local",
-                "id": "my-app_1-1396592790353",
-                "ports": []
-            },
-            {
-                "host": "host2.local",
-                "id": "my-app_1-1396592784349",
-                "ports": []
-            }
-        ]
-        self.marathon.add_app(app, tasks)
+        self.marathon.add_app(app)
 
         response = yield self.client.request('GET', '/v2/apps')
         self.assertThat(response, IsJsonResponseWithCode(200))
 
         response_json = yield json_content(response)
         self.assertThat(response_json, Equals({'apps': [app]}))
-
-    @inlineCallbacks
-    def test_get_app(self):
-        """
-        When a specific app is requested, the app data should be returned.
-        """
-        app = {
-            'id': '/my-app_1',
-            'cmd': 'sleep 50'
-        }
-        tasks = [
-            {
-                "host": "host1.local",
-                "id": "my-app_1-1396592790353",
-                "ports": []
-            },
-            {
-                "host": "host2.local",
-                "id": "my-app_1-1396592784349",
-                "ports": []
-            }
-        ]
-        self.marathon.add_app(app, tasks)
-
-        response = yield self.client.request('GET', '/v2/apps/my-app_1')
-        self.assertThat(response, IsJsonResponseWithCode(200))
-
-        response_json = yield json_content(response)
-        self.assertThat(response_json, Equals({'app': app}))
-
-    @inlineCallbacks
-    def test_get_app_not_found(self):
-        """
-        When a specific app is requested but the app does not exist, a 404
-        response code should be returned as well as a message about the app
-        not existing.
-        """
-        response = yield self.client.request('GET', '/v2/apps/my-app_1')
-        self.assertThat(response, IsJsonResponseWithCode(404))
-
-        response_json = yield json_content(response)
-        self.assertThat(response_json,
-                        Equals({'message': "App '/my-app_1' does not exist"}))
-
-    @inlineCallbacks
-    def test_get_app_tasks(self):
-        """
-        When the tasks for an app are requested, the tasks for that app should
-        be returned.
-        """
-        app = {
-            'id': '/my-app_1',
-            'cmd': 'sleep 50'
-        }
-        tasks = [
-            {
-                "host": "host1.local",
-                "id": "my-app_1-1396592790353",
-                "ports": [
-                    31336,
-                    31337
-                ],
-                "stagedAt": "2014-04-04T06:26:30.355Z",
-                "startedAt": "2014-04-04T06:26:30.860Z",
-                "version": "2014-04-04T06:26:23.051Z"
-            },
-            {
-                "host": "host2.local",
-                "id": "my-app_1-1396592784349",
-                "ports": [
-                    31382,
-                    31383
-                ],
-                "stagedAt": "2014-04-04T06:26:24.351Z",
-                "startedAt": "2014-04-04T06:26:24.919Z",
-                "version": "2014-04-04T06:26:23.051Z"
-            }
-        ]
-        self.marathon.add_app(app, tasks)
-
-        response = yield self.client.request('GET', '/v2/apps/my-app_1/tasks')
-        self.assertThat(response, IsJsonResponseWithCode(200))
-
-        response_json = yield json_content(response)
-        self.assertThat(response_json, Equals({'tasks': tasks}))
-
-    @inlineCallbacks
-    def test_get_app_tasks_not_found(self):
-        """
-        When the tasks for an app are requested but the app does not exist, a
-        404 response code should be returned as well as a message about the app
-        not existing.
-        """
-        response = yield self.client.request('GET', '/v2/apps/my-app_1/tasks')
-        self.assertThat(response, IsJsonResponseWithCode(404))
-
-        response_json = yield json_content(response)
-        self.assertThat(response_json,
-                        Equals({'message': "App '/my-app_1' does not exist"}))
 
     @inlineCallbacks
     def test_get_events(self):

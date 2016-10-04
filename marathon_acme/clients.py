@@ -293,52 +293,12 @@ class MarathonClient(JsonClient):
 
         return response_json[field_name]
 
-    def get_event_subscriptions(self):
-        """
-        Get the current Marathon event subscriptions, returning a list of
-        callback URLs.
-        """
-        return self.get_json_field(
-            'callbackUrls', path='/v2/eventSubscriptions')
-
-    def post_event_subscription(self, callback_url):
-        """
-        Post a new Marathon event subscription with the given callback URL.
-        """
-        d = self.request('POST',
-                         path='/v2/eventSubscriptions',
-                         params={'callbackUrl': callback_url})
-        return d.addCallback(lambda response: response.code == OK)
-
-    def delete_event_subscription(self, callback_url):
-        """
-        Delete the Marathon event subscription with the given callback URL.
-        """
-        d = self.request('DELETE',
-                         path='/v2/eventSubscriptions',
-                         params={'callbackUrl': callback_url})
-        return d.addCallback(lambda response: response.code == OK)
-
     def get_apps(self):
         """
         Get the currently running Marathon apps, returning a list of app
         definitions.
         """
         return self.get_json_field('apps', path='/v2/apps')
-
-    def get_app(self, app_id):
-        """
-        Get information about the app with the given app ID.
-        """
-        return self.get_json_field('app', path='/v2/apps%s' % (app_id,))
-
-    def get_app_tasks(self, app_id):
-        """
-        Get the currently running tasks for the app with the given app ID,
-        returning a list of task definitions.
-        """
-        return self.get_json_field(
-            'tasks', path='/v2/apps%s/tasks' % (app_id,))
 
     def get_events(self, callbacks):
         """
