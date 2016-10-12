@@ -12,7 +12,7 @@ from twisted.python.filepath import FilePath
 
 from txacme.util import generate_private_key
 
-from marathon_acme.txacme import maybe_key
+from marathon_acme.acme_util import maybe_key
 
 
 class TestMaybeKey(TestCase):
