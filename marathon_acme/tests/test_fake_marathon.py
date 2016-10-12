@@ -10,11 +10,13 @@ from txfake import FakeServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    JsonClient, json_content, sse_content, sse_content_with_protocol)
-from marathon_acme.tests.fake_marathon import FakeMarathon, FakeMarathonAPI
+    HTTPClient, JsonClient, json_content, sse_content,
+    sse_content_with_protocol)
+from marathon_acme.tests.fake_marathon import (
+    FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
 from marathon_acme.tests.helpers import FakeServerAgent, TestCase
 from marathon_acme.tests.matchers import (
-    IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
+    HasHeader, IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
 
 
 class TestFakeMarathonAPI(TestCase):
@@ -180,3 +182,65 @@ class TestFakeMarathonAPI(TestCase):
         # FIXME: No clientIp in request
         self.assertThat(detach_data_json, IsMarathonEvent(
             'event_stream_detached', remoteAddress=Is(None)))
+
+
+class TestFakeMarathonLb(TestCase):
+
+    def setUp(self):
+        super(TestFakeMarathonLb, self).setUp()
+
+        self.marathon_lb = FakeMarathonLb()
+
+        # FIXME: Current released version (15.3.1) of Klein expects the host to
+        # have a 'port' attribute which in the case of Twisted's UNIX localhost
+        # host there isn't. Monkeypatch on a port to get things to work.
+        # https://github.com/twisted/klein/issues/102
+        _LoopbackAddress.port = 7000
+
+        fake_server = FakeServer(Site(self.marathon_lb.app.resource()))
+        fake_agent = FakeServerAgent(fake_server.endpoint)
+        self.client = HTTPClient('http://www.example.com', agent=fake_agent)
+
+    @inlineCallbacks
+    def test_signal_hup(self):
+        """
+        When a client calls the ``/mlb_signal/hup`` endpoint, the correct
+        response should be returned and the ``signalled_hup`` flag set True.
+        """
+        self.assertThat(self.marathon_lb.check_signalled_hup(), Equals(False))
+
+        response = yield self.client.request('GET', '/mlb_signal/hup')
+        self.assertThat(response.code, Equals(200))
+        self.assertThat(response.headers, HasHeader(
+            'content-type', ['text/plain']))
+
+        response_text = yield response.text()
+        self.assertThat(response_text,
+                        Equals('Sent SIGHUP signal to marathon-lb'))
+
+        self.assertThat(self.marathon_lb.check_signalled_hup(), Equals(True))
+
+        # Signalled flag should be reset to false after it is checked
+        self.assertThat(self.marathon_lb.check_signalled_hup(), Equals(False))
+
+    @inlineCallbacks
+    def test_signal_usr1(self):
+        """
+        When a client calls the ``/mlb_signal/usr1`` endpoint, the correct
+        response should be returned and the ``signalled_usr1`` flag set True.
+        """
+        self.assertThat(self.marathon_lb.check_signalled_usr1(), Equals(False))
+
+        response = yield self.client.request('GET', '/mlb_signal/usr1')
+        self.assertThat(response.code, Equals(200))
+        self.assertThat(response.headers, HasHeader(
+            'content-type', ['text/plain']))
+
+        response_text = yield response.text()
+        self.assertThat(response_text,
+                        Equals('Sent SIGUSR1 signal to marathon-lb'))
+
+        self.assertThat(self.marathon_lb.check_signalled_usr1(), Equals(True))
+
+        # Signalled flag should be reset to false after it is checked
+        self.assertThat(self.marathon_lb.check_signalled_usr1(), Equals(False))
