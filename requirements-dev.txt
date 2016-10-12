@@ -1,3 +1,4 @@
+fixtures
 pytest
 pytest-coverage
 pytest-xdist

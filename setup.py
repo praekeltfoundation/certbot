@@ -16,6 +16,7 @@ setup(
         'klein==15.3.1',
         'treq',
         'Twisted',
+        'txacme',
         'uritools>=1.0.0'
     ],
     classifiers=[
