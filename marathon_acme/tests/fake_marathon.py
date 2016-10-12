@@ -94,3 +94,31 @@ def _write_request_event(request, event):
     request.write(b'event: %s\n' % (event_type.encode('utf-8'),))
     request.write(b'data: %s\n' % (json.dumps(event).encode('utf-8'),))
     request.write(b'\n')
+
+
+class FakeMarathonLb(object):
+    app = Klein()
+    signalled_hup = False
+    signalled_usr1 = False
+
+    def check_signalled_hup(self):
+        """ Check and reset the ``signalled_hup`` flag. """
+        was_signalled, self.signalled_hup = self.signalled_hup, False
+        return was_signalled
+
+    def check_signalled_usr1(self):
+        """ Check and reset the ``signalled_usr1`` flag. """
+        was_signalled, self.signalled_usr1 = self.signalled_usr1, False
+        return was_signalled
+
+    @app.route('/mlb_signal/hup')
+    def signal_hup(self, request):
+        self.signalled_hup = True
+        request.setHeader('content-type', 'text/plain')
+        return u'Sent SIGHUP signal to marathon-lb'
+
+    @app.route('/mlb_signal/usr1')
+    def signal_usr1(self, request):
+        self.signalled_usr1 = True
+        request.setHeader('content-type', 'text/plain')
+        return u'Sent SIGUSR1 signal to marathon-lb'
