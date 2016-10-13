@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
+from testtools.matchers import Equals
 from twisted.internet.defer import inlineCallbacks
 from twisted.protocols.loopback import _LoopbackAddress
-
-from testtools.matchers import Equals
 
 from marathon_acme.clients import JsonClient, json_content
 from marathon_acme.server import HealthServer, Health

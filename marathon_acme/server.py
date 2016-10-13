@@ -1,9 +1,8 @@
 import json
 
+from klein import Klein
 from twisted.python import log
 from twisted.web.http import OK, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE
-
-from klein import Klein
 
 
 def write_request_json(request, json_obj):

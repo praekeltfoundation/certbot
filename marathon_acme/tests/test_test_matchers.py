@@ -1,7 +1,6 @@
 from testtools import TestCase
 from testtools.content import text_content
 from testtools.matchers import Equals, Is
-
 from twisted.web.http_headers import Headers
 
 from marathon_acme.tests.matchers import HasHeader

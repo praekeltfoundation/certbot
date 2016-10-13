@@ -1,12 +1,8 @@
 import testtools
-
 from testtools.twistedsupport import AsynchronousDeferredRunTest
-
 from treq.client import HTTPClient
-
 from twisted.web.client import ProxyAgent, URI
 from twisted.web.server import Site
-
 from txfake import FakeServer
 
 

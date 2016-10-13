@@ -1,20 +1,16 @@
 import json
 
 import testtools
-
-from twisted.internet import reactor
-from twisted.internet.task import Clock
-from twisted.internet.defer import inlineCallbacks, DeferredQueue
-from twisted.web.client import Agent
-from twisted.web.http_headers import Headers
-from twisted.web.server import NOT_DONE_YET
-
 from testtools import ExpectedException
 from testtools.matchers import Equals, Is, IsInstance
 from testtools.twistedsupport import failed
-
 from treq.client import HTTPClient as treq_HTTPClient
-
+from twisted.internet import reactor
+from twisted.internet.defer import inlineCallbacks, DeferredQueue
+from twisted.internet.task import Clock
+from twisted.web.client import Agent
+from twisted.web.http_headers import Headers
+from twisted.web.server import NOT_DONE_YET
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 

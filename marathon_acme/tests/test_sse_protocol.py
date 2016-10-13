@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from testtools import TestCase
 from testtools.matchers import Contains, Equals, IsInstance
-
 from twisted.internet.defer import Deferred
 from twisted.internet.error import ConnectionLost
 
