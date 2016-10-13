@@ -1,7 +1,6 @@
 from acme.jose import JWKRSA
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-
 from txacme.util import generate_private_key
 
 

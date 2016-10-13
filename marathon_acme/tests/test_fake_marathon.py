@@ -1,10 +1,8 @@
 import json
 
 from testtools.matchers import Equals, Is
-
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.protocols.loopback import _LoopbackAddress
-
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (

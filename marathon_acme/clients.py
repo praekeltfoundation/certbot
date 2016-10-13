@@ -2,13 +2,10 @@ import cgi
 import json
 
 from requests.exceptions import HTTPError
-
 from treq.client import HTTPClient as treq_HTTPClient
-
+from twisted.internet.defer import Deferred, gatherResults
 from twisted.python import log
 from twisted.web.http import OK
-from twisted.internet.defer import Deferred, gatherResults
-
 from uritools import uricompose, uridecode, urisplit
 
 from marathon_acme.sse_protocol import SseProtocol

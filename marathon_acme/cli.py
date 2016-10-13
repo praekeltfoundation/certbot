@@ -1,5 +1,6 @@
-import click
 import sys
+
+import click
 
 
 @click.command()
