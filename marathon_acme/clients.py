@@ -84,24 +84,23 @@ def default_reactor(reactor):
     return reactor
 
 
-def default_agent(agent, reactor):
+def default_client(client, reactor):
     """
-    Set up a default agent if one is not provided. Use a default reactor to do
-    so, unless one is not provided. The agent will set up a default
-    (non-persistent) connection pool if one is not provided.
+    Set up a default client if one is not provided. Set up the default
+    ``twisted.web.client.Agent`` using the provided reactor.
     """
-    if agent is None:
+    if client is None:
         from twisted.web.client import Agent
-        agent = Agent(reactor)
+        client = treq_HTTPClient(Agent(reactor))
 
-    return agent
+    return client
 
 
 class HTTPClient(object):
     debug = False
     timeout = 5
 
-    def __init__(self, url=None, agent=None, reactor=None):
+    def __init__(self, url=None, client=None, reactor=None):
         """
         Create a client with the specified default URL.
         """
@@ -109,7 +108,7 @@ class HTTPClient(object):
         # Keep track of the reactor because treq uses it for timeouts in a
         # clumsy way
         self._reactor = default_reactor(reactor)
-        self._client = treq_HTTPClient(default_agent(agent, self._reactor))
+        self._client = default_client(client, self._reactor)
 
     def _log_request_response(self, response, method, path, kwargs):
         log.msg('%s %s with args %s returned: %s' % (

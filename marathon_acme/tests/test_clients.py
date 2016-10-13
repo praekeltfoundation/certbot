@@ -13,11 +13,13 @@ from testtools import ExpectedException
 from testtools.matchers import Equals, Is, IsInstance
 from testtools.twistedsupport import failed
 
+from treq.client import HTTPClient as treq_HTTPClient
+
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    default_agent, default_reactor, get_single_header, HTTPClient, HTTPError,
+    default_client, default_reactor, get_single_header, HTTPClient, HTTPError,
     json_content, JsonClient, MarathonClient, MarathonLbClient,
     raise_for_status)
 from marathon_acme.server import write_request_json
@@ -101,21 +103,22 @@ class TestDefaultReactor(testtools.TestCase):
         self.assertThat(default_reactor(None), Is(reactor))
 
 
-class TestDefaultAgent(testtools.TestCase):
-    def test_default_agent(self):
+class TestDefaultClient(testtools.TestCase):
+    def test_default_client(self):
         """
-        When default_agent is passed an agent it should return that agent.
+        When default_client is passed a client it should return that client.
         """
-        agent = Agent(reactor)
+        client = treq_HTTPClient(Agent(reactor))
 
-        self.assertThat(default_agent(agent, reactor), Is(agent))
+        self.assertThat(default_client(client, reactor), Is(client))
 
-    def test_default_agent_not_provided(self):
+    def test_default_client_not_provided(self):
         """
         When default_agent is not passed an agent, it should return a default
         agent.
         """
-        self.assertThat(default_agent(None, reactor), IsInstance(Agent))
+        self.assertThat(default_client(None, reactor),
+                        IsInstance(treq_HTTPClient))
 
 
 class TestHTTPClientBase(TestCase):
@@ -125,7 +128,8 @@ class TestHTTPClientBase(TestCase):
         self.requests = DeferredQueue()
         fake_server = FakeHttpServer(self.handle_request)
 
-        self.client = self.get_client(fake_server.get_agent())
+        inner_client = treq_HTTPClient(fake_server.get_agent())
+        self.client = self.get_client(inner_client)
 
         # Spin the reactor once at the end of each test to clean up any
         # cancelled deferreds
@@ -135,7 +139,7 @@ class TestHTTPClientBase(TestCase):
         self.requests.put(request)
         return NOT_DONE_YET
 
-    def get_client(self, agent):
+    def get_client(self, client):
         """To be implemented by subclass"""
         raise NotImplementedError()
 
@@ -148,8 +152,8 @@ class TestHTTPClientBase(TestCase):
 
 
 class TestHTTPClient(TestHTTPClientBase):
-    def get_client(self, agent):
-        return HTTPClient('http://localhost:8000', agent=agent)
+    def get_client(self, client):
+        return HTTPClient('http://localhost:8000', client=client)
 
     @inlineCallbacks
     def test_request(self):
@@ -383,8 +387,8 @@ class TestHTTPClient(TestHTTPClientBase):
 
 class TestJsonClient(TestHTTPClientBase):
 
-    def get_client(self, agent):
-        return JsonClient('http://localhost:8000', agent=agent)
+    def get_client(self, client):
+        return JsonClient('http://localhost:8000', client=client)
 
     @inlineCallbacks
     def test_request_json_data(self):
@@ -500,8 +504,8 @@ class TestJsonClient(TestHTTPClientBase):
 
 
 class TestMarathonClient(TestHTTPClientBase):
-    def get_client(self, agent):
-        return MarathonClient('http://localhost:8080', agent=agent)
+    def get_client(self, client):
+        return MarathonClient('http://localhost:8080', client=client)
 
     @inlineCallbacks
     def test_get_json_field(self):
@@ -794,9 +798,9 @@ class TestMarathonClient(TestHTTPClientBase):
 
 
 class TestMarathonLbClient(TestHTTPClientBase):
-    def get_client(self, agent):
+    def get_client(self, client):
         return MarathonLbClient(['http://lb1:9090', 'http://lb2:9090'],
-                                agent=agent)
+                                client=client)
 
     @inlineCallbacks
     def test_mlb_signal_hup(self):

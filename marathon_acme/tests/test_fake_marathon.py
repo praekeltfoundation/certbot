@@ -4,9 +4,7 @@ from testtools.matchers import Equals, Is
 
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.protocols.loopback import _LoopbackAddress
-from twisted.web.server import Site
 
-from txfake import FakeServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
@@ -14,7 +12,7 @@ from marathon_acme.clients import (
     sse_content_with_protocol)
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
-from marathon_acme.tests.helpers import FakeServerAgent, TestCase
+from marathon_acme.tests.helpers import fake_client, TestCase
 from marathon_acme.tests.matchers import (
     HasHeader, IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
 
@@ -34,9 +32,9 @@ class TestFakeMarathonAPI(TestCase):
         # https://github.com/twisted/klein/issues/102
         _LoopbackAddress.port = 7000
 
-        fake_server = FakeServer(Site(self.marathon_api.app.resource()))
-        fake_agent = FakeServerAgent(fake_server.endpoint)
-        self.client = JsonClient('http://www.example.com', agent=fake_agent)
+        self.client = JsonClient(
+            'http://www.example.com',
+            client=fake_client(self.marathon_api.app.resource()))
 
     @inlineCallbacks
     def test_get_apps_empty(self):
@@ -197,9 +195,9 @@ class TestFakeMarathonLb(TestCase):
         # https://github.com/twisted/klein/issues/102
         _LoopbackAddress.port = 7000
 
-        fake_server = FakeServer(Site(self.marathon_lb.app.resource()))
-        fake_agent = FakeServerAgent(fake_server.endpoint)
-        self.client = HTTPClient('http://www.example.com', agent=fake_agent)
+        self.client = HTTPClient(
+            'http://www.example.com',
+            client=fake_client(self.marathon_lb.app.resource()))
 
     @inlineCallbacks
     def test_signal_hup(self):
