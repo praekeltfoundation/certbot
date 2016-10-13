@@ -5,6 +5,8 @@ from twisted.web.server import Site
 
 from testtools.matchers import Equals
 
+from treq.client import HTTPClient as treq_HTTPClient
+
 from txfake import FakeServer
 
 from marathon_acme.clients import JsonClient, json_content
@@ -27,7 +29,8 @@ class TestHealthServer(TestCase):
 
         fake_server = FakeServer(Site(self.event_server.app.resource()))
         fake_agent = FakeServerAgent(fake_server.endpoint)
-        self.client = JsonClient('http://www.example.com', agent=fake_agent)
+        fake_client = treq_HTTPClient(fake_agent)
+        self.client = JsonClient('http://www.example.com', client=fake_client)
 
     @inlineCallbacks
     def test_health_healthy(self):

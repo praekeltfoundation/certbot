@@ -2,6 +2,8 @@ import json
 
 from testtools.matchers import Equals, Is
 
+from treq.client import HTTPClient as treq_HTTPClient
+
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.protocols.loopback import _LoopbackAddress
 from twisted.web.server import Site
@@ -36,7 +38,8 @@ class TestFakeMarathonAPI(TestCase):
 
         fake_server = FakeServer(Site(self.marathon_api.app.resource()))
         fake_agent = FakeServerAgent(fake_server.endpoint)
-        self.client = JsonClient('http://www.example.com', agent=fake_agent)
+        fake_client = treq_HTTPClient(fake_agent)
+        self.client = JsonClient('http://www.example.com', client=fake_client)
 
     @inlineCallbacks
     def test_get_apps_empty(self):
@@ -199,7 +202,8 @@ class TestFakeMarathonLb(TestCase):
 
         fake_server = FakeServer(Site(self.marathon_lb.app.resource()))
         fake_agent = FakeServerAgent(fake_server.endpoint)
-        self.client = HTTPClient('http://www.example.com', agent=fake_agent)
+        fake_client = treq_HTTPClient(fake_agent)
+        self.client = HTTPClient('http://www.example.com', client=fake_client)
 
     @inlineCallbacks
     def test_signal_hup(self):
