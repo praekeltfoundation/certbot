@@ -1,17 +1,12 @@
 # -*- coding: utf-8 -*-
 from twisted.internet.defer import inlineCallbacks
 from twisted.protocols.loopback import _LoopbackAddress
-from twisted.web.server import Site
 
 from testtools.matchers import Equals
 
-from treq.client import HTTPClient as treq_HTTPClient
-
-from txfake import FakeServer
-
 from marathon_acme.clients import JsonClient, json_content
 from marathon_acme.server import HealthServer, Health
-from marathon_acme.tests.helpers import TestCase, FakeServerAgent
+from marathon_acme.tests.helpers import fake_client, TestCase
 from marathon_acme.tests.matchers import IsJsonResponseWithCode
 
 
@@ -27,10 +22,9 @@ class TestHealthServer(TestCase):
         # https://github.com/twisted/klein/issues/102
         _LoopbackAddress.port = 7000
 
-        fake_server = FakeServer(Site(self.event_server.app.resource()))
-        fake_agent = FakeServerAgent(fake_server.endpoint)
-        fake_client = treq_HTTPClient(fake_agent)
-        self.client = JsonClient('http://www.example.com', client=fake_client)
+        self.client = JsonClient(
+            'http://www.example.com',
+            client=fake_client(self.event_server.app.resource()))
 
     @inlineCallbacks
     def test_health_healthy(self):
