@@ -205,7 +205,7 @@ class TestFakeMarathonLb(TestCase):
         """
         self.assertThat(self.marathon_lb.check_signalled_hup(), Equals(False))
 
-        response = yield self.client.request('GET', '/mlb_signal/hup')
+        response = yield self.client.request('GET', '/_mlb_signal/hup')
         self.assertThat(response.code, Equals(200))
         self.assertThat(response.headers, HasHeader(
             'content-type', ['text/plain']))
@@ -227,7 +227,7 @@ class TestFakeMarathonLb(TestCase):
         """
         self.assertThat(self.marathon_lb.check_signalled_usr1(), Equals(False))
 
-        response = yield self.client.request('GET', '/mlb_signal/usr1')
+        response = yield self.client.request('GET', '/_mlb_signal/usr1')
         self.assertThat(response.code, Equals(200))
         self.assertThat(response.headers, HasHeader(
             'content-type', ['text/plain']))
