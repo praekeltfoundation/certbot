@@ -112,11 +112,11 @@ def IsBetween(minimum, maximum):
 def IsRecentMarathonTimestamp():
     """
     Match whether a Marathon timestamp string describes a time within the last
-    second.
+    few seconds.
     """
     return AfterPreprocessing(
         lambda ts: datetime.strptime(ts, '%Y-%m-%dT%H:%M:%S.%fZ'),
-        IsBetween(datetime.utcnow() - timedelta(seconds=1),
+        IsBetween(datetime.utcnow() - timedelta(seconds=3),
                   datetime.utcnow()))
 
 

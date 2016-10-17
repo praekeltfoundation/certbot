@@ -110,13 +110,13 @@ class FakeMarathonLb(object):
         was_signalled, self.signalled_usr1 = self.signalled_usr1, False
         return was_signalled
 
-    @app.route('/mlb_signal/hup')
+    @app.route('/_mlb_signal/hup')
     def signal_hup(self, request):
         self.signalled_hup = True
         request.setHeader('content-type', 'text/plain')
         return u'Sent SIGHUP signal to marathon-lb'
 
-    @app.route('/mlb_signal/usr1')
+    @app.route('/_mlb_signal/usr1')
     def signal_usr1(self, request):
         self.signalled_usr1 = True
         request.setHeader('content-type', 'text/plain')
