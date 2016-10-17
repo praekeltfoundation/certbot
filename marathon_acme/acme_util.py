@@ -2,7 +2,6 @@ from acme.jose import JWKRSA
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from txacme.interfaces import ICertificateStore
-from txacme.store import DirectoryStore
 from txacme.util import generate_private_key
 from zope.interface import implementer
 
@@ -37,7 +36,7 @@ def maybe_key(pem_path):
 
 
 @implementer(ICertificateStore)
-class MlbCertificateStore(DirectoryStore):
+class MlbCertificateStore(object):
     """
     An ``ICertificateStore`` that wraps another ``ICertificateStore`` but
     calls marathon-lb for a USR1 signal to be triggered when a certificate is
