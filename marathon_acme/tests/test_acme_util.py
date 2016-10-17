@@ -130,4 +130,4 @@ class TestMlbCertificateStore(TestCase):
         self.assertThat(d, failed(WithErrorTypeAndMessage(
             RuntimeError,
             "Wrapped certificate store returned something non-None. Don't "
-            'know what to do with it.')))
+            "know what to do with 'foo'.")))

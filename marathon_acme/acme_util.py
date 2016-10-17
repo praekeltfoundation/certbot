@@ -60,7 +60,7 @@ class MlbCertificateStore(object):
         if certificate_store_response is not None:
             raise RuntimeError(
                 "Wrapped certificate store returned something non-None. Don't "
-                'know what to do with it.')
+                'know what to do with %r.' % (certificate_store_response,))
         return self.mlb_client.mlb_signal_usr1()
 
     def as_dict(self):
