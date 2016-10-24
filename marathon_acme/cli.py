@@ -1,37 +1,32 @@
+import argparse
 import sys
 
-import click
 
-
-@click.command()
-@click.option('--acme',
-              help='The address for the ACME Directory Resource',
-              default='https://acme-v01.api.letsencrypt.org/directory',
-              show_default=True)
-@click.option('--email',
-              help=("Email address for Let's Encrypt certificate registration "
-                    "and recovery contact"),
-              required=True)
-@click.option('--storage-dir',
-              help='Path to directory for storing certificates')
-@click.option('--marathon', default='http://marathon.mesos:8080',
-              help='The address for the Marathon HTTP API',
-              show_default=True)
-@click.option('--poll',
-              help=("Periodically check Marathon's state every _n_ seconds "
-                    "[default: disabled]"),
-              type=int)
-@click.option('--logfile',
-              help='Where to log output to [default: stdout]',
-              type=click.File('a'),
-              default=sys.stdout)
-@click.option('--debug',
-              help='Log debug output',
-              is_flag=True)
-def main(acme, email, storage_dir,  # ACME/certificates
-         marathon, poll,            # Marathon
-         logfile, debug):           # Logging
+def main(raw_args=sys.argv[1:]):
     """
     A tool to automatically request, renew and distribute Let's Encrypt
-    certificates for apps running on Seed Stack.
+    certificates for apps running on Marathon and served by marathon-lb.
     """
+    parser = argparse.ArgumentParser(
+        description='Automatically manage ACME certificates for Marathon apps')
+    parser.add_argument('-a', '--acme',
+                        help='The address for the ACME Directory Resource '
+                             '(default: %(default)s)',
+                        default=(
+                            'https://acme-v01.api.letsencrypt.org/directory'))
+    parser.add_argument('-m', '--marathon', nargs='+',
+                        help='The address for the Marathon HTTP API (default: '
+                             '%(default)s)',
+                        default='http://marathon.mesos:8080')
+    parser.add_argument('-l', '--lb', nargs='+',
+                        help='The address for the marathon-lb HTTP API '
+                             '(default: %(default)s)',
+                        default='http://marathon-lb.marathon.mesos:9090')
+    parser.add_argument('storage-dir',
+                        help='Path to directory for storing certificates')
+
+    args = parser.parse_args(raw_args)  # noqa
+
+
+if __name__ == '__main__':
+    main()
