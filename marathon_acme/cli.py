@@ -22,6 +22,10 @@ def main(raw_args=sys.argv[1:]):
                         help='The address for the marathon-lb HTTP API '
                              '(default: %(default)s)',
                         default='http://marathon-lb.marathon.mesos:9090')
+    parser.add_argument('-g', '--group',
+                        help='The marathon-lb group to issue certificates for '
+                             '(default: %(default)s)',
+                        default='external')
     parser.add_argument('storage-dir',
                         help='Path to directory for storing certificates')
 
