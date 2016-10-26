@@ -3,7 +3,8 @@ from datetime import datetime
 from acme import challenges
 from acme.jose import JWKRSA
 from testtools.assertions import assert_that
-from testtools.matchers import Equals
+from testtools.matchers import (
+    AfterPreprocessing, Equals, MatchesAll, MatchesListwise, MatchesStructure)
 from testtools.twistedsupport import succeeded
 from treq.testing import StubTreq
 from twisted.internet.defer import succeed
@@ -42,14 +43,14 @@ class TestMarathonAcme(object):
         fake_marathon_api = FakeMarathonAPI(self.fake_marathon)
         marathon_client = MarathonClient(
             'http://localhost:8080',
-            StubTreq(fake_marathon_api.app.resource()))
+            client=StubTreq(fake_marathon_api.app.resource()))
 
         self.cert_store = MemoryStore()
 
         self.fake_marathon_lb = FakeMarathonLb()
         mlb_client = MarathonLbClient(
             ['http://localhost:9090'],
-            StubTreq(self.fake_marathon_lb.app.resource()))
+            client=StubTreq(self.fake_marathon_lb.app.resource()))
 
         key = JWKRSA(key=generate_private_key(u'rsa'))
         self.clock = Clock()
@@ -82,7 +83,18 @@ class TestMarathonAcme(object):
         })
 
         d = self.marathon_acme.sync()
-        assert_that(d, succeeded(Equals('foo')))
+        assert_that(d, succeeded(MatchesListwise([  # Per domain
+            MatchesListwise([  # Per marathon-lb instance
+                MatchesAll(
+                    MatchesStructure(code=Equals(200)),
+                    AfterPreprocessing(
+                        lambda r: r.text(), succeeded(
+                            Equals('Sent SIGUSR1 signal to marathon-lb')))
+                )
+            ])
+        ])))
+
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
 
     def test_sync_no_apps(self):
         d = self.marathon_acme.sync()
