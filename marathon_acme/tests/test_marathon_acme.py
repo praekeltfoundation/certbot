@@ -1,8 +1,9 @@
 from datetime import datetime
 
-import pytest
+from acme import challenges
+from acme.jose import JWKRSA
 from testtools.assertions import assert_that
-from testtools.matchers import Equals, MatchesListwise
+from testtools.matchers import Equals
 from testtools.twistedsupport import succeeded
 from treq.testing import StubTreq
 from twisted.internet.defer import succeed
@@ -50,11 +51,13 @@ class TestMarathonAcme(object):
             ['http://localhost:9090'],
             StubTreq(self.fake_marathon_lb.app.resource()))
 
-        key = generate_private_key(u'rsa')
+        key = JWKRSA(key=generate_private_key(u'rsa'))
         self.clock = Clock()
         self.clock.rightNow = (
             datetime.now() - datetime(1970, 1, 1)).total_seconds()
         txacme_client = FakeClient(key, self.clock)
+        # Patch on support for HTTP challenge types
+        txacme_client._challenge_types.append(challenges.HTTP01)
 
         self.marathon_acme = MarathonAcme(
             marathon_client,
@@ -65,8 +68,6 @@ class TestMarathonAcme(object):
             self.clock
         )
 
-    @pytest.mark.xfail(
-        reason="txacme's FakeClient doesn't support HTTP challenge type")
     def test_sync_app(self):
         # Store an app in Marathon with a marathon-acme domain
         self.fake_marathon.add_app({
@@ -81,13 +82,7 @@ class TestMarathonAcme(object):
         })
 
         d = self.marathon_acme.sync()
-        assert_that(d, succeeded(MatchesListwise([
-            succeeded(Equals('foo'))
-        ])))
-
-        # Nothing stored, nothing notified
-        assert_that(self.fake_marathon_lb.check_signalled_usr1(),
-                    Equals(True))
+        assert_that(d, succeeded(Equals('foo')))
 
     def test_sync_no_apps(self):
         d = self.marathon_acme.sync()
