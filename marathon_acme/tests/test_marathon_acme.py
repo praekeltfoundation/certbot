@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 from testtools.assertions import assert_that
 from testtools.matchers import Equals, MatchesListwise
 from testtools.twistedsupport import succeeded
@@ -64,6 +65,8 @@ class TestMarathonAcme(object):
             self.clock
         )
 
+    @pytest.mark.xfail(
+        reason="txacme's FakeClient doesn't support HTTP challenge type")
     def test_sync_app(self):
         # Store an app in Marathon with a marathon-acme domain
         self.fake_marathon.add_app({
