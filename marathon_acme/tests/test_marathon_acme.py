@@ -10,7 +10,7 @@ from txacme.testing import FakeClient, MemoryStore
 from txacme.util import generate_private_key
 
 from marathon_acme.clients import MarathonClient, MarathonLbClient
-from marathon_acme.marathon_acme import MarathonAcme, parse_domain_label
+from marathon_acme.service import MarathonAcme, parse_domain_label
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
 
