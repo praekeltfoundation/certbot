@@ -85,10 +85,5 @@ class MarathonAcme(object):
         return d
 
     def _issue_certs(self, domains):
-        deferreds = []
-        for domain in domains:
-            # FIXME: Use the public txacme API once it is available
-            deferreds.append(self.txacme_service._with_client(
-                self.txacme_service._issue_cert, domain))
-
-        return gatherResults(deferreds)
+        return gatherResults(
+            [self.txacme_service.issue_cert(domain) for domain in domains])
