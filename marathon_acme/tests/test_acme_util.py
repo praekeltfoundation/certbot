@@ -7,8 +7,8 @@ from testtools import TestCase
 from testtools.matchers import Equals, MatchesListwise, MatchesStructure
 from testtools.twistedsupport import succeeded, failed
 from treq.testing import StubTreq
-from twisted.python.filepath import FilePath
 from twisted.internet.defer import succeed
+from twisted.python.filepath import FilePath
 from txacme.testing import MemoryStore
 from txacme.util import generate_private_key
 
