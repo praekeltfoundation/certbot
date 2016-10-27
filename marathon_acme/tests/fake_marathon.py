@@ -20,11 +20,16 @@ class FakeMarathon(object):
         self._apps = {}
         self.event_callbacks = []
 
-    def add_app(self, app):
+    def add_app(self, app, client_ip=None):
         # Store the app
         app_id = app['id']
         assert app_id not in self._apps
         self._apps[app_id] = app
+
+        self.trigger_event('api_post_event',
+                           clientIp=client_ip,
+                           uri='/v2/apps/' + app_id.lstrip('/'),
+                           appDefinition=app)
 
     def get_apps(self):
         return list(self._apps.values())

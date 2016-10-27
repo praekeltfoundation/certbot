@@ -1,6 +1,6 @@
 import json
 
-from testtools.matchers import Equals, Is
+from testtools.matchers import Equals, HasLength, Is
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.protocols.loopback import _LoopbackAddress
 from txfake.fake_connection import wait0
@@ -178,6 +178,44 @@ class TestFakeMarathonAPI(TestCase):
         # FIXME: No clientIp in request
         self.assertThat(detach_data_json, IsMarathonEvent(
             'event_stream_detached', remoteAddress=Is(None)))
+
+    @inlineCallbacks
+    def test_add_app_triggers_api_post_event(self):
+        """
+        When an app is added to the underlying fake Marathon, an
+        ``api_post_event`` should be received by any event listeners.
+        """
+        response = yield self.client.request('GET', '/v2/events', headers={
+            'Accept': 'text/event-stream'
+        })
+        self.assertThat(response, IsSseResponse())
+
+        app = {
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        }
+        self.marathon.add_app(app)
+
+        data = []
+        sse_content(response, {'api_post_event': data.append})
+
+        yield wait0()
+
+        self.assertThat(data, HasLength(1))
+        data_json = json.loads(data[0])
+
+        self.assertThat(data_json, IsMarathonEvent(
+            'api_post_event',
+            clientIp=Is(None),
+            uri=Equals('/v2/apps/my-app_1'),
+            appDefinition=Equals(app)
+        ))
 
 
 class TestFakeMarathonLb(TestCase):
