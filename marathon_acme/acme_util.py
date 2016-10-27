@@ -1,7 +1,10 @@
 from acme.jose import JWKRSA
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from twisted.web.resource import Resource
+from txacme.challenges._http import HTTP01Responder
 from txacme.interfaces import ICertificateStore
+from txacme.service import AcmeIssuingService
 from txacme.util import generate_private_key
 from zope.interface import implementer
 
@@ -33,6 +36,43 @@ def maybe_key(pem_path):
             )
         )
     return JWKRSA(key=key)
+
+
+def create_txacme_service(cert_store, mlb_client, txacme_client_creator, clock,
+                          root_resource, **kwargs):
+    """
+    Create the txacme ``AcmeIssuingService``.
+
+    :param cert_store: The ``txacme.interfaces.ICertificateStore`` to use.
+    :param mlb_client:
+        The ``marathon_acme.clients.MarathonLbClient`` instance to tie to store
+        calls in the created certificate store.
+    :param txacme_client_creator:
+        No-args callable that returns a deferred that will be called with the
+        created client.
+    :param clock:
+        ``IReactorTime`` provider; usually the reactor, when not testing.
+    :param Resource root_resource: The HTTP server's root resource.
+    :param kwargs: Other arguments to create the ``AcmeIssuingService`` with.
+    """
+    mlb_cert_store = MlbCertificateStore(cert_store, mlb_client)
+    responders = [_create_txacme_responder(root_resource)]
+    return AcmeIssuingService(
+        mlb_cert_store, txacme_client_creator, clock, responders, **kwargs)
+
+
+def _create_txacme_responder(root_resource):
+    """
+    Create the txacme HTTP01Responder and attach it to the resource tree under
+    /.well-known/acme-challenge/<responder>.
+
+    :param Resource root_resource: The HTTP server's root resource
+    """
+    well_known = Resource()
+    root_resource.putChild(b'.well-known', well_known)
+    responder = HTTP01Responder()
+    well_known.putChild(b'acme-challenge', responder.resource)
+    return responder
 
 
 @implementer(ICertificateStore)
