@@ -158,6 +158,84 @@ class TestMarathonAcme(object):
 
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
 
+    def test_sync_multiple_apps(self):
+        """
+        When a sync is run and there are multiple apps, certificates are
+        fetched for the domains of all the apps.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com',
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+        self.fake_marathon.add_app({
+            'id': '/my-app_2',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example2.com',
+            },
+            'portDefinitions': [
+                {'port': 8000, 'protocol': 'tcp', 'labels': {}},
+            ]
+        })
+
+        d = self.marathon_acme.sync()
+        assert_that(d, succeeded(MatchesListwise([  # Per domain
+            is_marathon_lb_sigusr_response,
+            is_marathon_lb_sigusr_response
+        ])))
+
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None)),
+            'example2.com': Not(Is(None))
+        })))
+
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
+    def test_sync_apps_common_domains(self):
+        """
+        When a sync is run and there are multiple apps, possibly with multiple
+        ports, then certificates are only fetched for unique domains.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com',
+                'MARATHON_ACME_1_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}},
+                {'port': 9001, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+        self.fake_marathon.add_app({
+            'id': '/my-app_2',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com',
+            },
+            'portDefinitions': [
+                {'port': 8000, 'protocol': 'tcp', 'labels': {}},
+            ]
+        })
+
+        d = self.marathon_acme.sync()
+        assert_that(d, succeeded(MatchesListwise([  # Per domain
+            is_marathon_lb_sigusr_response
+        ])))
+
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None))
+        })))
+
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
     def test_sync_no_apps(self):
         """
         When a sync is run and Marathon has no apps for us then no certificates
