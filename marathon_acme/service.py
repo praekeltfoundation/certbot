@@ -5,6 +5,7 @@ from marathon_acme.acme_util import create_txacme_service
 
 
 def parse_domain_label(domain_label):
+    """ Parse the list of comma-separated domains from the app label. """
     domains = []
     for domain_string in domain_label.split(','):
         domain = domain_string.strip()
@@ -17,6 +18,16 @@ class MarathonAcme(object):
 
     def __init__(self, marathon_client, group, cert_store, mlb_client,
                  txacme_client_creator, clock):
+        """
+        Create the marathon-acme service.
+
+        :param marathon_client: The Marathon API client.
+        :param group: The name of the marathon-lb group.
+        :param cert_store: The ``ICertificateStore`` instance to use.
+        :param mlb_clinet: The marathon-lb API client.
+        :param txacme_client_creator: Callable to create the txacme client.
+        :param clock: The ``IReactorTime`` provider.
+        """
         self.marathon_client = marathon_client
         self.group = group
 
@@ -27,21 +38,12 @@ class MarathonAcme(object):
             cert_store, mlb_client, txacme_client_creator, clock,
             root_resource)
 
-    def run(self, host, port):
-        # Start up the server
-        self.server.run(host, port)
-
-        # Start the txacme service
-        self.txacme_service.startService()
-
-        # Run an initial sync, then start listening for events
-        d = self.sync()
-
-        # TODO: Listen for events and trigger syncs
-
-        return d
-
     def sync(self):
+        """
+        Fetch the list of apps from Marathon, find the domains that require
+        certificates, and issue certificates for any domains that don't already
+        have a certificate.
+        """
         return (self.marathon_client.get_apps()
                 .addCallback(self._apps_acme_domains)
                 .addCallback(self._filter_new_domains)
