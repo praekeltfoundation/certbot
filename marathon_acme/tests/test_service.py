@@ -212,3 +212,30 @@ class TestMarathonAcme(object):
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
+
+    def test_sync_app_existing_cert(self):
+        """
+        When a sync is run and Marathon has an app with a domain label but we
+        already have a certificate for that app then a new certificate should
+        not be fetched.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+        self.cert_store.store('example.com', 'certcontent')
+
+        d = self.marathon_acme.sync()
+        assert_that(d, succeeded(Equals([])))
+
+        # Existing cert unchanged, marathon-lb not notified
+        assert_that(self.cert_store.as_dict(), succeeded(
+            Equals({'example.com': 'certcontent'})))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(),
+                    Equals(False))
