@@ -4,7 +4,7 @@ from acme import challenges
 from acme.jose import JWKRSA
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    AfterPreprocessing, Equals, Is, MatchesAll, MatchesListwise,
+    AfterPreprocessing, Equals, Is, MatchesAll, MatchesDict, MatchesListwise,
     MatchesStructure, Not)
 from testtools.twistedsupport import succeeded
 from treq.testing import StubTreq
@@ -52,6 +52,15 @@ class TestParseDomainLabel(object):
         """
         domains = parse_domain_label(' example.com, example2.com ')
         assert_that(domains, Equals(['example.com', 'example2.com']))
+
+
+is_marathon_lb_sigusr_response = MatchesListwise([  # Per marathon-lb instance
+    MatchesAll(
+        MatchesStructure(code=Equals(200)),
+        AfterPreprocessing(
+            lambda r: r.text(), succeeded(
+                Equals('Sent SIGUSR1 signal to marathon-lb'))))
+])
 
 
 class TestMarathonAcme(object):
@@ -108,18 +117,44 @@ class TestMarathonAcme(object):
 
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(MatchesListwise([  # Per domain
-            MatchesListwise([  # Per marathon-lb instance
-                MatchesAll(
-                    MatchesStructure(code=Equals(200)),
-                    AfterPreprocessing(
-                        lambda r: r.text(), succeeded(
-                            Equals('Sent SIGUSR1 signal to marathon-lb')))
-                )
-            ])
+            is_marathon_lb_sigusr_response
         ])))
 
-        assert_that(self.cert_store.get('example.com'),
-                    succeeded(Not(Is(None))))
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None))
+        })))
+
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
+    def test_sync_app_multiple_ports(self):
+        """
+        When a sync is run and there is an app with domain labels for multiple
+        ports, then certificates should be fetched for each port.
+        """
+        # Store an app in Marathon with a marathon-acme domain
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com',
+                'MARATHON_ACME_1_DOMAIN': 'example2.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}},
+                {'port': 9001, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+
+        d = self.marathon_acme.sync()
+        assert_that(d, succeeded(MatchesListwise([  # Per domain
+            is_marathon_lb_sigusr_response,
+            is_marathon_lb_sigusr_response
+        ])))
+
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None)),
+            'example2.com': Not(Is(None))
+        })))
 
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
 
