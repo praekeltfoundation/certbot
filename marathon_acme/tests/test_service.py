@@ -68,9 +68,10 @@ class TestMarathonAcme(object):
     def setup_method(self):
         self.fake_marathon = FakeMarathon()
         fake_marathon_api = FakeMarathonAPI(self.fake_marathon)
+        self.marathon_inner_client = StubTreq(fake_marathon_api.app.resource())
         marathon_client = MarathonClient(
             'http://localhost:8080',
-            client=StubTreq(fake_marathon_api.app.resource()))
+            client=self.marathon_inner_client)
 
         self.cert_store = MemoryStore()
 
@@ -398,6 +399,9 @@ class TestMarathonAcme(object):
                 {'port': 9000, 'protocol': 'tcp', 'labels': {}}
             ]
         })
+
+        # Flush the client to make sure the event is received
+        self.marathon_inner_client.flush()
 
         assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
             'example.com': Not(Is(None))

@@ -43,12 +43,8 @@ class MarathonAcme(object):
         Listen for events from Marathon and run syncs when appropriate.
         """
         return self.marathon_client.get_events({
-            'api_post_event': self._sync_on_event
+            'api_post_event': lambda _: self.sync()
         })
-
-    def _sync_on_event(self, event):
-        print('received event:', event)
-        return self.sync()
 
     def sync(self):
         """
