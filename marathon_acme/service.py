@@ -38,6 +38,18 @@ class MarathonAcme(object):
             cert_store, mlb_client, txacme_client_creator, clock,
             root_resource)
 
+    def listen_events(self):
+        """
+        Listen for events from Marathon and run syncs when appropriate.
+        """
+        return self.marathon_client.get_events({
+            'api_post_event': self._sync_on_event
+        })
+
+    def _sync_on_event(self, event):
+        print('received event:', event)
+        return self.sync()
+
     def sync(self):
         """
         Fetch the list of apps from Marathon, find the domains that require

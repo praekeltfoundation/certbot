@@ -379,3 +379,27 @@ class TestMarathonAcme(object):
             Equals({'example.com': 'certcontent'})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
+
+    def test_listen_event(self):
+        """
+        When Marathon events are listened for, and an action (adding an app) in
+        Marathon triggers an ``api_post_event``, a sync should be run.
+        """
+        self.marathon_acme.listen_events()
+
+        # Add an app to trigger an event
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None))
+        })))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
