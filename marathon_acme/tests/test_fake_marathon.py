@@ -1,18 +1,17 @@
 import json
 from functools import partial
+from operator import methodcaller
 
 from testtools.assertions import assert_that
 from testtools.matchers import AfterPreprocessing as After
-from testtools.matchers import Equals, Is, MatchesAll, MatchesListwise
+from testtools.matchers import (
+    Equals, Is, MatchesAll, MatchesListwise, MatchesStructure)
 from testtools.twistedsupport import succeeded
-from twisted.internet.defer import inlineCallbacks
-from twisted.protocols.loopback import _LoopbackAddress
 
 from marathon_acme.clients import (
-    HTTPClient, json_content, sse_content, sse_content_with_protocol)
+    json_content, sse_content, sse_content_with_protocol)
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
-from marathon_acme.tests.helpers import fake_client, TestCase
 from marathon_acme.tests.matchers import (
     HasHeader, IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
 
@@ -197,63 +196,50 @@ class TestFakeMarathonAPI(object):
                 ]))))
 
 
-class TestFakeMarathonLb(TestCase):
+class TestFakeMarathonLb(object):
 
-    def setUp(self):
-        super(TestFakeMarathonLb, self).setUp()
-
+    def setup_method(self):
         self.marathon_lb = FakeMarathonLb()
+        self.client = self.marathon_lb.client
 
-        # FIXME: Current released version (15.3.1) of Klein expects the host to
-        # have a 'port' attribute which in the case of Twisted's UNIX localhost
-        # host there isn't. Monkeypatch on a port to get things to work.
-        # https://github.com/twisted/klein/issues/102
-        _LoopbackAddress.port = 7000
-
-        self.client = HTTPClient(
-            'http://www.example.com',
-            client=fake_client(self.marathon_lb.app.resource()))
-
-    @inlineCallbacks
     def test_signal_hup(self):
         """
         When a client calls the ``/mlb_signal/hup`` endpoint, the correct
         response should be returned and the ``signalled_hup`` flag set True.
         """
-        self.assertThat(self.marathon_lb.check_signalled_hup(), Equals(False))
+        assert_that(self.marathon_lb.check_signalled_hup(), Equals(False))
 
-        response = yield self.client.request('GET', '/_mlb_signal/hup')
-        self.assertThat(response.code, Equals(200))
-        self.assertThat(response.headers, HasHeader(
-            'content-type', ['text/plain']))
+        response = self.client.get('http://localhost/_mlb_signal/hup')
+        assert_that(response, succeeded(MatchesAll(
+            MatchesStructure(
+                code=Equals(200),
+                headers=HasHeader('content-type', ['text/plain'])),
+            After(methodcaller('text'), succeeded(
+                Equals('Sent SIGHUP signal to marathon-lb')))
+        )))
 
-        response_text = yield response.text()
-        self.assertThat(response_text,
-                        Equals('Sent SIGHUP signal to marathon-lb'))
-
-        self.assertThat(self.marathon_lb.check_signalled_hup(), Equals(True))
+        assert_that(self.marathon_lb.check_signalled_hup(), Equals(True))
 
         # Signalled flag should be reset to false after it is checked
-        self.assertThat(self.marathon_lb.check_signalled_hup(), Equals(False))
+        assert_that(self.marathon_lb.check_signalled_hup(), Equals(False))
 
-    @inlineCallbacks
     def test_signal_usr1(self):
         """
         When a client calls the ``/mlb_signal/usr1`` endpoint, the correct
         response should be returned and the ``signalled_usr1`` flag set True.
         """
-        self.assertThat(self.marathon_lb.check_signalled_usr1(), Equals(False))
+        assert_that(self.marathon_lb.check_signalled_usr1(), Equals(False))
 
-        response = yield self.client.request('GET', '/_mlb_signal/usr1')
-        self.assertThat(response.code, Equals(200))
-        self.assertThat(response.headers, HasHeader(
-            'content-type', ['text/plain']))
+        response = self.client.get('http://localhost/_mlb_signal/usr1')
+        assert_that(response, succeeded(MatchesAll(
+            MatchesStructure(
+                code=Equals(200),
+                headers=HasHeader('content-type', ['text/plain'])),
+            After(methodcaller('text'), succeeded(
+                Equals('Sent SIGUSR1 signal to marathon-lb')))
+        )))
 
-        response_text = yield response.text()
-        self.assertThat(response_text,
-                        Equals('Sent SIGUSR1 signal to marathon-lb'))
-
-        self.assertThat(self.marathon_lb.check_signalled_usr1(), Equals(True))
+        assert_that(self.marathon_lb.check_signalled_usr1(), Equals(True))
 
         # Signalled flag should be reset to false after it is checked
-        self.assertThat(self.marathon_lb.check_signalled_usr1(), Equals(False))
+        assert_that(self.marathon_lb.check_signalled_usr1(), Equals(False))

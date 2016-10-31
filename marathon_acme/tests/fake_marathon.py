@@ -107,6 +107,9 @@ class FakeMarathonLb(object):
     signalled_hup = False
     signalled_usr1 = False
 
+    def __init__(self):
+        self.client = StubTreq(self.app.resource())
+
     def check_signalled_hup(self):
         """ Check and reset the ``signalled_hup`` flag. """
         was_signalled, self.signalled_hup = self.signalled_hup, False
