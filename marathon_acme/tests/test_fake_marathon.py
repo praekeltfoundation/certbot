@@ -86,7 +86,7 @@ class TestFakeMarathonAPI(object):
                 MatchesListwise([
                     After(json.loads, IsMarathonEvent(
                         'event_stream_attached',
-                        remoteAddress=Equals('127.0.0.1')))
+                        clientIp=Equals('127.0.0.1')))
                 ])
             )
         )))
@@ -141,10 +141,10 @@ class TestFakeMarathonAPI(object):
         assert_that(attach_data1, MatchesListwise([
             # First attach event on request 1 from itself connecting
             After(json.loads, IsMarathonEvent(
-                'event_stream_attached', remoteAddress=Equals('127.0.0.1'))),
+                'event_stream_attached', clientIp=Equals('127.0.0.1'))),
             # Second attach event on request 1 from request 2 connecting
             After(json.loads, IsMarathonEvent(
-                'event_stream_attached', remoteAddress=Equals('127.0.0.1')))
+                'event_stream_attached', clientIp=Equals('127.0.0.1')))
         ]))
 
         # Request 1 shouldn't receive any detach events
@@ -154,13 +154,13 @@ class TestFakeMarathonAPI(object):
         # Attach event only for itself
         assert_that(attach_data2, MatchesListwise([
             After(json.loads, IsMarathonEvent(
-                'event_stream_attached', remoteAddress=Equals('127.0.0.1')))
+                'event_stream_attached', clientIp=Equals('127.0.0.1')))
         ]))
 
         # Detach event for request 1
         assert_that(detach_data2, MatchesListwise([
             After(json.loads, IsMarathonEvent(
-                'event_stream_detached', remoteAddress=Equals('127.0.0.1')))
+                'event_stream_detached', clientIp=Equals('127.0.0.1')))
         ]))
 
     def test_add_app_triggers_api_post_event(self):

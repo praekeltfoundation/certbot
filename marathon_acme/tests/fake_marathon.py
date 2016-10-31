@@ -35,19 +35,17 @@ class FakeMarathon(object):
     def get_apps(self):
         return list(self._apps.values())
 
-    def attach_event_stream(self, callback, remote_address=None):
+    def attach_event_stream(self, callback, client_ip=None):
         assert callback not in self.event_callbacks
 
         self.event_callbacks.append(callback)
-        self.trigger_event('event_stream_attached',
-                           remoteAddress=remote_address)
+        self.trigger_event('event_stream_attached', clientIp=client_ip)
 
-    def detach_event_stream(self, callback, remote_address=None):
+    def detach_event_stream(self, callback, client_ip=None):
         assert callback in self.event_callbacks
 
         self.event_callbacks.remove(callback)
-        self.trigger_event('event_stream_detached',
-                           remoteAddress=remote_address)
+        self.trigger_event('event_stream_detached', clientIp=client_ip)
 
     def trigger_event(self, event_type, **kwargs):
         event = {
