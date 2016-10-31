@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 from klein import Klein
+from treq.testing import StubTreq
 
 from marathon_acme.clients import get_single_header
 from marathon_acme.server import write_request_json
@@ -61,9 +62,15 @@ class FakeMarathon(object):
 
 class FakeMarathonAPI(object):
     app = Klein()
+    client = None
 
     def __init__(self, marathon):
         self._marathon = marathon
+
+    def get_client(self):
+        if self.client is None:
+            self.client = StubTreq(self.app.resource())
+        return self.client
 
     @app.route('/v2/apps', methods=['GET'])
     def get_apps(self, request):
@@ -83,6 +90,8 @@ class FakeMarathonAPI(object):
 
         def callback(event):
             _write_request_event(request, event)
+            if self.client is not None:
+                self.client.flush()
         self._marathon.attach_event_stream(callback, request.getClientIP())
 
         finished = request.notifyFinish()

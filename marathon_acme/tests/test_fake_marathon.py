@@ -1,13 +1,15 @@
 import json
+from functools import partial
 
-from testtools.matchers import Equals, HasLength, Is
-from twisted.internet.defer import inlineCallbacks, DeferredQueue
+from testtools.assertions import assert_that
+from testtools.matchers import AfterPreprocessing as After
+from testtools.matchers import Equals, Is, MatchesAll, MatchesListwise
+from testtools.twistedsupport import succeeded
+from twisted.internet.defer import inlineCallbacks
 from twisted.protocols.loopback import _LoopbackAddress
-from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    HTTPClient, JsonClient, json_content, sse_content,
-    sse_content_with_protocol)
+    HTTPClient, json_content, sse_content, sse_content_with_protocol)
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
 from marathon_acme.tests.helpers import fake_client, TestCase
@@ -15,38 +17,29 @@ from marathon_acme.tests.matchers import (
     HasHeader, IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
 
 
-class TestFakeMarathonAPI(TestCase):
-    event_requests = DeferredQueue()
+def collect_events(event_type, response):
+    data = []
+    sse_content(response, {event_type: data.append})
+    return data
 
-    def setUp(self):
-        super(TestFakeMarathonAPI, self).setUp()
 
+class TestFakeMarathonAPI(object):
+    def setup_method(self):
         self.marathon = FakeMarathon()
         self.marathon_api = FakeMarathonAPI(self.marathon)
+        self.client = self.marathon_api.get_client()
 
-        # FIXME: Current released version (15.3.1) of Klein expects the host to
-        # have a 'port' attribute which in the case of Twisted's UNIX localhost
-        # host there isn't. Monkeypatch on a port to get things to work.
-        # https://github.com/twisted/klein/issues/102
-        _LoopbackAddress.port = 7000
-
-        self.client = JsonClient(
-            'http://www.example.com',
-            client=fake_client(self.marathon_api.app.resource()))
-
-    @inlineCallbacks
     def test_get_apps_empty(self):
         """
         When the list of apps is requested and there are no apps, an empty list
         of apps should be returned.
         """
-        response = yield self.client.request('GET', '/v2/apps')
-        self.assertThat(response, IsJsonResponseWithCode(200))
+        response = self.client.get('http://localhost/v2/apps')
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(Equals({'apps': []})))
+        )))
 
-        response_json = yield json_content(response)
-        self.assertThat(response_json, Equals({'apps': []}))
-
-    @inlineCallbacks
     def test_get_apps(self):
         """
         When the list of apps is requested, a list of apps added via add_app()
@@ -70,37 +63,34 @@ class TestFakeMarathonAPI(TestCase):
         }
         self.marathon.add_app(app)
 
-        response = yield self.client.request('GET', '/v2/apps')
-        self.assertThat(response, IsJsonResponseWithCode(200))
+        response = self.client.get('http://localhost/v2/apps')
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(Equals({'apps': [app]})))
+        )))
 
-        response_json = yield json_content(response)
-        self.assertThat(response_json, Equals({'apps': [app]}))
-
-    @inlineCallbacks
     def test_get_events(self):
         """
         When a request is made to the event stream endpoint, an SSE stream
         should be received in response and an event should be fired that
         indicates that the stream was attached to.
         """
-        response = yield self.client.request('GET', '/v2/events', headers={
+        response = self.client.get('http://localhost/v2/events', headers={
             'Accept': 'text/event-stream'
         })
-        self.assertThat(response, IsSseResponse())
 
-        data = []
-        sse_content(response, {'event_stream_attached': data.append})
+        assert_that(response, succeeded(MatchesAll(
+            IsSseResponse(),
+            After(
+                partial(collect_events, 'event_stream_attached'),
+                MatchesListwise([
+                    After(json.loads, IsMarathonEvent(
+                        'event_stream_attached',
+                        remoteAddress=Equals('127.0.0.1')))
+                ])
+            )
+        )))
 
-        yield wait0()
-
-        self.assertThat(len(data), Equals(1))
-
-        data_json = json.loads(data[0])
-        # FIXME: No clientIp in request
-        self.assertThat(data_json, IsMarathonEvent(
-            'event_stream_attached', remoteAddress=Is(None)))
-
-    @inlineCallbacks
     def test_get_events_lost_connection(self):
         """
         When two connections are made the the event stream, the first
@@ -108,23 +98,26 @@ class TestFakeMarathonAPI(TestCase):
         stream. Then, when the first connection is disconnected, the second
         should receive a detach event for the first.
         """
-        response1 = yield self.client.request('GET', '/v2/events', headers={
+        response1_d = self.client.get('http://localhost/v2/events', headers={
             'Accept': 'text/event-stream'
         })
-        self.assertThat(response1, IsSseResponse())
+        # First listener attaches and receives event it attached
+        assert_that(response1_d, succeeded(IsSseResponse()))
 
+        response1 = response1_d.result
         attach_data1 = []
         detach_data1 = []
         finished, protocol = sse_content_with_protocol(response1, {
-            'event_stream_attached': attach_data1.append,
-            'event_stream_detached': detach_data1.append
+           'event_stream_attached': attach_data1.append,
+           'event_stream_detached': detach_data1.append
         })
 
-        response2 = yield self.client.request('GET', '/v2/events', headers={
+        response2_d = self.client.get('http://localhost/v2/events', headers={
             'Accept': 'text/event-stream'
         })
-        self.assertThat(response2, IsSseResponse())
+        assert_that(response2_d, succeeded(IsSseResponse()))
 
+        response2 = response2_d.result
         attach_data2 = []
         detach_data2 = []
         sse_content(response2, {
@@ -139,56 +132,46 @@ class TestFakeMarathonAPI(TestCase):
         # TransportProxyProducer (because that's what HTTP11ClientProtocol
         # gives our protocol). Get the actual wrapped transport from the
         # _producer attribute.
-        transport = protocol.transport._producer
-        yield transport.loseConnection()
-        yield finished
-
-        # Spin the reactor to fire all the callbacks
-        yield wait0()
+        protocol.transport._producer.loseConnection()
+        # Flush the client so that the disconnection propagates
+        self.client.flush()
+        assert_that(finished, succeeded(Is(None)))
 
         # Assert request 1's response data
-        self.assertThat(len(attach_data1), Equals(2))
-
-        # First attach event on request 1 from itself connecting
-        data0_json = json.loads(attach_data1[0])
-        # FIXME: No clientIp in request
-        self.assertThat(data0_json, IsMarathonEvent(
-            'event_stream_attached', remoteAddress=Is(None)))
-
-        # Second attach event on request 1 from request 2 connecting
-        data1_json = json.loads(attach_data1[1])
-        # FIXME: No clientIp in request
-        self.assertThat(data1_json, IsMarathonEvent(
-            'event_stream_attached', remoteAddress=Is(None)))
+        assert_that(attach_data1, MatchesListwise([
+            # First attach event on request 1 from itself connecting
+            After(json.loads, IsMarathonEvent(
+                'event_stream_attached', remoteAddress=Equals('127.0.0.1'))),
+            # Second attach event on request 1 from request 2 connecting
+            After(json.loads, IsMarathonEvent(
+                'event_stream_attached', remoteAddress=Equals('127.0.0.1')))
+        ]))
 
         # Request 1 shouldn't receive any detach events
-        self.assertThat(detach_data1, Equals([]))
+        assert_that(detach_data1, Equals([]))
 
         # Now look at request 2's events
         # Attach event only for itself
-        self.assertThat(len(attach_data2), Equals(1))
-        attach_data_json = json.loads(attach_data2[0])
-        # FIXME: No clientIp in request
-        self.assertThat(attach_data_json, IsMarathonEvent(
-            'event_stream_attached', remoteAddress=Is(None)))
+        assert_that(attach_data2, MatchesListwise([
+            After(json.loads, IsMarathonEvent(
+                'event_stream_attached', remoteAddress=Equals('127.0.0.1')))
+        ]))
 
         # Detach event for request 1
-        self.assertThat(len(detach_data2), Equals(1))
-        detach_data_json = json.loads(detach_data2[0])
-        # FIXME: No clientIp in request
-        self.assertThat(detach_data_json, IsMarathonEvent(
-            'event_stream_detached', remoteAddress=Is(None)))
+        assert_that(detach_data2, MatchesListwise([
+            After(json.loads, IsMarathonEvent(
+                'event_stream_detached', remoteAddress=Equals('127.0.0.1')))
+        ]))
 
-    @inlineCallbacks
     def test_add_app_triggers_api_post_event(self):
         """
         When an app is added to the underlying fake Marathon, an
         ``api_post_event`` should be received by any event listeners.
         """
-        response = yield self.client.request('GET', '/v2/events', headers={
+        response = self.client.get('http://localhost/v2/events', headers={
             'Accept': 'text/event-stream'
         })
-        self.assertThat(response, IsSseResponse())
+        assert_that(response, succeeded(IsSseResponse()))
 
         app = {
             'id': '/my-app_1',
@@ -202,20 +185,16 @@ class TestFakeMarathonAPI(TestCase):
         }
         self.marathon.add_app(app)
 
-        data = []
-        sse_content(response, {'api_post_event': data.append})
-
-        yield wait0()
-
-        self.assertThat(data, HasLength(1))
-        data_json = json.loads(data[0])
-
-        self.assertThat(data_json, IsMarathonEvent(
-            'api_post_event',
-            clientIp=Is(None),
-            uri=Equals('/v2/apps/my-app_1'),
-            appDefinition=Equals(app)
-        ))
+        assert_that(response, succeeded(
+            After(
+                partial(collect_events, 'api_post_event'),
+                MatchesListwise([
+                    After(json.loads, IsMarathonEvent(
+                        'api_post_event',
+                        clientIp=Is(None),
+                        uri=Equals('/v2/apps/my-app_1'),
+                        appDefinition=Equals(app)))
+                ]))))
 
 
 class TestFakeMarathonLb(TestCase):
