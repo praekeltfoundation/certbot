@@ -22,7 +22,6 @@ install:
   - pip install git+https://github.com/JayH5/txacme.git@issue-83-challenge-body
   # Install libcloud for txacme (issue #80)
   - pip install apache-libcloud
-  - pip install -e .
   - pip install -r requirements-dev.txt
   - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:
