@@ -27,7 +27,7 @@ class TestFakeMarathonAPI(object):
     def setup_method(self):
         self.marathon = FakeMarathon()
         self.marathon_api = FakeMarathonAPI(self.marathon)
-        self.client = self.marathon_api.get_client()
+        self.client = self.marathon_api.client
 
     def test_get_apps_empty(self):
         """
