@@ -1,6 +1,6 @@
 import json
 
-import testtools
+from testtools.assertions import assert_that
 from testtools import ExpectedException
 from testtools.matchers import Equals, Is, IsInstance
 from testtools.twistedsupport import failed
@@ -35,7 +35,7 @@ def json_response(request, json_data, response_code=200):
     request.finish()
 
 
-class TestGetSingleHeader(testtools.TestCase):
+class TestGetSingleHeader(object):
     def test_single_value(self):
         """
         When a single value is set for a header key and we use
@@ -44,7 +44,7 @@ class TestGetSingleHeader(testtools.TestCase):
         headers = Headers({'Content-Type': ['application/json']})
         content_type = get_single_header(headers, 'Content-Type')
 
-        self.assertThat(content_type, Equals('application/json'))
+        assert_that(content_type, Equals('application/json'))
 
     def test_multiple_values(self):
         """
@@ -58,7 +58,7 @@ class TestGetSingleHeader(testtools.TestCase):
         ]})
         content_type = get_single_header(headers, 'Content-Type')
 
-        self.assertThat(content_type, Equals('text/html'))
+        assert_that(content_type, Equals('text/html'))
 
     def test_value_with_params(self):
         """
@@ -69,7 +69,7 @@ class TestGetSingleHeader(testtools.TestCase):
         headers = Headers({'Accept': ['application/json; charset=utf-8']})
         accept = get_single_header(headers, 'Accept')
 
-        self.assertThat(accept, Equals('application/json'))
+        assert_that(accept, Equals('application/json'))
 
     def test_value_missing(self):
         """
@@ -79,42 +79,41 @@ class TestGetSingleHeader(testtools.TestCase):
         headers = Headers({'Content-Type': ['application/json']})
         content_type = get_single_header(headers, 'Accept')
 
-        self.assertThat(content_type, Is(None))
+        assert_that(content_type, Is(None))
 
 
-class TestDefaultReactor(testtools.TestCase):
+class TestDefaultReactor(object):
     def test_default_reactor(self):
         """
         When default_reactor is passed a reactor it should return that reactor.
         """
         clock = Clock()
 
-        self.assertThat(default_reactor(clock), Is(clock))
+        assert_that(default_reactor(clock), Is(clock))
 
     def test_default_reactor_not_provided(self):
         """
         When default_reactor is not passed a reactor, it should return the
         default reactor.
         """
-        self.assertThat(default_reactor(None), Is(reactor))
+        assert_that(default_reactor(None), Is(reactor))
 
 
-class TestDefaultClient(testtools.TestCase):
+class TestDefaultClient(object):
     def test_default_client(self):
         """
         When default_client is passed a client it should return that client.
         """
         client = treq_HTTPClient(Agent(reactor))
 
-        self.assertThat(default_client(client, reactor), Is(client))
+        assert_that(default_client(client, reactor), Is(client))
 
     def test_default_client_not_provided(self):
         """
         When default_agent is not passed an agent, it should return a default
         agent.
         """
-        self.assertThat(default_client(None, reactor),
-                        IsInstance(treq_HTTPClient))
+        assert_that(default_client(None, reactor), IsInstance(treq_HTTPClient))
 
 
 class TestHTTPClientBase(TestCase):

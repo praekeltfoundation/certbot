@@ -1,4 +1,4 @@
-from testtools import TestCase
+from testtools.assertions import assert_that
 from testtools.content import text_content
 from testtools.matchers import Equals, Is
 from twisted.web.http_headers import Headers
@@ -6,7 +6,7 @@ from twisted.web.http_headers import Headers
 from marathon_acme.tests.matchers import HasHeader
 
 
-class TestHasHeader(TestCase):
+class TestHasHeader(object):
 
     def test_header_present(self):
         """
@@ -15,7 +15,7 @@ class TestHasHeader(TestCase):
         matcher = HasHeader('test', ['abc', 'def'])
         match = matcher.match(Headers({'Test': ['abc', 'def']}))
 
-        self.assertThat(match, Is(None))
+        assert_that(match, Is(None))
 
     def test_header_key_not_present(self):
         """
@@ -26,11 +26,11 @@ class TestHasHeader(TestCase):
         headers = Headers({'Something else': ['abc']})
         match = matcher.match(headers)
 
-        self.assertThat(match.describe(),
-                        Equals('The response does not have a "test" header'))
+        assert_that(match.describe(),
+                    Equals('The response does not have a "test" header'))
         headers_content = text_content(repr(dict(headers.getAllRawHeaders())))
-        self.assertThat(match.get_details(),
-                        Equals({'raw headers': headers_content}))
+        assert_that(match.get_details(),
+                    Equals({'raw headers': headers_content}))
 
     def test_header_value_mismatch(self):
         """
@@ -40,8 +40,7 @@ class TestHasHeader(TestCase):
         matcher = HasHeader('test', ['abc'])
         match = matcher.match(Headers({'Test': ['abcd']}))
 
-        self.assertThat(match.describe(),
-                        Equals("['abcd'] != ['abc']"))
+        assert_that(match.describe(), Equals("['abcd'] != ['abc']"))
 
     def test_header_value_different_order(self):
         """
@@ -51,5 +50,5 @@ class TestHasHeader(TestCase):
         matcher = HasHeader('test', ['abc', 'def'])
         match = matcher.match(Headers({'Test': ['def', 'abc']}))
 
-        self.assertThat(match.describe(),
-                        Equals("['def', 'abc'] != ['abc', 'def']"))
+        assert_that(match.describe(),
+                    Equals("['def', 'abc'] != ['abc', 'def']"))

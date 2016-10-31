@@ -1,9 +1,9 @@
 import pem
+import pytest
 from acme.jose import JWKRSA
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from fixtures import TempDir
-from testtools import TestCase
+from testtools.assertions import assert_that
 from testtools.matchers import Equals, MatchesListwise, MatchesStructure
 from testtools.twistedsupport import succeeded, failed
 from treq.testing import StubTreq
@@ -18,13 +18,12 @@ from marathon_acme.tests.fake_marathon import FakeMarathonLb
 from marathon_acme.tests.matchers import WithErrorTypeAndMessage
 
 
-class TestMaybeKey(TestCase):
-    def setUp(self):
-        super(TestMaybeKey, self).setUp()
+class TestMaybeKey(object):
+    @pytest.fixture
+    def pem_path(self, tmpdir):
+        return FilePath(str(tmpdir))
 
-        self.pem_path = FilePath(self.useFixture(TempDir()).path)
-
-    def test_key_exists(self):
+    def test_key_exists(self, pem_path):
         """
         When we get the client key and the key file already exists, the file
         should be read and the existing key returned.
@@ -32,25 +31,25 @@ class TestMaybeKey(TestCase):
         raw_key = generate_private_key(u'rsa')
         expected_key = JWKRSA(key=raw_key)
 
-        pem_file = self.pem_path.child(u'client.key')
+        pem_file = pem_path.child(u'client.key')
         pem_file.setContent(raw_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption()
         ))
 
-        actual_key = maybe_key(self.pem_path)
-        self.assertThat(actual_key, Equals(expected_key))
+        actual_key = maybe_key(pem_path)
+        assert_that(actual_key, Equals(expected_key))
 
-    def test_key_not_exists(self):
+    def test_key_not_exists(self, pem_path):
         """
         When we get the client key and no key file exists, a new key should be
         generated and the key should be saved in a key file.
         """
-        key = maybe_key(self.pem_path)
+        key = maybe_key(pem_path)
 
-        pem_file = self.pem_path.child(u'client.key')
-        self.assertThat(pem_file.exists(), Equals(True))
+        pem_file = pem_path.child(u'client.key')
+        assert_that(pem_file.exists(), Equals(True))
 
         file_key = serialization.load_pem_private_key(
             pem_file.getContent(),
@@ -59,7 +58,7 @@ class TestMaybeKey(TestCase):
         )
         file_key = JWKRSA(key=file_key)
 
-        self.assertThat(key, Equals(file_key))
+        assert_that(key, Equals(file_key))
 
 
 # From txacme
@@ -79,9 +78,8 @@ EXAMPLE_PEM_OBJECTS = [
     ]
 
 
-class TestMlbCertificateStore(TestCase):
-    def setUp(self):
-        super(TestMlbCertificateStore, self).setUp()
+class TestMlbCertificateStore(object):
+    def setup_method(self):
         self.fake_marathon_lb = FakeMarathonLb()
         self.client = MarathonLbClient(
             ['http://lb1:9090'],
@@ -98,20 +96,18 @@ class TestMlbCertificateStore(TestCase):
         d = self.mlb_store.store('example.com', EXAMPLE_PEM_OBJECTS)
 
         # Check that the one request succeeds
-        self.assertThat(d, succeeded(MatchesListwise([
+        assert_that(d, succeeded(MatchesListwise([
             MatchesStructure(code=Equals(200))
         ])))
 
         # Check that marathon-lb was signalled
-        self.assertThat(self.fake_marathon_lb.check_signalled_usr1(),
-                        Equals(True))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
 
         # Check that the certificate was stored
-        self.assertThat(self.mlb_store.get('example.com'),
-                        succeeded(Equals(EXAMPLE_PEM_OBJECTS)))
-        self.assertThat(self.mlb_store.as_dict(),
-                        succeeded(
-                            Equals({'example.com': EXAMPLE_PEM_OBJECTS})))
+        assert_that(self.mlb_store.get('example.com'),
+                    succeeded(Equals(EXAMPLE_PEM_OBJECTS)))
+        assert_that(self.mlb_store.as_dict(),
+                    succeeded(Equals({'example.com': EXAMPLE_PEM_OBJECTS})))
 
     def test_store_unexpected_response(self):
         """
@@ -127,7 +123,7 @@ class TestMlbCertificateStore(TestCase):
 
         d = mlb_store.store('example.com', EXAMPLE_PEM_OBJECTS)
 
-        self.assertThat(d, failed(WithErrorTypeAndMessage(
+        assert_that(d, failed(WithErrorTypeAndMessage(
             RuntimeError,
             "Wrapped certificate store returned something non-None. Don't "
             "know what to do with 'foo'.")))
