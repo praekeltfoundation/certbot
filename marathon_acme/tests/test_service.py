@@ -7,7 +7,6 @@ from testtools.matchers import (
     AfterPreprocessing, Equals, Is, MatchesAll, MatchesDict, MatchesListwise,
     MatchesStructure, Not)
 from testtools.twistedsupport import succeeded
-from treq.testing import StubTreq
 from twisted.internet.defer import succeed
 from twisted.internet.task import Clock
 from txacme.testing import FakeClient, MemoryStore
@@ -69,15 +68,13 @@ class TestMarathonAcme(object):
         self.fake_marathon = FakeMarathon()
         fake_marathon_api = FakeMarathonAPI(self.fake_marathon)
         marathon_client = MarathonClient(
-            'http://localhost:8080',
-            client=StubTreq(fake_marathon_api.app.resource()))
+            'http://localhost:8080', client=fake_marathon_api.client)
 
         self.cert_store = MemoryStore()
 
         self.fake_marathon_lb = FakeMarathonLb()
         mlb_client = MarathonLbClient(
-            ['http://localhost:9090'],
-            client=StubTreq(self.fake_marathon_lb.app.resource()))
+            ['http://localhost:9090'], client=self.fake_marathon_lb.client)
 
         key = JWKRSA(key=generate_private_key(u'rsa'))
         self.clock = Clock()

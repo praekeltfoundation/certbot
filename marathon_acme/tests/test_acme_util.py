@@ -6,7 +6,6 @@ from cryptography.hazmat.primitives import serialization
 from testtools.assertions import assert_that
 from testtools.matchers import Equals, MatchesListwise, MatchesStructure
 from testtools.twistedsupport import succeeded, failed
-from treq.testing import StubTreq
 from twisted.internet.defer import succeed
 from twisted.python.filepath import FilePath
 from txacme.testing import MemoryStore
@@ -82,8 +81,7 @@ class TestMlbCertificateStore(object):
     def setup_method(self):
         self.fake_marathon_lb = FakeMarathonLb()
         self.client = MarathonLbClient(
-            ['http://lb1:9090'],
-            client=StubTreq(self.fake_marathon_lb.app.resource()))
+            ['http://lb1:9090'], client=self.fake_marathon_lb.client)
 
         certificate_store = MemoryStore()
         self.mlb_store = MlbCertificateStore(certificate_store, self.client)
