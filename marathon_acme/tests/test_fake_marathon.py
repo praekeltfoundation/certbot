@@ -92,10 +92,10 @@ class TestFakeMarathonAPI(object):
 
     def test_get_events_lost_connection(self):
         """
-        When two connections are made the the event stream, the first
-        connection should receive events for both connections attaching to the
-        stream. Then, when the first connection is disconnected, the second
-        should receive a detach event for the first.
+        When two connections are made to the event stream, the first connection
+        should receive events for both connections attaching to the stream.
+        Then, when the first connection is disconnected, the second should
+        receive a detach event for the first.
         """
         response1_d = self.client.get('http://localhost/v2/events', headers={
             'Accept': 'text/event-stream'
