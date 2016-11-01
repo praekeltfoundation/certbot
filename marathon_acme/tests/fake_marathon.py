@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 from klein import Klein
+from treq.testing import StubTreq
 
 from marathon_acme.clients import get_single_header
 from marathon_acme.server import write_request_json
@@ -20,11 +21,16 @@ class FakeMarathon(object):
         self._apps = {}
         self.event_callbacks = []
 
-    def add_app(self, app):
+    def add_app(self, app, client_ip=None):
         # Store the app
         app_id = app['id']
         assert app_id not in self._apps
         self._apps[app_id] = app
+
+        self.trigger_event('api_post_event',
+                           clientIp=client_ip,
+                           uri='/v2/apps/' + app_id.lstrip('/'),
+                           appDefinition=app)
 
     def get_apps(self):
         return list(self._apps.values())
@@ -56,9 +62,11 @@ class FakeMarathon(object):
 
 class FakeMarathonAPI(object):
     app = Klein()
+    client = None
 
     def __init__(self, marathon):
         self._marathon = marathon
+        self.client = StubTreq(self.app.resource())
 
     @app.route('/v2/apps', methods=['GET'])
     def get_apps(self, request):
@@ -78,6 +86,7 @@ class FakeMarathonAPI(object):
 
         def callback(event):
             _write_request_event(request, event)
+            self.client.flush()
         self._marathon.attach_event_stream(callback, request.getClientIP())
 
         finished = request.notifyFinish()
@@ -99,6 +108,9 @@ class FakeMarathonLb(object):
     app = Klein()
     signalled_hup = False
     signalled_usr1 = False
+
+    def __init__(self):
+        self.client = StubTreq(self.app.resource())
 
     def check_signalled_hup(self):
         """ Check and reset the ``signalled_hup`` flag. """
