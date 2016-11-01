@@ -1,11 +1,4 @@
-import testtools
-from testtools.twistedsupport import AsynchronousDeferredRunTest
 from twisted.web.client import ProxyAgent, URI
-
-
-class TestCase(testtools.TestCase):
-    """ TestCase class for use with Twisted asynchornous tests. """
-    run_tests_with = AsynchronousDeferredRunTest.make_factory(timeout=0.1)
 
 
 class FakeServerAgent(ProxyAgent):

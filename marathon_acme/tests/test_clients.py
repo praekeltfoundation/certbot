@@ -1,9 +1,9 @@
 import json
 
+from testtools import ExpectedException, TestCase
 from testtools.assertions import assert_that
-from testtools import ExpectedException
 from testtools.matchers import Equals, Is, IsInstance
-from testtools.twistedsupport import failed
+from testtools.twistedsupport import AsynchronousDeferredRunTest, failed
 from treq.client import HTTPClient as treq_HTTPClient
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
@@ -19,7 +19,6 @@ from marathon_acme.clients import (
     json_content, JsonClient, MarathonClient, MarathonLbClient,
     raise_for_status)
 from marathon_acme.server import write_request_json
-from marathon_acme.tests.helpers import TestCase
 from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
 
@@ -117,6 +116,9 @@ class TestDefaultClient(object):
 
 
 class TestHTTPClientBase(TestCase):
+    # TODO: Run client tests synchronously with treq.testing tools (#38)
+    run_tests_with = AsynchronousDeferredRunTest.make_factory(timeout=0.1)
+
     def setUp(self):
         super(TestHTTPClientBase, self).setUp()
 
