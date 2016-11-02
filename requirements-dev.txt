@@ -1,7 +1,6 @@
-fixtures
-pytest>=3.0.0
-pytest-coverage
-pytest-xdist
+-e .
 flake8
+pytest >= 3.0.0
+pytest-coverage
 testtools
-txfake>=0.1.1
+txfake >= 0.1.1

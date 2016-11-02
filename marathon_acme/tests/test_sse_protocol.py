@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from testtools import TestCase
+from testtools.assertions import assert_that
 from testtools.matchers import Contains, Equals, IsInstance
 from twisted.internet.defer import Deferred
 from twisted.internet.error import ConnectionLost
@@ -11,10 +11,8 @@ class DummyTransport(object):
     disconnecting = False
 
 
-class TestSseProtocol(TestCase):
-
-    def setUp(self):
-        super(TestSseProtocol, self).setUp()
+class TestSseProtocol(object):
+    def setup_method(self):
         self.protocol = SseProtocol()
 
         self.transport = DummyTransport()
@@ -29,7 +27,7 @@ class TestSseProtocol(TestCase):
         self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
 
-        self.assertThat(data, Equals(['hello']))
+        assert_that(data, Equals(['hello']))
 
     def test_multiline_data(self):
         """
@@ -41,7 +39,7 @@ class TestSseProtocol(TestCase):
         self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\r\ndata:world\r\n\r\n')
 
-        self.assertThat(data, Equals(['hello\nworld']))
+        assert_that(data, Equals(['hello\nworld']))
 
     def test_different_newlines(self):
         """
@@ -52,7 +50,7 @@ class TestSseProtocol(TestCase):
         self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:hello\ndata:world\r\r\n')
 
-        self.assertThat(data, Equals(['hello\nworld']))
+        assert_that(data, Equals(['hello\nworld']))
 
     def test_empty_data(self):
         """
@@ -63,7 +61,7 @@ class TestSseProtocol(TestCase):
         self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:\r\n\r\n')
 
-        self.assertThat(data, Equals(['']))
+        assert_that(data, Equals(['']))
 
     def test_no_data(self):
         """
@@ -74,7 +72,7 @@ class TestSseProtocol(TestCase):
         self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'\r\n')
 
-        self.assertThat(data, Equals([]))
+        assert_that(data, Equals([]))
 
     def test_space_before_value(self):
         """
@@ -85,7 +83,7 @@ class TestSseProtocol(TestCase):
         self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data: hello\r\n\r\n')
 
-        self.assertThat(data, Equals(['hello']))
+        assert_that(data, Equals(['hello']))
 
     def test_space_before_value_strip_only_first_space(self):
         """
@@ -97,7 +95,7 @@ class TestSseProtocol(TestCase):
         self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(b'data:%s\r\n\r\n' % (b' ' * 4,))
 
-        self.assertThat(data, Equals([' ' * 3]))
+        assert_that(data, Equals([' ' * 3]))
 
     def test_custom_event(self):
         """
@@ -109,7 +107,7 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'event:my_event\r\n')
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
 
-        self.assertThat(data, Equals(['hello']))
+        assert_that(data, Equals(['hello']))
 
     def test_multiple_events(self):
         """
@@ -126,8 +124,8 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'event:test2\r\n')
         self.protocol.dataReceived(b'data:world\r\n\r\n')
 
-        self.assertThat(data1, Equals(['hello']))
-        self.assertThat(data2, Equals(['world']))
+        assert_that(data1, Equals(['hello']))
+        assert_that(data2, Equals(['world']))
 
     def test_id_ignored(self):
         """
@@ -138,7 +136,7 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'data:hello\r\n')
         self.protocol.dataReceived(b'id:123\r\n\r\n')
 
-        self.assertThat(data, Equals(['hello']))
+        assert_that(data, Equals(['hello']))
 
     def test_retry_ignored(self):
         """
@@ -149,7 +147,7 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'data:hello\r\n')
         self.protocol.dataReceived(b'retry:123\r\n\r\n')
 
-        self.assertThat(data, Equals(['hello']))
+        assert_that(data, Equals(['hello']))
 
     def test_unknown_field_ignored(self):
         """
@@ -160,7 +158,7 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'data:hello\r\n')
         self.protocol.dataReceived(b'somefield:123\r\n\r\n')
 
-        self.assertThat(data, Equals(['hello']))
+        assert_that(data, Equals(['hello']))
 
     def test_leading_colon_ignored(self):
         """
@@ -172,7 +170,7 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'data:hello\r\n')
         self.protocol.dataReceived(b':123abc\r\n\r\n')
 
-        self.assertThat(data, Equals(['hello']))
+        assert_that(data, Equals(['hello']))
 
     def test_missing_colon(self):
         """
@@ -185,7 +183,7 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'data\r\n')
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
 
-        self.assertThat(data, Equals(['\nhello']))
+        assert_that(data, Equals(['\nhello']))
 
     def test_trim_only_last_newline(self):
         """
@@ -198,7 +196,7 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'data:\n')
         self.protocol.dataReceived(b'data:\r\n\r\n')
 
-        self.assertThat(data, Equals(['\n\n']))
+        assert_that(data, Equals(['\n\n']))
 
     def test_multiple_data_parts(self):
         """
@@ -211,7 +209,7 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b' hello\r\n')
         self.protocol.dataReceived(b'\r\n')
 
-        self.assertThat(data, Equals(['hello']))
+        assert_that(data, Equals(['hello']))
 
     def test_unicode_data(self):
         """
@@ -222,7 +220,7 @@ class TestSseProtocol(TestCase):
         self.protocol.set_callback('message', data.append)
         self.protocol.dataReceived(u'data:hëlló\r\n\r\n'.encode('utf-8'))
 
-        self.assertThat(data, Equals([u'hëlló']))
+        assert_that(data, Equals([u'hëlló']))
 
     def test_line_too_long(self):
         """
@@ -234,8 +232,8 @@ class TestSseProtocol(TestCase):
         err = self.protocol.dataReceived(b'data:%s\r\n\r\n' % (
             b'x' * (self.protocol.MAX_LENGTH + 1),))
 
-        self.assertThat(err, IsInstance(ConnectionLost))
-        self.assertThat(str(err), Contains('Line length exceeded'))
+        assert_that(err, IsInstance(ConnectionLost))
+        assert_that(str(err), Contains('Line length exceeded'))
 
     def test_incomplete_line_too_long(self):
         """
@@ -247,8 +245,8 @@ class TestSseProtocol(TestCase):
         err = self.protocol.dataReceived(b'data:%s' % (
             b'x' * (self.protocol.MAX_LENGTH + 1),))
 
-        self.assertThat(err, IsInstance(ConnectionLost))
-        self.assertThat(str(err), Contains('Line length exceeded'))
+        assert_that(err, IsInstance(ConnectionLost))
+        assert_that(str(err), Contains('Line length exceeded'))
 
     def test_transport_disconnecting(self):
         """
@@ -260,7 +258,7 @@ class TestSseProtocol(TestCase):
         self.transport.disconnecting = True
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
 
-        self.assertThat(data, Equals([]))
+        assert_that(data, Equals([]))
 
     def test_transport_connection_lost(self):
         """
@@ -271,7 +269,7 @@ class TestSseProtocol(TestCase):
 
         self.protocol.connectionLost('Something went wrong')
 
-        self.assertThat(finished.called, Equals(True))
+        assert_that(finished.called, Equals(True))
 
     def test_transport_connection_lost_no_callback(self):
         """
@@ -301,5 +299,5 @@ class TestSseProtocol(TestCase):
         self.protocol.dataReceived(b'data:world\r\n')
         self.protocol.dataReceived(b'\r\n')
 
-        self.assertThat(status_data, Equals(['hello']))
-        self.assertThat(message_data, Equals(['world']))
+        assert_that(status_data, Equals(['hello']))
+        assert_that(message_data, Equals(['world']))
