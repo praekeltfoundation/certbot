@@ -93,6 +93,49 @@ class TestMarathonAcme(object):
             self.clock
         )
 
+    def test_listen_events_triggers_sync(self):
+        """
+        When we listen for events from Marathon, and something happens that
+        triggers an event (such as adding an app), a sync should be performed
+        and certificates issued for any new domains.
+        """
+        events_d = self.marathon_acme.listen_events()
+
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+
+        # Observe that the certificate was stored and marathon-lb notified
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None))
+        })))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
+        # Try one more app
+        self.fake_marathon.add_app({
+            'id': '/my-app_2',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example2.com',
+            },
+            'portDefinitions': [
+                {'port': 8000, 'protocol': 'tcp', 'labels': {}},
+            ]
+        })
+
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None)),
+            'example2.com': Not(Is(None)),
+        })))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
     def test_sync_app(self):
         """
         When a sync is run and there is an app with a domain label and no
