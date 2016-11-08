@@ -18,8 +18,8 @@ before_install:
       fi
 install:
   - pip install --upgrade pip # Upgrade pip to get wheel caching
-  # Install txacme from fork (issue #83)
-  - pip install git+https://github.com/JayH5/txacme.git@issue-83-challenge-body
+  # Install txacme from master
+  - pip install git+https://github.com/mithrandi/txacme.git
   # Install libcloud for txacme (issue #80)
   - pip install apache-libcloud
   - pip install -r requirements-dev.txt
