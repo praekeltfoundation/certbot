@@ -99,7 +99,7 @@ class TestMarathonAcme(object):
         triggers an event (such as adding an app), a sync should be performed
         and certificates issued for any new domains.
         """
-        events_d = self.marathon_acme.listen_events()
+        self.marathon_acme.listen_events()
 
         self.fake_marathon.add_app({
             'id': '/my-app_1',
