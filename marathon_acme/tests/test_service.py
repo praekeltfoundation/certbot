@@ -78,10 +78,10 @@ class TestMarathonAcme(object):
             ['http://localhost:9090'], client=self.fake_marathon_lb.client)
 
         key = JWKRSA(key=generate_private_key(u'rsa'))
-        self.clock = Clock()
-        self.clock.rightNow = (
+        clock = Clock()
+        clock.rightNow = (
             datetime.now() - datetime(1970, 1, 1)).total_seconds()
-        txacme_client = FakeClient(key, self.clock)
+        txacme_client = FakeClient(key, clock)
         # Patch on support for HTTP challenge types
         txacme_client._challenge_types.append(challenges.HTTP01)
 
@@ -91,7 +91,7 @@ class TestMarathonAcme(object):
             self.cert_store,
             mlb_client,
             lambda: succeed(txacme_client),
-            self.clock
+            clock
         )
 
     def test_listen_events_triggers_sync(self):
