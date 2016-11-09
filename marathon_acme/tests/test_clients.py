@@ -7,7 +7,7 @@ from testtools.twistedsupport import (
     AsynchronousDeferredRunTest, failed, flush_logged_errors)
 from treq.client import HTTPClient as treq_HTTPClient
 from twisted.internet import reactor
-from twisted.internet.defer import inlineCallbacks, DeferredQueue, fail
+from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.internet.task import Clock
 from twisted.web.client import Agent
 from twisted.web.http_headers import Headers
@@ -20,6 +20,7 @@ from marathon_acme.clients import (
     json_content, JsonClient, MarathonClient, MarathonLbClient,
     raise_for_status)
 from marathon_acme.server import write_request_json
+from marathon_acme.tests.helpers import failing_client
 from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
 
@@ -33,12 +34,6 @@ def json_response(request, json_data, response_code=200):
     request.setResponseCode(response_code)
     write_request_json(request, json_data)
     request.finish()
-
-
-class FailingAgent(object):
-    """ A twisted.web.iweb.IAgent that does nothing but fail. """
-    def request(self, method, uri, headers=None, bodyProducer=None):
-        return fail(RuntimeError())
 
 
 class TestGetSingleHeader(object):
@@ -393,8 +388,7 @@ class TestHTTPClient(TestHTTPClientBase):
         When a failure occurs during a request, the exception is propagated
         to the request's deferred.
         """
-        inner_client = treq_HTTPClient(FailingAgent())
-        client = self.get_client(inner_client)
+        client = self.get_client(failing_client)
 
         d = client.request('GET', path='/hello')
         self.assertThat(d, failed(MatchesStructure(
