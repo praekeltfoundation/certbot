@@ -4,7 +4,7 @@ import json
 from requests.exceptions import HTTPError
 from treq.client import HTTPClient as treq_HTTPClient
 from twisted.internet.defer import Deferred, gatherResults
-from twisted.python import log
+from twisted.logger import Logger, LogLevel
 from twisted.web.http import OK
 from uritools import uricompose, uridecode, urisplit
 
@@ -94,8 +94,8 @@ def default_client(client, reactor):
 
 
 class HTTPClient(object):
-    debug = False
     timeout = 5
+    log = Logger()
 
     def __init__(self, url=None, client=None, reactor=None):
         """
@@ -108,12 +108,14 @@ class HTTPClient(object):
         self._client = default_client(client, self._reactor)
 
     def _log_request_response(self, response, method, path, kwargs):
-        log.msg('%s %s with args %s returned: %s' % (
-            method, path, kwargs, response.code))
+        self.log.debug(
+            '{method} {path} with args {args} returned: {code}',
+            method=method, path=path, args=kwargs, code=response.code)
         return response
 
     def _log_request_error(self, failure, url):
-        log.err(failure, 'Error performing request to %s' % (url,))
+        self.log.failure('Error performing request to url "{url}"', failure,
+                         LogLevel.error, url=url)
         return failure
 
     def _compose_url(self, url, kwargs):
@@ -175,9 +177,7 @@ class HTTPClient(object):
 
         d = self._client.request(method, url, reactor=self._reactor, **kwargs)
 
-        if self.debug:
-            d.addCallback(self._log_request_response, method, url, kwargs)
-
+        d.addCallback(self._log_request_response, method, url, kwargs)
         d.addErrback(self._log_request_error, url)
 
         return d
