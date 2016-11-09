@@ -26,6 +26,11 @@ def main(raw_args=sys.argv[1:]):
                         help='The marathon-lb group to issue certificates for '
                              '(default: %(default)s)',
                         default='external')
+    parser.add_argument('--log-level',
+                        help='The minimum severity level to log messages at '
+                             '(default: %(default)s)',
+                        choices=['debug', 'info', 'warn', 'error', 'critical'],
+                        default='info'),
     parser.add_argument('storage-dir',
                         help='Path to directory for storing certificates')
 
