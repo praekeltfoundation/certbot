@@ -4,9 +4,9 @@ from acme import challenges
 from acme.jose import JWKRSA
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    AfterPreprocessing, Equals, Is, MatchesAll, MatchesDict, MatchesListwise,
-    MatchesStructure, Not)
-from testtools.twistedsupport import succeeded
+    AfterPreprocessing, Equals, Is, IsInstance, MatchesAll, MatchesDict,
+    MatchesListwise, MatchesStructure, Not)
+from testtools.twistedsupport import failed, succeeded
 from twisted.internet.defer import succeed
 from twisted.internet.task import Clock
 from txacme.testing import FakeClient, MemoryStore
@@ -16,6 +16,7 @@ from marathon_acme.clients import MarathonClient, MarathonLbClient
 from marathon_acme.service import MarathonAcme, parse_domain_label
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
+from marathon_acme.tests.helpers import failing_client
 
 
 class TestParseDomainLabel(object):
@@ -77,10 +78,10 @@ class TestMarathonAcme(object):
             ['http://localhost:9090'], client=self.fake_marathon_lb.client)
 
         key = JWKRSA(key=generate_private_key(u'rsa'))
-        self.clock = Clock()
-        self.clock.rightNow = (
+        clock = Clock()
+        clock.rightNow = (
             datetime.now() - datetime(1970, 1, 1)).total_seconds()
-        txacme_client = FakeClient(key, self.clock)
+        txacme_client = FakeClient(key, clock)
         # Patch on support for HTTP challenge types
         txacme_client._challenge_types.append(challenges.HTTP01)
 
@@ -90,7 +91,7 @@ class TestMarathonAcme(object):
             self.cert_store,
             mlb_client,
             lambda: succeed(txacme_client),
-            self.clock
+            clock
         )
 
     def test_listen_events_triggers_sync(self):
@@ -419,3 +420,15 @@ class TestMarathonAcme(object):
             Equals({'example.com': 'certcontent'})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
+
+    def test_sync_failure(self):
+        """
+        When a sync is run and something fails, the failure is propagated to
+        the sync's deferred.
+        """
+        self.marathon_acme.marathon_client = MarathonClient(
+            'http://localhost:8080', client=failing_client)
+
+        d = self.marathon_acme.sync()
+        assert_that(d, failed(MatchesStructure(
+            value=IsInstance(RuntimeError))))

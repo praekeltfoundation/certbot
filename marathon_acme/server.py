@@ -1,7 +1,7 @@
 import json
 
 from klein import Klein
-from twisted.python import log
+from twisted.logger import Logger
 from twisted.web.http import OK, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE
 
 
@@ -14,6 +14,7 @@ class HealthServer(object):
 
     app = Klein()
     health_handler = None
+    log = Logger()
 
     def set_health_handler(self, health_handler):
         """
@@ -56,7 +57,7 @@ class HealthServer(object):
         write_request_json(request, health.json_message)
 
     def _no_health_handler(self, request):
-        log.msg('Request to /health made but no handler is set')
+        self.log.warn('Request to /health made but no handler is set')
         request.setResponseCode(NOT_IMPLEMENTED)
         write_request_json(request, {
             'error': 'Cannot determine service health: no handler set'

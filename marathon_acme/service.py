@@ -1,4 +1,5 @@
 from twisted.internet.defer import gatherResults
+from twisted.logger import Logger, LogLevel
 
 from marathon_acme.server import HealthServer
 from marathon_acme.acme_util import create_txacme_service
@@ -15,6 +16,7 @@ def parse_domain_label(domain_label):
 
 
 class MarathonAcme(object):
+    log = Logger()
 
     def __init__(self, marathon_client, group, cert_store, mlb_client,
                  txacme_client_creator, clock):
@@ -43,12 +45,14 @@ class MarathonAcme(object):
         Start listening for events from Marathon, triggering a sync on relevant
         events.
         """
+        self.log.info('Listening for events from Marathon...')
         return self.marathon_client.get_events({
             'api_post_event': self._sync_on_event
         })
 
     def _sync_on_event(self, event):
-        # TODO: probably a good place to add some logging
+        self.log.info('Sync triggered by event with timestamp "{timestamp}"',
+                      timestamp=event['timestamp'])
         return self.sync()
 
     def sync(self):
@@ -57,15 +61,20 @@ class MarathonAcme(object):
         certificates, and issue certificates for any domains that don't already
         have a certificate.
         """
+        self.log.info('Starting a sync...')
         return (self.marathon_client.get_apps()
                 .addCallback(self._apps_acme_domains)
                 .addCallback(self._filter_new_domains)
-                .addCallback(self._issue_certs))
+                .addCallback(self._issue_certs)
+                .addCallbacks(self._log_sync_success, self._log_sync_failure))
 
     def _apps_acme_domains(self, apps):
         domains = []
         for app in apps:
             domains.extend(self._app_acme_domains(app))
+
+        self.log.debug('Found {len_domains} domains for apps: {domains}',
+                       len_domains=len(domains), domains=domains)
 
         return domains
 
@@ -87,7 +96,17 @@ class MarathonAcme(object):
 
                 if port_domains:
                     # TODO: Support SANs- for now just use the first domain
+                    if len(port_domains) > 1:
+                        self.log.warn(
+                            'Multiple domains found for port {port} of app '
+                            '{app}, only the first will be used',
+                            port=port_index, app=app['id'])
+
                     app_domains.append(port_domains[0])
+
+        self.log.debug(
+            'Found {len_domains} domains for app {app}: {domains}',
+            len_domains=len(app_domains), app=app['id'], domains=app_domains)
 
         return app_domains
 
@@ -100,5 +119,19 @@ class MarathonAcme(object):
         return d
 
     def _issue_certs(self, domains):
+        if domains:
+            self.log.info(
+                'Issuing certificates for {len_domains} domains: {domains}',
+                len_domains=len(domains), domains=domains)
+        else:
+            self.log.debug('No new domains to issue certificates for')
         return gatherResults(
             [self.txacme_service.issue_cert(domain) for domain in domains])
+
+    def _log_sync_success(self, result):
+        self.log.info('Sync completed successfully')
+        return result
+
+    def _log_sync_failure(self, failure):
+        self.log.failure('Sync failed', failure, LogLevel.error)
+        return failure
