@@ -26,6 +26,10 @@ def main(raw_args=sys.argv[1:]):
                         help='The marathon-lb group to issue certificates for '
                              '(default: %(default)s)',
                         default='external')
+    parser.add_argument('--listen',
+                        help='The address for the port to listen on (default: '
+                             '%(default)s)',
+                        default='0.0.0.0:8000')
     parser.add_argument('--log-level',
                         help='The minimum severity level to log messages at '
                              '(default: %(default)s)',
