@@ -14,7 +14,7 @@ def main(raw_args=sys.argv[1:]):
                              '(default: %(default)s)',
                         default=(
                             'https://acme-v01.api.letsencrypt.org/directory'))
-    parser.add_argument('-m', '--marathon', nargs='+',
+    parser.add_argument('-m', '--marathon',
                         help='The address for the Marathon HTTP API (default: '
                              '%(default)s)',
                         default='http://marathon.mesos:8080')
