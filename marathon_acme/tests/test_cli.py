@@ -1,3 +1,4 @@
+import pytest
 from testtools import ExpectedException
 from testtools.matchers import Equals, MatchesStructure
 
@@ -13,6 +14,7 @@ class TestCli(object):
         with ExpectedException(SystemExit, MatchesStructure(code=Equals(2))):
             main([])
 
+    @pytest.mark.skip(reason='if we run this...too much happens')
     def test_storage_dir_provided(self):
         """
         When the program is run with an argument, it should run successfully.

@@ -1,6 +1,18 @@
 import argparse
 import sys
 
+from twisted.logger import (
+    FilteringLogObserver, globalLogPublisher, LogLevel,
+    LogLevelFilterPredicate, textFileLogObserver)
+from twisted.python.filepath import FilePath
+from twisted.python.url import URL
+from txacme.client import Client as txacme_Client
+from txacme.store import DirectoryStore
+
+from marathon_acme.acme_util import maybe_key
+from marathon_acme.clients import MarathonClient, MarathonLbClient
+from marathon_acme.service import MarathonAcme
+
 
 def main(raw_args=sys.argv[1:]):
     """
@@ -35,10 +47,45 @@ def main(raw_args=sys.argv[1:]):
                              '(default: %(default)s)',
                         choices=['debug', 'info', 'warn', 'error', 'critical'],
                         default='info'),
-    parser.add_argument('storage-dir',
+    parser.add_argument('storage_dir', metavar='storage-dir',
                         help='Path to directory for storing certificates')
 
-    args = parser.parse_args(raw_args)  # noqa
+    args = parser.parse_args(raw_args)
+
+    # Set up marathon-acme
+    marathon_client = MarathonClient(args.marathon)
+    group = args.group
+    store_path = FilePath(args.storage_dir)
+    cert_store = DirectoryStore(store_path)
+    mlb_client = MarathonLbClient(args.lb)
+
+    from twisted.internet import reactor
+    clock = reactor
+
+    def client_creator():
+        acme_url = URL.fromText(args.acme)
+        key = maybe_key(store_path)
+        return txacme_Client.from_url(clock, acme_url, key)
+
+    marathon_acme = MarathonAcme(
+        marathon_client,
+        group,
+        cert_store,
+        mlb_client,
+        client_creator,
+        clock)
+
+    # Set up logging
+    log_level_filter = LogLevelFilterPredicate(
+        LogLevel.levelWithName(args.log_level))
+    log_observer = FilteringLogObserver(
+        textFileLogObserver(sys.stdout), [log_level_filter])
+    globalLogPublisher.addObserver(log_observer)
+
+    # Run the thing
+    host, port = args.listen.split(':', 1)  # TODO: better validation
+    marathon_acme.run(host, int(port))
+    reactor.run()
 
 
 if __name__ == '__main__':
