@@ -1,6 +1,7 @@
 import pytest
 from testtools import ExpectedException
 from testtools.matchers import Equals, MatchesStructure
+from twisted.internet.task import Clock
 
 from marathon_acme.cli import main
 
@@ -12,11 +13,11 @@ class TestCli(object):
         because there is one required argument.
         """
         with ExpectedException(SystemExit, MatchesStructure(code=Equals(2))):
-            main([])
+            main(Clock(), raw_args=[])
 
     @pytest.mark.skip(reason='if we run this...too much happens')
     def test_storage_dir_provided(self):
         """
         When the program is run with an argument, it should run successfully.
         """
-        main(['/var/lib/marathon-acme'])
+        main(Clock(), raw_args=['/var/lib/marathon-acme'])
