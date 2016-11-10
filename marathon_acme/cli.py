@@ -1,6 +1,7 @@
 import argparse
 import sys
 
+from twisted.internet.task import react
 from twisted.logger import (
     FilteringLogObserver, globalLogPublisher, LogLevel,
     LogLevelFilterPredicate, textFileLogObserver)
@@ -14,7 +15,7 @@ from marathon_acme.clients import MarathonClient, MarathonLbClient
 from marathon_acme.service import MarathonAcme
 
 
-def main(raw_args=sys.argv[1:]):
+def main(reactor, raw_args=sys.argv[1:]):
     """
     A tool to automatically request, renew and distribute Let's Encrypt
     certificates for apps running on Marathon and served by marathon-lb.
@@ -52,41 +53,72 @@ def main(raw_args=sys.argv[1:]):
 
     args = parser.parse_args(raw_args)
 
-    # Set up marathon-acme
-    marathon_client = MarathonClient(args.marathon)
-    group = args.group
-    store_path = FilePath(args.storage_dir)
-    cert_store = DirectoryStore(store_path)
-    mlb_client = MarathonLbClient(args.lb)
+    # Set up logging
+    init_logging(args.log_level)
 
-    from twisted.internet import reactor
-    clock = reactor
+    # Set up marathon-acme
+    marathon_acme = create_marathon_acme(
+        args.storage_dir, args.acme,
+        args.marathon, args.lb, args.group,
+        reactor)
+
+    # Run the thing
+    host, port = args.listen.split(':', 1)  # TODO: better validation
+    return marathon_acme.run(host, int(port))
+
+
+def create_marathon_acme(storage_dir, acme_directory,
+                         marathon_addr, mlb_addrs, group,
+                         reactor):
+    """
+    Create a marathon-acme instance.
+
+    :param storage_dir:
+        Path to the storage directory for certificates and the client key.
+    :param acme_directory: Address for the ACME directory to use.
+    :param marathon_addr:
+        Address for the Marathon instance to find app domains that require
+        certificates.
+    :param mlb_addrs:
+        List of addresses for marathon-lb instances to reload when a new
+        certificate is issued.
+    :param group:
+        The marathon-lb group (``HAPROXY_GROUP``) to consider when finding
+        app domains.
+    :param reactor: The reactor to use.
+    """
+    store_path = FilePath(storage_dir)
 
     def client_creator():
-        acme_url = URL.fromText(args.acme)
+        acme_url = URL.fromText(acme_directory)
         key = maybe_key(store_path)
-        return txacme_Client.from_url(clock, acme_url, key)
+        return txacme_Client.from_url(reactor, acme_url, key)
 
-    marathon_acme = MarathonAcme(
-        marathon_client,
+    return MarathonAcme(
+        MarathonClient(marathon_addr, reactor=reactor),
         group,
-        cert_store,
-        mlb_client,
+        DirectoryStore(store_path),
+        MarathonLbClient(mlb_addrs, reactor=reactor),
         client_creator,
-        clock)
+        reactor)
 
-    # Set up logging
+
+def init_logging(log_level):
+    """
+    Initialise the logging by adding an observer to the global log publisher.
+
+    :param str log_level: The minimum log level to log messages for.
+    """
     log_level_filter = LogLevelFilterPredicate(
-        LogLevel.levelWithName(args.log_level))
+        LogLevel.levelWithName(log_level))
     log_observer = FilteringLogObserver(
         textFileLogObserver(sys.stdout), [log_level_filter])
     globalLogPublisher.addObserver(log_observer)
 
-    # Run the thing
-    host, port = args.listen.split(':', 1)  # TODO: better validation
-    marathon_acme.run(host, int(port))
-    reactor.run()
+
+def _main():
+    react(main)
 
 
 if __name__ == '__main__':
-    main()
+    _main()

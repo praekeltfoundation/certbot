@@ -31,6 +31,6 @@ setup(
         'Programming Language :: Python :: Implementation :: PyPy'
     ],
     entry_points={
-        'console_scripts': ['marathon-acme = marathon_acme.cli:main'],
+        'console_scripts': ['marathon-acme = marathon_acme.cli:_main'],
     }
 )
