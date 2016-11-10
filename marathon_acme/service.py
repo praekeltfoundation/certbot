@@ -19,7 +19,7 @@ class MarathonAcme(object):
     log = Logger()
 
     def __init__(self, marathon_client, group, cert_store, mlb_client,
-                 txacme_client_creator, clock):
+                 txacme_client_creator, reactor):
         """
         Create the marathon-acme service.
 
@@ -28,22 +28,22 @@ class MarathonAcme(object):
         :param cert_store: The ``ICertificateStore`` instance to use.
         :param mlb_clinet: The marathon-lb API client.
         :param txacme_client_creator: Callable to create the txacme client.
-        :param clock: The ``IReactorTime`` provider.
+        :param reactor: The reactor to use.
         """
         self.marathon_client = marathon_client
         self.group = group
-        self.clock = clock
+        self.reactor = reactor
 
         self.server = HealthServer()
 
         root_resource = self.server.app.resource()
         self.txacme_service = create_txacme_service(
-            cert_store, mlb_client, txacme_client_creator, self.clock,
+            cert_store, mlb_client, txacme_client_creator, self.reactor,
             root_resource)
 
     def run(self, host, port):
         # Start the server
-        self.server.listen(host, port, self.clock)
+        self.server.listen(host, port, self.reactor)
 
         # Start the txacme service
         self.txacme_service.startService()

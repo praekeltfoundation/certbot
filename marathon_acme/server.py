@@ -27,18 +27,18 @@ class HealthServer(object):
         """
         self.health_handler = health_handler
 
-    def listen(self, host, port, clock):
+    def listen(self, host, port, reactor):
         """
         Run the server, i.e. start listening for requests on the given host and
         port.
 
         :param host: The address for the interface to listen on.
         :param port: The port to bind to.
-        :param clock: The ``IReactorTCP`` to use.
+        :param reactor: The ``IReactorTCP`` to use.
         :return: An object that provides ``IListeningPort``.
         """
         site = Site(self.app.resource())
-        return clock.listenTCP(port, site, interface=host)
+        return reactor.listenTCP(port, site, interface=host)
 
     @app.route('/health', methods=['GET'])
     def health(self, request):
