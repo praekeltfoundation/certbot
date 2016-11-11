@@ -90,17 +90,14 @@ def create_marathon_acme(storage_dir, acme_directory,
     store_path = FilePath(storage_dir)
     acme_url = URL.fromText(acme_directory)
     key = maybe_key(store_path)
-    client_creator, txacme_client_pool = create_txacme_client_creator(
-        reactor, acme_url, key)
 
     return MarathonAcme(
         MarathonClient(marathon_addr, reactor=reactor),
         group,
         DirectoryStore(store_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),
-        client_creator,
-        reactor,
-        txacme_client_pool=txacme_client_pool)
+        create_txacme_client_creator(reactor, acme_url, key),
+        reactor)
 
 
 def init_logging(log_level):

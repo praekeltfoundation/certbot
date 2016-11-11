@@ -19,7 +19,7 @@ class MarathonAcme(object):
     log = Logger()
 
     def __init__(self, marathon_client, group, cert_store, mlb_client,
-                 txacme_client_creator, reactor, txacme_client_pool=None):
+                 txacme_client_creator, reactor):
         """
         Create the marathon-acme service.
 
@@ -29,7 +29,6 @@ class MarathonAcme(object):
         :param mlb_clinet: The marathon-lb API client.
         :param txacme_client_creator: Callable to create the txacme client.
         :param reactor: The reactor to use.
-        :param txacme_client_pool: The txacme client's ``HTTPConnectionPool``.
         """
         self.marathon_client = marathon_client
         self.group = group
@@ -43,7 +42,6 @@ class MarathonAcme(object):
             root_resource)
 
         self._server_listening = None
-        self._txacme_client_pool = txacme_client_pool
 
     def run(self, host, port):
         # Start the server
@@ -69,14 +67,10 @@ class MarathonAcme(object):
         return failure
 
     def _stop(self, ignored):
-        deferreds = [
+        return gatherResults([
             self._server_listening.stopListening(),
             self.txacme_service.stopService()
-        ]
-        if self._txacme_client_pool is not None:
-            deferreds.append(self._txacme_client_pool.closeCachedConnections())
-
-        return gatherResults(deferreds, consumeErrors=True)
+        ], consumeErrors=True)
 
     def listen_events(self):
         """
