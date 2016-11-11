@@ -67,6 +67,7 @@ class MarathonAcme(object):
         return failure
 
     def _stop(self, ignored):
+        self.log.warn('Stopping marathon-acme...')
         return gatherResults([
             self._server_listening.stopListening(),
             self.txacme_service.stopService()
