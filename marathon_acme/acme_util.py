@@ -1,8 +1,13 @@
-from acme.jose import JWKRSA
+from functools import partial
+
+from acme import jose
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from treq.client import HTTPClient
+from twisted.web.client import Agent, HTTPConnectionPool
 from twisted.web.resource import Resource
 from txacme.challenges._http import HTTP01Responder
+from txacme.client import Client as txacme_Client, JWSClient
 from txacme.interfaces import ICertificateStore
 from txacme.service import AcmeIssuingService
 from txacme.util import generate_private_key
@@ -35,7 +40,7 @@ def maybe_key(pem_path):
                 encryption_algorithm=serialization.NoEncryption()
             )
         )
-    return JWKRSA(key=key)
+    return jose.JWKRSA(key=key)
 
 
 def create_txacme_service(cert_store, mlb_client, txacme_client_creator, clock,
@@ -73,6 +78,33 @@ def _create_txacme_responder(root_resource):
     responder = HTTP01Responder()
     well_known.putChild(b'acme-challenge', responder.resource)
     return responder
+
+
+def _create_jws_client(reactor, key, alg):
+    """
+    Create a ``txacme.client.JWSClient`` instance with a persistent connection
+    pool. We need both the client and its pool.
+    See https://github.com/mithrandi/txacme/issues/86.
+
+    :return: the JWS client *and* the connection pool
+    """
+    pool = HTTPConnectionPool(reactor)
+    agent = Agent(reactor, pool=pool)
+    jws_client = JWSClient(HTTPClient(agent=agent), key, alg)
+    return jws_client, pool
+
+
+def create_txacme_client_creator(reactor, url, key, alg=jose.RS256):
+    """
+    Create a creator for txacme clients to provide to the txacme service. See
+    ``txacme.client.Client.from_url()``.
+
+    :return: the client creator and the client's underlying connection pool
+    """
+    jws_client, pool = _create_jws_client(reactor, key, alg)
+    creator = partial(
+        txacme_Client.from_url, reactor, url, key, alg, jws_client)
+    return creator, pool
 
 
 @implementer(ICertificateStore)

@@ -7,10 +7,9 @@ from twisted.logger import (
     LogLevelFilterPredicate, textFileLogObserver)
 from twisted.python.filepath import FilePath
 from twisted.python.url import URL
-from txacme.client import Client as txacme_Client
 from txacme.store import DirectoryStore
 
-from marathon_acme.acme_util import maybe_key
+from marathon_acme.acme_util import maybe_key, create_txacme_client_creator
 from marathon_acme.clients import MarathonClient, MarathonLbClient
 from marathon_acme.service import MarathonAcme
 
@@ -88,11 +87,10 @@ def create_marathon_acme(storage_dir, acme_directory,
     :param reactor: The reactor to use.
     """
     store_path = FilePath(storage_dir)
-
-    def client_creator():
-        acme_url = URL.fromText(acme_directory)
-        key = maybe_key(store_path)
-        return txacme_Client.from_url(reactor, acme_url, key)
+    acme_url = URL.fromText(acme_directory)
+    key = maybe_key(store_path)
+    client_creator, txacme_client_pool = create_txacme_client_creator(
+        reactor, acme_url, key)
 
     return MarathonAcme(
         MarathonClient(marathon_addr, reactor=reactor),
@@ -100,7 +98,8 @@ def create_marathon_acme(storage_dir, acme_directory,
         DirectoryStore(store_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),
         client_creator,
-        reactor)
+        reactor,
+        txacme_client_pool=txacme_client_pool)
 
 
 def init_logging(log_level):

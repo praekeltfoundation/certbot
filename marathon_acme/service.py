@@ -19,7 +19,7 @@ class MarathonAcme(object):
     log = Logger()
 
     def __init__(self, marathon_client, group, cert_store, mlb_client,
-                 txacme_client_creator, reactor):
+                 txacme_client_creator, reactor, txacme_client_pool=None):
         """
         Create the marathon-acme service.
 
@@ -29,6 +29,7 @@ class MarathonAcme(object):
         :param mlb_clinet: The marathon-lb API client.
         :param txacme_client_creator: Callable to create the txacme client.
         :param reactor: The reactor to use.
+        :param txacme_client_pool: The txacme client's ``HTTPConnectionPool``.
         """
         self.marathon_client = marathon_client
         self.group = group
@@ -41,20 +42,43 @@ class MarathonAcme(object):
             cert_store, mlb_client, txacme_client_creator, self.reactor,
             root_resource)
 
+        self._server_listening = None
+        self._txacme_client_pool = txacme_client_pool
+
     def run(self, host, port):
         # Start the server
-        self.server.listen(host, port, self.reactor)
+        self._server_listening = self.server.listen(host, port, self.reactor)
 
-        # Start the txacme service
+        # Start the txacme service and wait for the initial check
         self.txacme_service.startService()
+        d = self.txacme_service.when_certs_valid()
 
         # Run an initial sync
-        d = self.sync()
+        d.addCallback(lambda _: self.sync())
+        d.addErrback(self._log_failure, 'Error during initial sync')
 
         # Then listen for events...
-        d.addCallback(lambda _: self.listen_events())
+        d.addCallbacks(lambda _: self.listen_events())
+        d.addErrback(self._log_failure, 'Error listening for Marathon events')
+
+        # Stop everything if something goes wrong
+        d.addBoth(self._stop)
 
         return d
+
+    def _log_failure(self, failure, message):
+        self.log.failure(message, failure)
+        return failure
+
+    def _stop(self, ignored):
+        deferreds = [
+            self._server_listening.stopListening(),
+            self.txacme_service.stopService()
+        ]
+        if self._txacme_client_pool is not None:
+            deferreds.append(self._txacme_client_pool.closeCachedConnections())
+
+        return gatherResults(deferreds, consumeErrors=True)
 
     def listen_events(self):
         """

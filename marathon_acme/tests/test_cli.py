@@ -1,23 +1,42 @@
-import pytest
-from testtools import ExpectedException
+from fixtures import TempDir
+from testtools import ExpectedException, run_test_with, TestCase
 from testtools.matchers import Equals, MatchesStructure
-from twisted.internet.task import Clock
+from testtools.twistedsupport import (
+    AsynchronousDeferredRunTest, flush_logged_errors)
+from twisted.internet import reactor
+from twisted.internet.defer import inlineCallbacks
+from twisted.internet.error import DNSLookupError
+from txacme.urls import LETSENCRYPT_STAGING_DIRECTORY
 
 from marathon_acme.cli import main
 
 
-class TestCli(object):
+class TestCli(TestCase):
+    # These are testtools-style tests so we can run aynchronous tests
+
     def test_storage_dir_required(self):
         """
         When the program is run with no arguments, it should exit with code 2
         because there is one required argument.
         """
         with ExpectedException(SystemExit, MatchesStructure(code=Equals(2))):
-            main(Clock(), raw_args=[])
+            main(reactor, raw_args=[])
 
-    @pytest.mark.skip(reason='if we run this...too much happens')
+    @inlineCallbacks
+    @run_test_with(AsynchronousDeferredRunTest.make_factory(timeout=10.0))
     def test_storage_dir_provided(self):
         """
-        When the program is run with an argument, it should run successfully.
+        When the program is run with an argument, it should start up and run.
+        The program is expected to fail because it is unable to look up the
+        Marathon DNS address.
+
+        This test takes a while because we have to let txacme go through it's
+        initial sync (registration + issuing of 0 certificates) before things
+        can be halted.
         """
-        main(Clock(), raw_args=['/var/lib/marathon-acme'])
+        temp_dir = self.useFixture(TempDir())
+        yield main(reactor, raw_args=[
+            temp_dir.path, '--acme', LETSENCRYPT_STAGING_DIRECTORY.asText()])
+
+        # Expect a DNS error looking up Marathon
+        flush_logged_errors(DNSLookupError)
