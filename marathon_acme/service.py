@@ -55,13 +55,11 @@ class MarathonAcme(object):
 
         # Run an initial sync
         d.addCallback(lambda _: self.sync())
-        d.addErrback(self._log_failure, 'Error during initial sync')
 
         # Then listen for events...
-        d.addCallbacks(lambda _: self.listen_events())
-        d.addErrback(self._log_failure, 'Error listening for Marathon events')
+        d.addCallback(lambda _: self.listen_events())
 
-        # Stop everything if something goes wrong
+        # If anything goes wrong or listening for events returns, stop
         d.addBoth(self._stop)
 
         return d
@@ -86,9 +84,17 @@ class MarathonAcme(object):
         events.
         """
         self.log.info('Listening for events from Marathon...')
+
+        def on_finished(result):
+            raise RuntimeError('Connection lost listening for events')
+
+        def log_failure(failure):
+            self.log.failure('Failed to listen for events', failure)
+            return failure
+
         return self.marathon_client.get_events({
             'api_post_event': self._sync_on_event
-        })
+        }).addCallbacks(on_finished, log_failure)
 
     def _sync_on_event(self, event):
         self.log.info('Sync triggered by event with timestamp "{timestamp}"',
@@ -102,11 +108,20 @@ class MarathonAcme(object):
         have a certificate.
         """
         self.log.info('Starting a sync...')
+
+        def log_success(result):
+            self.log.info('Sync completed successfully')
+            return result
+
+        def log_failure(failure):
+            self.log.failure('Sync failed', failure, LogLevel.error)
+            return failure
+
         return (self.marathon_client.get_apps()
                 .addCallback(self._apps_acme_domains)
                 .addCallback(self._filter_new_domains)
                 .addCallback(self._issue_certs)
-                .addCallbacks(self._log_sync_success, self._log_sync_failure))
+                .addCallbacks(log_success, log_failure))
 
     def _apps_acme_domains(self, apps):
         domains = []
@@ -167,11 +182,3 @@ class MarathonAcme(object):
             self.log.debug('No new domains to issue certificates for')
         return gatherResults(
             [self.txacme_service.issue_cert(domain) for domain in domains])
-
-    def _log_sync_success(self, result):
-        self.log.info('Sync completed successfully')
-        return result
-
-    def _log_sync_failure(self, failure):
-        self.log.failure('Sync failed', failure, LogLevel.error)
-        return failure
