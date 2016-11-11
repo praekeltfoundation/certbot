@@ -64,10 +64,6 @@ class MarathonAcme(object):
 
         return d
 
-    def _log_failure(self, failure, message):
-        self.log.failure(message, failure)
-        return failure
-
     def _stop(self, ignored):
         self.log.warn('Stopping marathon-acme...')
         return gatherResults([
