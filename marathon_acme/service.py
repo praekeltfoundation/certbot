@@ -44,6 +44,8 @@ class MarathonAcme(object):
         self._server_listening = None
 
     def run(self, host, port):
+        self.log.info('Starting marathon-acme...')
+
         # Start the server
         self._server_listening = self.server.listen(host, port, self.reactor)
 
