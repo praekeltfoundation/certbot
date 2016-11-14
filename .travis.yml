@@ -20,8 +20,6 @@ install:
   - pip install --upgrade pip # Upgrade pip to get wheel caching
   # Install txacme from master
   - pip install git+https://github.com/mithrandi/txacme.git
-  # Install libcloud for txacme (issue #80)
-  - pip install apache-libcloud
   - pip install -r requirements-dev.txt
   - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:
