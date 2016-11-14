@@ -1,8 +1,13 @@
-from acme.jose import JWKRSA
+from functools import partial
+
+from acme import jose
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from treq.client import HTTPClient
+from twisted.web.client import Agent
 from twisted.web.resource import Resource
 from txacme.challenges._http import HTTP01Responder
+from txacme.client import Client as txacme_Client, JWSClient
 from txacme.interfaces import ICertificateStore
 from txacme.service import AcmeIssuingService
 from txacme.util import generate_private_key
@@ -35,7 +40,7 @@ def maybe_key(pem_path):
                 encryption_algorithm=serialization.NoEncryption()
             )
         )
-    return JWKRSA(key=key)
+    return jose.JWKRSA(key=key)
 
 
 def create_txacme_service(cert_store, mlb_client, txacme_client_creator, clock,
@@ -73,6 +78,22 @@ def _create_txacme_responder(root_resource):
     responder = HTTP01Responder()
     well_known.putChild(b'acme-challenge', responder.resource)
     return responder
+
+
+def create_txacme_client_creator(reactor, url, key, alg=jose.RS256):
+    """
+    Create a creator for txacme clients to provide to the txacme service. See
+    ``txacme.client.Client.from_url()``. We create the underlying JWSClient
+    with a non-persistent pool to avoid
+    https://github.com/mithrandi/txacme/issues/86.
+
+    :return: a callable that returns a deffered that returns the client
+    """
+    # Creating an Agent without specifying a pool gives us the default pool
+    # which is non-persistent.
+    jws_client = JWSClient(HTTPClient(agent=Agent(reactor)), key, alg)
+
+    return partial(txacme_Client.from_url, reactor, url, key, alg, jws_client)
 
 
 @implementer(ICertificateStore)

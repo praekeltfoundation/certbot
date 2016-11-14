@@ -3,6 +3,7 @@ import json
 from klein import Klein
 from twisted.logger import Logger
 from twisted.web.http import OK, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE
+from twisted.web.server import Site
 
 
 def write_request_json(request, json_obj):
@@ -26,19 +27,18 @@ class HealthServer(object):
         """
         self.health_handler = health_handler
 
-    def run(self, host, port, log_file=None):
+    def listen(self, host, port, reactor):
         """
         Run the server, i.e. start listening for requests on the given host and
         port.
 
-        :param host:
-            The address to the interface to listen on.
-        :param port:
-            The port to bind to.
-        :param log_file:
-            The file to write logs to.
+        :param host: The address for the interface to listen on.
+        :param port: The port to bind to.
+        :param reactor: The ``IReactorTCP`` to use.
+        :return: An object that provides ``IListeningPort``.
         """
-        self.app.run(host, port, log_file)
+        site = Site(self.app.resource())
+        return reactor.listenTCP(port, site, interface=host)
 
     @app.route('/health', methods=['GET'])
     def health(self, request):

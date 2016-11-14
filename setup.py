@@ -12,7 +12,6 @@ setup(
     author_email='jamie@praekelt.com',
     packages=find_packages(),
     install_requires=[
-        'click',
         'klein==15.3.1',
         'treq',
         'Twisted',
@@ -32,6 +31,6 @@ setup(
         'Programming Language :: Python :: Implementation :: PyPy'
     ],
     entry_points={
-        'console_scripts': ['marathon-acme = marathon_acme.cli:main'],
+        'console_scripts': ['marathon-acme = marathon_acme.cli:_main'],
     }
 )

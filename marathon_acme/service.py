@@ -19,7 +19,7 @@ class MarathonAcme(object):
     log = Logger()
 
     def __init__(self, marathon_client, group, cert_store, mlb_client,
-                 txacme_client_creator, clock):
+                 txacme_client_creator, reactor):
         """
         Create the marathon-acme service.
 
@@ -28,17 +28,48 @@ class MarathonAcme(object):
         :param cert_store: The ``ICertificateStore`` instance to use.
         :param mlb_clinet: The marathon-lb API client.
         :param txacme_client_creator: Callable to create the txacme client.
-        :param clock: The ``IReactorTime`` provider.
+        :param reactor: The reactor to use.
         """
         self.marathon_client = marathon_client
         self.group = group
+        self.reactor = reactor
 
         self.server = HealthServer()
 
         root_resource = self.server.app.resource()
         self.txacme_service = create_txacme_service(
-            cert_store, mlb_client, txacme_client_creator, clock,
+            cert_store, mlb_client, txacme_client_creator, self.reactor,
             root_resource)
+
+        self._server_listening = None
+
+    def run(self, host, port):
+        self.log.info('Starting marathon-acme...')
+
+        # Start the server
+        self._server_listening = self.server.listen(host, port, self.reactor)
+
+        # Start the txacme service and wait for the initial check
+        self.txacme_service.startService()
+        d = self.txacme_service.when_certs_valid()
+
+        # Run an initial sync
+        d.addCallback(lambda _: self.sync())
+
+        # Then listen for events...
+        d.addCallback(lambda _: self.listen_events())
+
+        # If anything goes wrong or listening for events returns, stop
+        d.addBoth(self._stop)
+
+        return d
+
+    def _stop(self, ignored):
+        self.log.warn('Stopping marathon-acme...')
+        return gatherResults([
+            self._server_listening.stopListening(),
+            self.txacme_service.stopService()
+        ], consumeErrors=True)
 
     def listen_events(self):
         """
@@ -46,9 +77,17 @@ class MarathonAcme(object):
         events.
         """
         self.log.info('Listening for events from Marathon...')
+
+        def on_finished(result):
+            raise RuntimeError('Connection lost listening for events')
+
+        def log_failure(failure):
+            self.log.failure('Failed to listen for events', failure)
+            return failure
+
         return self.marathon_client.get_events({
             'api_post_event': self._sync_on_event
-        })
+        }).addCallbacks(on_finished, log_failure)
 
     def _sync_on_event(self, event):
         self.log.info('Sync triggered by event with timestamp "{timestamp}"',
@@ -62,11 +101,20 @@ class MarathonAcme(object):
         have a certificate.
         """
         self.log.info('Starting a sync...')
+
+        def log_success(result):
+            self.log.info('Sync completed successfully')
+            return result
+
+        def log_failure(failure):
+            self.log.failure('Sync failed', failure, LogLevel.error)
+            return failure
+
         return (self.marathon_client.get_apps()
                 .addCallback(self._apps_acme_domains)
                 .addCallback(self._filter_new_domains)
                 .addCallback(self._issue_certs)
-                .addCallbacks(self._log_sync_success, self._log_sync_failure))
+                .addCallbacks(log_success, log_failure))
 
     def _apps_acme_domains(self, apps):
         domains = []
@@ -127,11 +175,3 @@ class MarathonAcme(object):
             self.log.debug('No new domains to issue certificates for')
         return gatherResults(
             [self.txacme_service.issue_cert(domain) for domain in domains])
-
-    def _log_sync_success(self, result):
-        self.log.info('Sync completed successfully')
-        return result
-
-    def _log_sync_failure(self, failure):
-        self.log.failure('Sync failed', failure, LogLevel.error)
-        return failure
