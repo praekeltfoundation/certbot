@@ -1,10 +1,11 @@
 #!/usr/bin/env sh
 
 # Options can be set using environment variables:
-# MARATHON_ACME_ACME:     --acme
-# MARATHON_ACME_MARATHON: --marathon
-# MARATHON_ACME_LBS:      --lb
-# MARATHON_ACME_GROUP:    --group
+# MARATHON_ACME_ACME:      --acme
+# MARATHON_ACME_MARATHON:  --marathon
+# MARATHON_ACME_LBS:       --lb
+# MARATHON_ACME_GROUP:     --group
+# MARATHON_ACME_LOG_LEVEL: --log-level
 
 # The following options are hard-coded:
 # --listen:    0.0.0.0:8000
