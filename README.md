@@ -1,4 +1,8 @@
 # marathon-acme
+
+[![Build Status](https://travis-ci.org/praekeltfoundation/marathon-acme.svg?branch=develop)](https://travis-ci.org/praekeltfoundation/marathon-acme)
+[![codecov](https://codecov.io/gh/praekeltfoundation/marathon-acme/branch/develop/graph/badge.svg)](https://codecov.io/gh/praekeltfoundation/marathon-acme)
+
 Automate [ACME](https://en.wikipedia.org/wiki/Automated_Certificate_Management_Environment) certificates for [Marathon](https://mesosphere.github.io/marathon/) apps served by [`marathon-lb`](https://github.com/mesosphere/marathon-lb)
 
 ## How it works
