@@ -94,16 +94,6 @@ def generate_wildcard_pem_bytes():
     ))
 
 
-def write_pem_file(pem_path, pem_objects):
-    """
-    Concatenate and write a set of PEM bytes objects to file.
-
-    :param pem_path: the path to the file to write
-    :param pem_object: a list of PEM bytes objects
-    """
-    pem_path.setContent(b''.join(o.as_bytes() for o in pem_objects))
-
-
 @implementer(ICertificateStore)
 class MlbCertificateStore(object):
     """
