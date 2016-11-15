@@ -94,7 +94,8 @@ def create_marathon_acme(storage_dir, acme_directory,
     # Store certificates in a directory inside the storage directory, so
     # HAProxy will read just the certificates there.
     cert_path = store_path.child('certs')
-    cert_path.createDirectory()
+    if not cert_path.exists():
+        cert_path.createDirectory()
 
     return MarathonAcme(
         MarathonClient(marathon_addr, reactor=reactor),
