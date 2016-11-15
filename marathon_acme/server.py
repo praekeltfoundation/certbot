@@ -11,21 +11,19 @@ def write_request_json(request, json_obj):
     request.write(json.dumps(json_obj).encode('utf-8'))
 
 
-class HealthServer(object):
+class MarathonAcmeServer(object):
 
     app = Klein()
-    health_handler = None
     log = Logger()
 
-    def set_health_handler(self, health_handler):
+    def __init__(self, responder_resource):
         """
-        Set the handler for the health endpoint.
-
-        :param health_handler:
-            The handler for health status requests. This must be a callable
-            that returns a Health object.
+        :param responder_resource:
+            An ``IResponse`` used to respond to ACME HTTP challenge validation
+            requests.
         """
-        self.health_handler = health_handler
+        self.responder_resource = responder_resource
+        self.health_handler = None
 
     def listen(self, host, port, reactor):
         """
@@ -40,14 +38,27 @@ class HealthServer(object):
         site = Site(self.app.resource())
         return reactor.listenTCP(port, site, interface=host)
 
+    @app.route('/.well-known/acme-challenge/', branch=True, methods=['GET'])
+    def acme_challenge(self, request):
+        """
+        Respond to ACME challenge validation requests on
+        ``/.well-known/acme-challenge/`` using the ACME responder resource.
+        """
+        return self.responder_resource
+
+    def set_health_handler(self, health_handler):
+        """
+        Set the handler for the health endpoint.
+
+        :param health_handler:
+            The handler for health status requests. This must be a callable
+            that returns a Health object.
+        """
+        self.health_handler = health_handler
+
     @app.route('/health', methods=['GET'])
     def health(self, request):
-        """
-        Listens to incoming pings from Marathon on ``/health``.
-
-        :param klein.app.KleinRequest request:
-            The Klein HTTP request
-        """
+        """ Listens to incoming health checks from Marathon on ``/health``. """
         if self.health_handler is None:
             return self._no_health_handler(request)
 
