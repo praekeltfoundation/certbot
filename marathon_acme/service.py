@@ -1,8 +1,10 @@
 from twisted.internet.defer import gatherResults
 from twisted.logger import Logger, LogLevel
+from txacme.challenges import HTTP01Responder
+from txacme.service import AcmeIssuingService
 
-from marathon_acme.server import HealthServer
-from marathon_acme.acme_util import create_txacme_service
+from marathon_acme.server import MarathonAcmeServer
+from marathon_acme.acme_util import MlbCertificateStore
 
 
 def parse_domain_label(domain_label):
@@ -34,12 +36,12 @@ class MarathonAcme(object):
         self.group = group
         self.reactor = reactor
 
-        self.server = HealthServer()
+        responder = HTTP01Responder()
+        self.server = MarathonAcmeServer(responder.resource)
 
-        root_resource = self.server.app.resource()
-        self.txacme_service = create_txacme_service(
-            cert_store, mlb_client, txacme_client_creator, self.reactor,
-            root_resource)
+        mlb_cert_store = MlbCertificateStore(cert_store, mlb_client)
+        self.txacme_service = AcmeIssuingService(
+            mlb_cert_store, txacme_client_creator, reactor, [responder])
 
         self._server_listening = None
 
