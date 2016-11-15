@@ -1,8 +1,12 @@
+import uuid
+from datetime import datetime, timedelta
 from functools import partial
 
 from acme import jose
+from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.x509.oid import NameOID
 from treq.client import HTTPClient
 from twisted.web.client import Agent
 from txacme.client import Client as txacme_Client, JWSClient
@@ -54,6 +58,50 @@ def create_txacme_client_creator(reactor, url, key, alg=jose.RS256):
     jws_client = JWSClient(HTTPClient(agent=Agent(reactor)), key, alg)
 
     return partial(txacme_Client.from_url, reactor, url, key, alg, jws_client)
+
+
+def generate_wildcard_pem_bytes():
+    """
+    Generate a wildcard (subject name '*') self-signed certificate valid for
+    10 years.
+
+    https://cryptography.io/en/latest/x509/tutorial/#creating-a-self-signed-certificate
+
+    :return: Bytes representation of the PEM certificate data
+    """
+    key = generate_private_key(u'rsa')
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u'*')])
+    cert = (
+        x509.CertificateBuilder()
+        .issuer_name(name)
+        .subject_name(name)
+        .not_valid_before(datetime.today() - timedelta(days=1))
+        .not_valid_after(datetime.now() + timedelta(days=3650))
+        .serial_number(int(uuid.uuid4()))
+        .public_key(key.public_key())
+        .sign(
+            private_key=key,
+            algorithm=hashes.SHA256(),
+            backend=default_backend())
+        )
+
+    return b''.join((
+        key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()),
+        cert.public_bytes(serialization.Encoding.PEM)
+    ))
+
+
+def write_pem_file(pem_path, pem_objects):
+    """
+    Concatenate and write a set of PEM bytes objects to file.
+
+    :param pem_path: the path to the file to write
+    :param pem_object: a list of PEM bytes objects
+    """
+    pem_path.setContent(b''.join(o.as_bytes() for o in pem_objects))
 
 
 @implementer(ICertificateStore)

@@ -12,6 +12,7 @@ setup(
     author_email='jamie@praekelt.com',
     packages=find_packages(),
     install_requires=[
+        'cryptography',
         'klein==15.3.1',
         'treq',
         'Twisted',

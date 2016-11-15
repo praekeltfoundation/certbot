@@ -1,17 +1,24 @@
+from datetime import datetime, timedelta
+
 import pem
 import pytest
 from acme.jose import JWKRSA
+from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from testtools.assertions import assert_that
-from testtools.matchers import Equals, MatchesListwise, MatchesStructure
+from testtools.matchers import (
+    Equals, GreaterThan, HasLength, IsInstance, LessThan, MatchesAll,
+    MatchesAny, MatchesListwise, MatchesStructure)
 from testtools.twistedsupport import succeeded, failed
 from twisted.internet.defer import succeed
 from twisted.python.filepath import FilePath
 from txacme.testing import MemoryStore
 from txacme.util import generate_private_key
 
-from marathon_acme.acme_util import MlbCertificateStore, maybe_key
+from marathon_acme.acme_util import (
+    generate_wildcard_pem_bytes, maybe_key, MlbCertificateStore)
 from marathon_acme.clients import MarathonLbClient
 from marathon_acme.tests.fake_marathon import FakeMarathonLb
 from marathon_acme.tests.matchers import WithErrorTypeAndMessage
@@ -58,6 +65,63 @@ class TestMaybeKey(object):
         file_key = JWKRSA(key=file_key)
 
         assert_that(key, Equals(file_key))
+
+
+def test_generate_wildcard_pem_bytes():
+    """
+    When we generate a self-signed wildcard certificate's PEM data, that data
+    should be deserializable and the deserilized certificate should have the
+    expected parameters.
+    """
+    pem_bytes = generate_wildcard_pem_bytes()
+
+    # Parse the concatenated bytes into a list of object
+    pem_objects = pem.parse(pem_bytes)
+
+    assert_that(pem_objects, HasLength(2))
+
+    # Deserialize the private key and assert that it is the right type (the
+    # other details we trust txacme with)
+    key = serialization.load_pem_private_key(
+        pem_objects[0].as_bytes(),
+        password=None,
+        backend=default_backend()
+    )
+    assert_that(key, IsInstance(rsa.RSAPrivateKey))
+
+    # Deserialize the certificate and validate all the options we set
+    cert = x509.load_pem_x509_certificate(
+        pem_objects[1].as_bytes(), backend=default_backend()
+    )
+    expected_before = datetime.today() - timedelta(days=1)
+    expected_after = datetime.now() + timedelta(days=3650)
+    tolerance = timedelta(seconds=5)
+    assert_that(cert, MatchesStructure(
+        issuer=MatchesListwise([
+            MatchesStructure(value=Equals(u'*'))
+        ]),
+        subject=MatchesListwise([
+            MatchesStructure(value=Equals(u'*'))
+        ]),
+        not_valid_before=matches_datetime_roughly(
+            expected_before, timedelta(seconds=5)),
+        not_valid_after=matches_datetime_roughly(
+            expected_after, timedelta(seconds=5)),
+        signature_hash_algorithm=IsInstance(hashes.SHA256)
+    ))
+    assert_that(cert.public_key().public_numbers(), Equals(
+                key.public_key().public_numbers()))
+
+
+def matches_datetime_roughly(expected, tolerance):
+    """
+    Matcher for datetimes to assert that
+    ``expected - tolerance < actual <= expected``
+    """
+    return MatchesAll(
+        GreaterThan(expected - tolerance),
+        MatchesAny(LessThan(expected), Equals(expected))
+    )
 
 
 # From txacme
