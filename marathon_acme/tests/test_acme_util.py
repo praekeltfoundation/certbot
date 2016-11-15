@@ -95,7 +95,6 @@ def test_generate_wildcard_pem_bytes():
     )
     expected_before = datetime.today() - timedelta(days=1)
     expected_after = datetime.now() + timedelta(days=3650)
-    tolerance = timedelta(seconds=5)
     assert_that(cert, MatchesStructure(
         issuer=MatchesListwise([
             MatchesStructure(value=Equals(u'*'))
