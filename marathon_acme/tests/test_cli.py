@@ -1,3 +1,5 @@
+import os
+
 from fixtures import TempDir
 from testtools import ExpectedException, run_test_with, TestCase
 from testtools.matchers import Equals, MatchesStructure
@@ -40,6 +42,9 @@ class TestCli(TestCase):
             '--acme', LETSENCRYPT_STAGING_DIRECTORY.asText(),
             '--marathon', 'http://localhost:28080'  # An address we can't reach
         ])
+
+        # Expect a 'certs' directory to be created
+        self.assertThat(os.path.isdir(temp_dir.join('certs')), Equals(True))
 
         # Expect to be unable to connect
         flush_logged_errors(ConnectionRefusedError)

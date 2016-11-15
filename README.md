@@ -141,7 +141,7 @@ To override these values you must provide a custom command to the Docker contain
 
 As mentioned earlier, `marathon-lb` must share persistent storage with `marathon-acme`. BYONS: _bring your own networked storage._
 
-The only real configuration needed for `marathon-lb` is to add the path to `marathon-acme`'s certificate storage directory as a source of certificates. HAProxy supports loading certificates from a directory. You should set `marathon-lb`'s `--ssl-certs` CLI option to the certificate directory path.
+The only real configuration needed for `marathon-lb` is to add the path to `marathon-acme`'s certificate storage directory as a source of certificates. HAProxy supports loading certificates from a directory. You should set `marathon-lb`'s `--ssl-certs` CLI option to the certificate directory path which is the directory named "`certs`" inside `marathon-acme`'s storage directory.
 
 ### App configuration
 `marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma-separated domain names, although currently only the first domain name will be considered.
