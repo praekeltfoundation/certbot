@@ -19,15 +19,15 @@ class SseProtocol(Protocol):
             A 2-args callable that will be called back with the event and data
             when a complete message is received.
         """
-        self.handler = handler
+        self._handler = handler
         self._waiting = []
         self._buffer = b''
 
         self._reset_event_data()
 
     def _reset_event_data(self):
-        self.event = 'message'
-        self.data_lines = []
+        self._event = 'message'
+        self._data_lines = []
 
     def when_finished(self):
         """
@@ -89,9 +89,9 @@ class SseProtocol(Protocol):
     def _handle_field_value(self, field, value):
         """ Handle the field, value pair. """
         if field == 'event':
-            self.event = value
+            self._event = value
         elif field == 'data':
-            self.data_lines.append(value)
+            self._data_lines.append(value)
         elif field == 'id':
             # Not implemented
             pass
@@ -106,7 +106,7 @@ class SseProtocol(Protocol):
         """
         data = self._prepare_data()
         if data is not None:
-            self.handler(self.event, data)
+            self._handler(self._event, data)
 
         self._reset_event_data()
 
@@ -115,11 +115,11 @@ class SseProtocol(Protocol):
         Join the data lines into a single string for delivery to the callback.
         """
         # If the data is empty, abort
-        if not self.data_lines:
+        if not self._data_lines:
             return None
 
         # Add a newline character between lines
-        return '\n'.join(self.data_lines)
+        return '\n'.join(self._data_lines)
 
     def connectionLost(self, reason=connectionDone):
         self.log.failure('SSE connection lost', reason, LogLevel.warn)
