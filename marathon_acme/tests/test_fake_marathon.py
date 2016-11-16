@@ -16,10 +16,18 @@ from marathon_acme.tests.matchers import (
     HasHeader, IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
 
 
+def dict_handler(callback_dict):
+    def dispatch(event, data):
+        callback = callback_dict.get(event)
+        if callback is not None:
+            callback(data)
+    return dispatch
+
+
 def collect_events(event_type, response):
-    data = []
-    sse_content(response, {event_type: data.append})
-    return data
+    messages = []
+    sse_content(response, dict_handler({event_type: messages.append}))
+    return messages
 
 
 class TestFakeMarathonAPI(object):
@@ -106,10 +114,11 @@ class TestFakeMarathonAPI(object):
         response1 = response1_d.result
         attach_data1 = []
         detach_data1 = []
-        finished, protocol = sse_content_with_protocol(response1, {
+        handler1 = dict_handler({
            'event_stream_attached': attach_data1.append,
            'event_stream_detached': detach_data1.append
         })
+        finished, protocol = sse_content_with_protocol(response1, handler1)
 
         response2_d = self.client.get('http://localhost/v2/events', headers={
             'Accept': 'text/event-stream'
@@ -119,10 +128,11 @@ class TestFakeMarathonAPI(object):
         response2 = response2_d.result
         attach_data2 = []
         detach_data2 = []
-        sse_content(response2, {
-            'event_stream_attached': attach_data2.append,
-            'event_stream_detached': detach_data2.append
+        handler2 = dict_handler({
+           'event_stream_attached': attach_data2.append,
+           'event_stream_detached': detach_data2.append
         })
+        sse_content(response2, handler2)
 
         # Close request 1's connection
         # FIXME: Currently the only way to get the underlying transport so that

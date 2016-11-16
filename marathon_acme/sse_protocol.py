@@ -1,5 +1,6 @@
 from twisted.internet import error
-from twisted.internet.protocol import Protocol
+from twisted.internet.defer import Deferred
+from twisted.internet.protocol import connectionDone, Protocol
 
 
 class SseProtocol(Protocol):
@@ -11,9 +12,14 @@ class SseProtocol(Protocol):
     _buffer = b''
     MAX_LENGTH = 16384
 
-    def __init__(self):
-        self.finished = None
-        self.callbacks = {}
+    def __init__(self, handler):
+        """
+        :param handler:
+            A 2-args callable that will be called back with the event and data
+            when a complete message is received.
+        """
+        self.handler = handler
+        self._waiting = []
 
         self._reset_event_data()
 
@@ -21,11 +27,13 @@ class SseProtocol(Protocol):
         self.event = 'message'
         self.data_lines = []
 
-    def set_finished_deferred(self, d):
-        self.finished = d
-
-    def set_callback(self, event, callback):
-        self.callbacks[event] = callback
+    def when_finished(self):
+        """
+        Get a deferred that will be fired when the connection is closed.
+        """
+        d = Deferred()
+        self._waiting.append(d)
+        return d
 
     def dataReceived(self, data):
         """
@@ -92,13 +100,11 @@ class SseProtocol(Protocol):
 
     def _dispatch_event(self):
         """
-        Dispatch the event to the relevant callback if one is present.
+        Dispatch the event to the handler.
         """
-        callback = self.callbacks.get(self.event)
-        if callback is not None:
-            data = self._prepare_data()
-            if data is not None:
-                callback(data)
+        data = self._prepare_data()
+        if data is not None:
+            self.handler(self.event, data)
 
         self._reset_event_data()
 
@@ -113,9 +119,10 @@ class SseProtocol(Protocol):
         # Add a newline character between lines
         return '\n'.join(self.data_lines)
 
-    def connectionLost(self, reason):
-        if self.finished is not None:
-            self.finished.callback(None)
+    def connectionLost(self, reason=connectionDone):
+        for d in list(self._waiting):
+            d.callback(None)
+        self._waiting = []
 
 
 def _parse_field_value(line):
