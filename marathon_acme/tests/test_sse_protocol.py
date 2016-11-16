@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 from testtools.assertions import assert_that
-from testtools.matchers import Contains, Equals, Is, IsInstance
+from testtools.matchers import Equals, Is
 from testtools.twistedsupport import succeeded
-from twisted.internet.error import ConnectionLost
 
 from marathon_acme.sse_protocol import SseProtocol
 
 
 class DummyTransport(object):
     disconnecting = False
+
+    def loseConnection(self):
+        self.disconnecting = True
 
 
 class TestSseProtocol(object):
@@ -179,24 +181,24 @@ class TestSseProtocol(object):
     def test_line_too_long(self):
         """
         When a line is received that is beyond the maximum allowed length,
-        ``dataReceived`` should return a ``ConnectionLost`` error.
+        the transport should be in 'disconnecting' state due to a request to
+        lose the connection.
         """
-        err = self.protocol.dataReceived(b'data:%s\r\n\r\n' % (
+        self.protocol.dataReceived(b'data:%s\r\n\r\n' % (
             b'x' * (self.protocol.MAX_LENGTH + 1),))
 
-        assert_that(err, IsInstance(ConnectionLost))
-        assert_that(str(err), Contains('Line length exceeded'))
+        assert_that(self.transport.disconnecting, Equals(True))
 
     def test_incomplete_line_too_long(self):
         """
         When a part of a line is received that is beyond the maximum allowed
-        length, ``dataReceived`` should return a ``ConnectionLost`` error.
+        length, the transport should be in 'disconnecting' state due to a
+        request to lose the connection.
         """
-        err = self.protocol.dataReceived(b'data:%s' % (
+        self.protocol.dataReceived(b'data:%s' % (
             b'x' * (self.protocol.MAX_LENGTH + 1),))
 
-        assert_that(err, IsInstance(ConnectionLost))
-        assert_that(str(err), Contains('Line length exceeded'))
+        assert_that(self.transport.disconnecting, Equals(True))
 
     def test_transport_disconnecting(self):
         """

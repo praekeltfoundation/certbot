@@ -1,4 +1,3 @@
-from twisted.internet import error
 from twisted.internet.defer import Deferred
 from twisted.internet.protocol import connectionDone, Protocol
 from twisted.logger import Logger, LogLevel
@@ -63,11 +62,13 @@ class SseProtocol(Protocol):
                 # the one that told it to close.
                 return
             if len(line) > self.MAX_LENGTH:
-                return self.lineLengthExceeded(line)
+                self.lineLengthExceeded(line)
+                return
             else:
                 self.lineReceived(line)
         if len(self._buffer) > self.MAX_LENGTH:
-            return self.lineLengthExceeded(self._buffer)
+            self.lineLengthExceeded(self._buffer)
+            return
 
     def lineReceived(self, line):
         line = line.decode('utf-8')
@@ -80,11 +81,9 @@ class SseProtocol(Protocol):
         self._handle_field_value(field, value)
 
     def lineLengthExceeded(self, line):
-        """
-        Called when the maximum line length has been reached.
-        Copied from ``twisted.protocols.basic.LineOnlyReceiver``.
-        """
-        return error.ConnectionLost('Line length exceeded')
+        self.log.error('SSE maximum line length exceeded: {length} > {max}',
+                       length=len(line), max=self.MAX_LENGTH)
+        self.transport.loseConnection()
 
     def _handle_field_value(self, field, value):
         """ Handle the field, value pair. """
