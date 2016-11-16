@@ -1,6 +1,7 @@
 from twisted.internet import error
 from twisted.internet.defer import Deferred
 from twisted.internet.protocol import connectionDone, Protocol
+from twisted.logger import Logger, LogLevel
 
 
 class SseProtocol(Protocol):
@@ -11,6 +12,7 @@ class SseProtocol(Protocol):
 
     _buffer = b''
     MAX_LENGTH = 16384
+    log = Logger()
 
     def __init__(self, handler):
         """
@@ -120,6 +122,7 @@ class SseProtocol(Protocol):
         return '\n'.join(self.data_lines)
 
     def connectionLost(self, reason=connectionDone):
+        self.log.failure('SSE connection lost', reason, LogLevel.warn)
         for d in list(self._waiting):
             d.callback(None)
         self._waiting = []
