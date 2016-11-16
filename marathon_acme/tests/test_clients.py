@@ -9,6 +9,7 @@ from treq.client import HTTPClient as treq_HTTPClient
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.internet.task import Clock
+from twisted.web._newclient import ResponseDone
 from twisted.web.client import Agent
 from twisted.web.http_headers import Headers
 from twisted.web.server import NOT_DONE_YET
@@ -665,6 +666,9 @@ class TestMarathonClient(TestHTTPClientBase):
         request.finish()
         yield d
 
+        # Expect request.finish() to result in a logged failure
+        flush_logged_errors(ResponseDone)
+
     @inlineCallbacks
     def test_get_events_multiple_events(self):
         """
@@ -699,6 +703,9 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request.finish()
         yield d
+
+        # Expect request.finish() to result in a logged failure
+        flush_logged_errors(ResponseDone)
 
     @inlineCallbacks
     def test_get_events_multiple_callbacks(self):
@@ -739,6 +746,9 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request.finish()
         yield d
+
+        # Expect request.finish() to result in a logged failure
+        flush_logged_errors(ResponseDone)
 
     @inlineCallbacks
     def test_get_events_non_200(self):
