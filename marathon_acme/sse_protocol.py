@@ -10,7 +10,6 @@ class SseProtocol(Protocol):
     https://html.spec.whatwg.org/multipage/comms.html#server-sent-events
     """
 
-    _buffer = b''
     MAX_LENGTH = 16384
     log = Logger()
 
@@ -22,6 +21,7 @@ class SseProtocol(Protocol):
         """
         self.handler = handler
         self._waiting = []
+        self._buffer = b''
 
         self._reset_event_data()
 
