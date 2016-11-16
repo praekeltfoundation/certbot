@@ -9,7 +9,8 @@ from twisted.python.filepath import FilePath
 from twisted.python.url import URL
 from txacme.store import DirectoryStore
 
-from marathon_acme.acme_util import maybe_key, create_txacme_client_creator
+from marathon_acme.acme_util import (
+    create_txacme_client_creator, generate_wildcard_pem_bytes, maybe_key)
 from marathon_acme.clients import MarathonClient, MarathonLbClient
 from marathon_acme.service import MarathonAcme
 
@@ -87,23 +88,40 @@ def create_marathon_acme(storage_dir, acme_directory,
         app domains.
     :param reactor: The reactor to use.
     """
-    store_path = FilePath(storage_dir)
+    storage_path, certs_path = init_storage_dir(storage_dir)
     acme_url = URL.fromText(acme_directory)
-    key = maybe_key(store_path)
-
-    # Store certificates in a directory inside the storage directory, so
-    # HAProxy will read just the certificates there.
-    cert_path = store_path.child('certs')
-    if not cert_path.exists():
-        cert_path.createDirectory()
+    key = maybe_key(storage_path)
 
     return MarathonAcme(
         MarathonClient(marathon_addr, reactor=reactor),
         group,
-        DirectoryStore(cert_path),
+        DirectoryStore(certs_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),
         create_txacme_client_creator(reactor, acme_url, key),
         reactor)
+
+
+def init_storage_dir(storage_dir):
+    """
+    Initialise the storage directory with the certificates directory and a
+    default wildcard self-signed certificate for HAProxy.
+
+    :return: the storage path and certs path
+    """
+    storage_path = FilePath(storage_dir)
+
+    # Create the default wildcard certificate if it doesn't already exist
+    default_cert_path = storage_path.child('default.pem')
+    if not default_cert_path.exists():
+        default_cert_path.setContent(generate_wildcard_pem_bytes())
+
+    # Store certificates in a directory inside the storage directory, so
+    # HAProxy will read just the certificates there.
+    certs_path = storage_path.child('certs')
+    if not certs_path.exists():
+        certs_path.createDirectory()
+
+    return storage_path, certs_path
 
 
 def init_logging(log_level):

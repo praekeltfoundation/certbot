@@ -136,12 +136,23 @@ The container also defaults to listening on port 8000 on all interfaces.
 
 To override these values you must provide a custom command to the Docker container.
 
+#### Certificate files
+`marathon-acme` creates the following directory/file structure:
+* `/var/lib/marathon-acme/`
+  * `client.key`: The ACME client private key
+  * `default.pem`: A self-signed wildcard cert for HAProxy to fallback to
+  * `certs/`
+    * _`www.example.com.pem`_: An issued ACME certificate for a domain
+
 ### `marathon-lb` configuration
 `marathon-acme` requires `marathon-lb` 1.4.0 or later in order to be able to trigger HAProxy reloads.
 
 As mentioned earlier, `marathon-lb` must share persistent storage with `marathon-acme`. BYONS: _bring your own networked storage._
 
-The only real configuration needed for `marathon-lb` is to add the path to `marathon-acme`'s certificate storage directory as a source of certificates. HAProxy supports loading certificates from a directory. You should set `marathon-lb`'s `--ssl-certs` CLI option to the certificate directory path which is the directory named "`certs`" inside `marathon-acme`'s storage directory.
+The only real configuration needed for `marathon-lb` is to add the path to `marathon-acme`'s certificate storage directory as a source of certificates. HAProxy supports loading certificates from a directory. You should set `marathon-lb`'s `--ssl-certs` CLI option to the certificate directory path as well as the fallback certificate (if HAProxy cannot find any certificates in the paths it is given it will fail to start).
+```
+--ssl-certs <storage-dir>/certs,<storage-dir>/default.pem
+```
 
 ### App configuration
 `marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma-separated domain names, although currently only the first domain name will be considered.

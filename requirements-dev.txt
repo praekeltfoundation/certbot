@@ -1,5 +1,7 @@
 -e .
+fixtures
 flake8
+pem >= 16.1.0
 pytest >= 3.0.0
 pytest-coverage
 testtools
