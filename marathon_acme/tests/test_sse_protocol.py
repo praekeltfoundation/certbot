@@ -91,8 +91,8 @@ class TestSseProtocol(object):
 
     def test_custom_event(self):
         """
-        If a custom event is set for an event, a the handler for should be
-        called with the correct event.
+        If a custom event is set for an event, a the handler should be called
+        with the correct event.
         """
         self.protocol.dataReceived(b'event:my_event\r\n')
         self.protocol.dataReceived(b'data:hello\r\n\r\n')
@@ -101,7 +101,7 @@ class TestSseProtocol(object):
 
     def test_multiple_events(self):
         """
-        If a multiple different event types are received, the handler should
+        If multiple different event types are received, the handler should
         receive the different event types and their corresponding data.
         """
         self.protocol.dataReceived(b'event:test1\r\n')
