@@ -62,11 +62,11 @@ class FakeMarathon(object):
 
 class FakeMarathonAPI(object):
     app = Klein()
-    client = None
 
     def __init__(self, marathon):
         self._marathon = marathon
         self.client = StubTreq(self.app.resource())
+        self.event_requests = []
 
     @app.route('/v2/apps', methods=['GET'])
     def get_apps(self, request):
@@ -88,11 +88,14 @@ class FakeMarathonAPI(object):
             _write_request_event(request, event)
             self.client.flush()
         self._marathon.attach_event_stream(callback, request.getClientIP())
+        self.event_requests.append(request)
+
+        def finished_errback(failure):
+            self._marathon.detach_event_stream(callback, request.getClientIP())
+            self.event_requests.remove(request)
 
         finished = request.notifyFinish()
-        finished.addErrback(
-            lambda _: self._marathon.detach_event_stream(
-                callback, request.getClientIP()))
+        finished.addErrback(finished_errback)
 
         return finished
 

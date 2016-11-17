@@ -4,8 +4,8 @@ from acme import challenges
 from acme.jose import JWKRSA
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    AfterPreprocessing, Equals, Is, IsInstance, MatchesAll, MatchesDict,
-    MatchesListwise, MatchesStructure, Not)
+    AfterPreprocessing, Equals, HasLength, Is, IsInstance, MatchesAll,
+    MatchesDict, MatchesListwise, MatchesStructure, Not)
 from testtools.twistedsupport import failed, succeeded
 from twisted.internet.defer import succeed
 from twisted.internet.task import Clock
@@ -67,9 +67,9 @@ class TestMarathonAcme(object):
 
     def setup_method(self):
         self.fake_marathon = FakeMarathon()
-        fake_marathon_api = FakeMarathonAPI(self.fake_marathon)
+        self.fake_marathon_api = FakeMarathonAPI(self.fake_marathon)
         marathon_client = MarathonClient(
-            'http://localhost:8080', client=fake_marathon_api.client)
+            'http://localhost:8080', client=self.fake_marathon_api.client)
 
         self.cert_store = MemoryStore()
 
@@ -159,6 +159,46 @@ class TestMarathonAcme(object):
         assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
             'example.com': Not(Is(None)),
             'example2.com': Not(Is(None)),
+        })))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
+    def test_listen_events_reconnects(self):
+        """
+        When we listen for events, and we connect successfully but the
+        persistent connection drops, we should reconnect to the event stream
+        and be able to receive new events.
+        """
+        self.marathon_acme.listen_events()
+
+        # Trigger a lost connection
+        requests = self.fake_marathon_api.event_requests
+        assert_that(requests, HasLength(1))
+        request = requests[0]
+
+        request.loseConnection()
+        self.fake_marathon_api.client.flush()
+
+        # Check a new request has been made
+        requests = self.fake_marathon_api.event_requests
+        assert_that(requests, HasLength(1))
+        new_request = requests[0]
+
+        # Make sure this is, in fact, another request
+        assert_that(new_request, Not(Is(request)))
+
+        # Check that apps will sync
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None))
         })))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
 
