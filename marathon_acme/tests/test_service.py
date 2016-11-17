@@ -94,11 +94,36 @@ class TestMarathonAcme(object):
             clock
         )
 
-    def test_listen_events_triggers_sync(self):
+    def test_listen_events_attach_initial_sync(self):
+        """
+        When we listen for events from Marathon, and we receive a subscribe
+        event from ourselves subscribing, an initial sync should be performed
+        and certificates issued for any new domains.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+
+        self.marathon_acme.listen_events()
+
+        # Observe that the certificate was stored and marathon-lb notified
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None))
+        })))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
+    def test_listen_events_api_request_triggers_sync(self):
         """
         When we listen for events from Marathon, and something happens that
-        triggers an event (such as adding an app), a sync should be performed
-        and certificates issued for any new domains.
+        triggers an API request event, a sync should be performed and
+        certificates issued for any new domains.
         """
         self.marathon_acme.listen_events()
 
