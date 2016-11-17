@@ -69,9 +69,8 @@ class MarathonAcme(object):
 
     def _stop(self, result):
         if isinstance(result, Failure):
-            self.log.failure('Stopping marathon-acme due to error', result)
-        else:
-            self.log.warn('Stopping marathon-acme...')
+            self.log.failure('Unhandle error during operation', result)
+        self.log.warn('Stopping marathon-acme...')
 
         return gatherResults([
             self._server_listening.stopListening(),
