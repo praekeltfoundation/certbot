@@ -56,9 +56,6 @@ class MarathonAcme(object):
         self.txacme_service.startService()
         d = self.txacme_service.when_certs_valid()
 
-        # Run an initial sync
-        d.addCallback(lambda _: self.sync())
-
         # Then listen for events...
         d.addCallback(lambda _: self.listen_events())
 
@@ -79,8 +76,8 @@ class MarathonAcme(object):
 
     def listen_events(self):
         """
-        Start listening for events from Marathon, triggering a sync on relevant
-        events.
+        Start listening for events from Marathon, running a sync when we first
+        successfully subscribe and triggering a sync on API request events.
         """
         self.log.info('Listening for events from Marathon...')
 
@@ -92,12 +89,22 @@ class MarathonAcme(object):
             return failure
 
         return self.marathon_client.get_events({
-            'api_post_event': self._sync_on_event
+            'event_stream_attached': self._sync_on_event_stream_attached,
+            'api_post_event': self._sync_on_api_post_event
         }).addCallbacks(on_finished, log_failure)
 
-    def _sync_on_event(self, event):
-        self.log.info('Sync triggered by event with timestamp "{timestamp}"',
-                      timestamp=event['timestamp'])
+    def _sync_on_event_stream_attached(self, event):
+        self.log.info(
+            'event_stream_attached event received (timestamp: "{timestamp}", '
+            'remoteAddress: "{remoteAddress}"), running initial sync...',
+            timestamp=event['timestamp'], remoteAddress=event['remoteAddress'])
+        return self.sync()
+
+    def _sync_on_api_post_event(self, event):
+        self.log.info(
+            'api_post_event event received (timestamp: "{timestamp}", uri: '
+            '"{uri}"), triggering a sync...', timestamp=event['timestamp'],
+            uri=event['uri'])
         return self.sync()
 
     def sync(self):
