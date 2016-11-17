@@ -99,6 +99,21 @@ class TestSseProtocol(object):
 
         assert_that(self.messages, Equals([('my_event', 'hello')]))
 
+    def test_multiple_events(self):
+        """
+        If a multiple different event types are received, the handler should
+        receive the different event types and their corresponding data.
+        """
+        self.protocol.dataReceived(b'event:test1\r\n')
+        self.protocol.dataReceived(b'data:hello\r\n\r\n')
+        self.protocol.dataReceived(b'event:test2\r\n')
+        self.protocol.dataReceived(b'data:world\r\n\r\n')
+
+        assert_that(self.messages, Equals([
+            ('test1', 'hello'),
+            ('test2', 'world')
+        ]))
+
     def test_id_ignored(self):
         """
         When the id field is included in an event, it should be ignored.
