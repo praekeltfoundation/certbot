@@ -1,5 +1,6 @@
 from twisted.internet.defer import gatherResults
 from twisted.logger import Logger, LogLevel
+from twisted.python.failure import Failure
 from txacme.challenges import HTTP01Responder
 from txacme.service import AcmeIssuingService
 
@@ -66,8 +67,11 @@ class MarathonAcme(object):
 
         return d
 
-    def _stop(self, ignored):
+    def _stop(self, result):
+        if isinstance(result, Failure):
+            self.log.failure('Unhandle error during operation', result)
         self.log.warn('Stopping marathon-acme...')
+
         return gatherResults([
             self._server_listening.stopListening(),
             self.txacme_service.stopService()

@@ -3,7 +3,7 @@ import json
 
 from requests.exceptions import HTTPError
 from treq.client import HTTPClient as treq_HTTPClient
-from twisted.internet.defer import Deferred, gatherResults
+from twisted.internet.defer import gatherResults
 from twisted.logger import Logger, LogLevel
 from twisted.web.http import OK
 from uritools import uricompose, uridecode, urisplit
@@ -226,41 +226,34 @@ def raise_for_not_ok_status(response):
     return response
 
 
-def sse_content_with_protocol(response, callbacks):
+def _sse_content_with_protocol(response, handler):
     """
-    *INTERNAL USE ONLY*
     Sometimes we need the protocol object so that we can manipulate the
     underlying transport in tests.
     """
-    protocol = SseProtocol()
-
-    finished = Deferred()
-    protocol.set_finished_deferred(finished)
-
-    for event, callback in callbacks.items():
-        protocol.set_callback(event, callback)
+    protocol = SseProtocol(handler)
+    finished = protocol.when_finished()
 
     response.deliverBody(protocol)
 
     return finished, protocol
 
 
-def sse_content(response, callbacks):
+def sse_content(response, handler):
     """
     Callback to collect the Server-Sent Events content of a response. Callbacks
     passed will receive event data.
 
     :param response:
         The response from the SSE request.
-    :param callbacks:
-        A dict mapping event type to callback functions that will be called
-        with the event data when it is received.
+    :param handler:
+        The handler for the SSE protocol.
     """
     # An SSE response must be 200/OK and have content-type 'text/event-stream'
     raise_for_not_ok_status(response)
     raise_for_header(response, 'Content-Type', 'text/event-stream')
 
-    finished, _ = sse_content_with_protocol(response, callbacks)
+    finished, _ = _sse_content_with_protocol(response, handler)
     return finished
 
 
@@ -320,12 +313,13 @@ class MarathonClient(JsonClient):
             'Cache-Control': 'no-store'
         })
 
-        # We know to expect JSON event data from Marathon, so wrap the
-        # callbacks in a step that decodes the JSON.
-        wrapped_cbs = {e: _wrap_json_callback(c) for e, c in callbacks.items()}
+        def handler(event, data):
+            callback = callbacks.get(event)
+            # Deserialize JSON if a callback is present
+            if callback is not None:
+                callback(json.loads(data))
 
-        d.addCallback(sse_content, wrapped_cbs)
-        return d
+        return d.addCallback(sse_content, handler)
 
 
 class MarathonLbClient(HTTPClient):
@@ -363,7 +357,3 @@ class MarathonLbClient(HTTPClient):
         config to be reloaded, whether it has changed or not.
         """
         return self.request('POST', path='/_mlb_signal/usr1')
-
-
-def _wrap_json_callback(callback):
-    return lambda data: callback(json.loads(data))

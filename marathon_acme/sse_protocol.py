@@ -1,5 +1,6 @@
-from twisted.internet import error
-from twisted.internet.protocol import Protocol
+from twisted.internet.defer import Deferred
+from twisted.internet.protocol import connectionDone, Protocol
+from twisted.logger import Logger, LogLevel
 
 
 class SseProtocol(Protocol):
@@ -8,24 +9,32 @@ class SseProtocol(Protocol):
     https://html.spec.whatwg.org/multipage/comms.html#server-sent-events
     """
 
-    _buffer = b''
     MAX_LENGTH = 16384
+    log = Logger()
 
-    def __init__(self):
-        self.finished = None
-        self.callbacks = {}
+    def __init__(self, handler):
+        """
+        :param handler:
+            A 2-args callable that will be called back with the event and data
+            when a complete message is received.
+        """
+        self._handler = handler
+        self._waiting = []
+        self._buffer = b''
 
         self._reset_event_data()
 
     def _reset_event_data(self):
-        self.event = 'message'
-        self.data_lines = []
+        self._event = 'message'
+        self._data_lines = []
 
-    def set_finished_deferred(self, d):
-        self.finished = d
-
-    def set_callback(self, event, callback):
-        self.callbacks[event] = callback
+    def when_finished(self):
+        """
+        Get a deferred that will be fired when the connection is closed.
+        """
+        d = Deferred()
+        self._waiting.append(d)
+        return d
 
     def dataReceived(self, data):
         """
@@ -53,11 +62,13 @@ class SseProtocol(Protocol):
                 # the one that told it to close.
                 return
             if len(line) > self.MAX_LENGTH:
-                return self.lineLengthExceeded(line)
+                self.lineLengthExceeded(line)
+                return
             else:
                 self.lineReceived(line)
         if len(self._buffer) > self.MAX_LENGTH:
-            return self.lineLengthExceeded(self._buffer)
+            self.lineLengthExceeded(self._buffer)
+            return
 
     def lineReceived(self, line):
         line = line.decode('utf-8')
@@ -70,18 +81,16 @@ class SseProtocol(Protocol):
         self._handle_field_value(field, value)
 
     def lineLengthExceeded(self, line):
-        """
-        Called when the maximum line length has been reached.
-        Copied from ``twisted.protocols.basic.LineOnlyReceiver``.
-        """
-        return error.ConnectionLost('Line length exceeded')
+        self.log.error('SSE maximum line length exceeded: {length} > {max}',
+                       length=len(line), max=self.MAX_LENGTH)
+        self.transport.loseConnection()
 
     def _handle_field_value(self, field, value):
         """ Handle the field, value pair. """
         if field == 'event':
-            self.event = value
+            self._event = value
         elif field == 'data':
-            self.data_lines.append(value)
+            self._data_lines.append(value)
         elif field == 'id':
             # Not implemented
             pass
@@ -92,13 +101,11 @@ class SseProtocol(Protocol):
 
     def _dispatch_event(self):
         """
-        Dispatch the event to the relevant callback if one is present.
+        Dispatch the event to the handler.
         """
-        callback = self.callbacks.get(self.event)
-        if callback is not None:
-            data = self._prepare_data()
-            if data is not None:
-                callback(data)
+        data = self._prepare_data()
+        if data is not None:
+            self._handler(self._event, data)
 
         self._reset_event_data()
 
@@ -107,15 +114,17 @@ class SseProtocol(Protocol):
         Join the data lines into a single string for delivery to the callback.
         """
         # If the data is empty, abort
-        if not self.data_lines:
+        if not self._data_lines:
             return None
 
         # Add a newline character between lines
-        return '\n'.join(self.data_lines)
+        return '\n'.join(self._data_lines)
 
-    def connectionLost(self, reason):
-        if self.finished is not None:
-            self.finished.callback(None)
+    def connectionLost(self, reason=connectionDone):
+        self.log.failure('SSE connection lost', reason, LogLevel.warn)
+        for d in list(self._waiting):
+            d.callback(None)
+        self._waiting = []
 
 
 def _parse_field_value(line):
