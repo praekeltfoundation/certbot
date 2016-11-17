@@ -9,7 +9,7 @@ from testtools.matchers import (
 from testtools.twistedsupport import succeeded
 
 from marathon_acme.clients import (
-    json_content, sse_content, sse_content_with_protocol)
+    json_content, sse_content, _sse_content_with_protocol)
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
 from marathon_acme.tests.matchers import (
@@ -118,7 +118,7 @@ class TestFakeMarathonAPI(object):
            'event_stream_attached': attach_data1.append,
            'event_stream_detached': detach_data1.append
         })
-        finished, protocol = sse_content_with_protocol(response1, handler1)
+        finished, protocol = _sse_content_with_protocol(response1, handler1)
 
         response2_d = self.client.get('http://localhost/v2/events', headers={
             'Accept': 'text/event-stream'

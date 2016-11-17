@@ -226,9 +226,8 @@ def raise_for_not_ok_status(response):
     return response
 
 
-def sse_content_with_protocol(response, handler):
+def _sse_content_with_protocol(response, handler):
     """
-    *INTERNAL USE ONLY*
     Sometimes we need the protocol object so that we can manipulate the
     underlying transport in tests.
     """
@@ -254,7 +253,7 @@ def sse_content(response, handler):
     raise_for_not_ok_status(response)
     raise_for_header(response, 'Content-Type', 'text/event-stream')
 
-    finished, _ = sse_content_with_protocol(response, handler)
+    finished, _ = _sse_content_with_protocol(response, handler)
     return finished
 
 
