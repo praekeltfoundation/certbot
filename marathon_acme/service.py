@@ -210,16 +210,8 @@ class MarathonAcme(object):
 
             # FIXME: The acme error code stuff is a mess pre- the unreleased
             # 0.10 version. Update this to use the 'code' attribute when the
-            # new acme library is released. The 'urn:acme:error' string doesn't
-            # seem to be in a constant anywhere either...and will also change
-            # (in some cases) in the new acme library version.
-            if not acme_error.typ.startswith('urn:acme:error:'):
-                # Don't know what to do-- just fail
-                self.log.error('Unknown ACME server error type "{error_type}"',
-                               error_type=acme_error.typ)
-                return failure
-
-            acme_error_code = acme_error.typ[len('urn:acme:error:'):]
+            # new acme library is released.
+            acme_error_code = str(acme_error.typ).split(':')[-1]
             if acme_error_code in ['rateLimited', 'serverInternal',
                                    'connection', 'unknownHost']:
                 # TODO: Fire off an error to Sentry or something?
