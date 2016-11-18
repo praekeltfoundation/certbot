@@ -99,7 +99,7 @@ def HasRequestProperties(method=None, url=None, query={}):
     )
 
 
-def matches_time_or_just_before(time, tolerance=timedelta(seconds=3)):
+def matches_time_or_just_before(time, tolerance=timedelta(seconds=10)):
     """
     Match a time to be equal to a certain time or just before it. Useful when
     checking for a time that is now +/- some amount of time.
