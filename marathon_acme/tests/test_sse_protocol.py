@@ -199,6 +199,7 @@ class TestSseProtocol(object):
         the transport should be in 'disconnecting' state due to a request to
         lose the connection.
         """
+        self.protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
         self.protocol.dataReceived(b'data:%s\r\n\r\n' % (
             b'x' * (self.protocol.MAX_LENGTH + 1),))
 
@@ -210,6 +211,7 @@ class TestSseProtocol(object):
         length, the transport should be in 'disconnecting' state due to a
         request to lose the connection.
         """
+        self.protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
         self.protocol.dataReceived(b'data:%s' % (
             b'x' * (self.protocol.MAX_LENGTH + 1),))
 

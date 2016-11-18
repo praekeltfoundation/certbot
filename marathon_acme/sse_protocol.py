@@ -9,7 +9,7 @@ class SseProtocol(Protocol):
     https://html.spec.whatwg.org/multipage/comms.html#server-sent-events
     """
 
-    MAX_LENGTH = 16384
+    MAX_LENGTH = 1024 * 1024 * 1024  # 1MiB
     log = Logger()
 
     def __init__(self, handler):
