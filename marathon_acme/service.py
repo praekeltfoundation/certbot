@@ -2,6 +2,7 @@ from twisted.internet.defer import gatherResults
 from twisted.logger import Logger, LogLevel
 from twisted.python.failure import Failure
 from txacme.challenges import HTTP01Responder
+from txacme.client import ServerError as txacme_ServerError
 from txacme.service import AcmeIssuingService
 
 from marathon_acme.server import MarathonAcmeServer
@@ -194,5 +195,34 @@ class MarathonAcme(object):
                 len_domains=len(domains), domains=domains)
         else:
             self.log.debug('No new domains to issue certificates for')
-        return gatherResults(
-            [self.txacme_service.issue_cert(domain) for domain in domains])
+        return gatherResults([self._issue_cert(domain) for domain in domains])
+
+    def _issue_cert(self, domain):
+        """
+        Issue a certificate for the given domain.
+        """
+        def errback(failure):
+            # Don't fail on some of the errors we could get from the ACME
+            # server, rather just log an error so that we can continue with
+            # other domains.
+            failure.trap(txacme_ServerError)
+            acme_error = failure.value.message
+
+            # FIXME: The acme error code stuff is a mess pre- the unreleased
+            # 0.10 version. Update this to use the 'code' attribute when the
+            # new acme library is released.
+            acme_error_code = str(acme_error.typ).split(':')[-1]
+            if acme_error_code in ['rateLimited', 'serverInternal',
+                                   'connection', 'unknownHost']:
+                # TODO: Fire off an error to Sentry or something?
+                self.log.error(
+                    'Error ({code}) issuing certificate for "{domain}": '
+                    '{detail}', code=acme_error_code, domain=domain,
+                    detail=acme_error.detail)
+            else:
+                # There are more error codes but if they happen then something
+                # serious has gone wrong-- carry on error-ing.
+                return failure
+
+        d = self.txacme_service.issue_cert(domain)
+        return d.addErrback(errback)

@@ -2,13 +2,15 @@ from datetime import datetime
 
 from acme import challenges
 from acme.jose import JWKRSA
+from acme.messages import Error as acme_Error
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing, Equals, HasLength, Is, IsInstance, MatchesAll,
-    MatchesDict, MatchesListwise, MatchesStructure, Not)
+    MatchesDict, MatchesListwise, MatchesPredicate, MatchesStructure, Not)
 from testtools.twistedsupport import failed, succeeded
 from twisted.internet.defer import succeed
 from twisted.internet.task import Clock
+from txacme.client import ServerError as txacme_ServerError
 from txacme.testing import FakeClient, MemoryStore
 from txacme.util import generate_private_key
 
@@ -63,6 +65,27 @@ is_marathon_lb_sigusr_response = MatchesListwise([  # Per marathon-lb instance
 ])
 
 
+class FailableTxacmeClient(FakeClient):
+    """
+    A fake txacme client that raises an error during the CSR issuance phase if
+    the 'error' attribute has been set. Used to very *very* roughly simulate
+    an error while issuing a certificate.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(FailableTxacmeClient, self).__init__(*args, **kwargs)
+        # Patch on support for HTTP challenge types
+        self._challenge_types.append(challenges.HTTP01)
+        self.issuance_error = None
+
+    def request_issuance(self, csr):
+        if self.issuance_error is not None:
+            # Server error takes an ACME error and a treq response...but we
+            # don't have a response
+            raise self.issuance_error
+        return super(FailableTxacmeClient, self).request_issuance(csr)
+
+
 class TestMarathonAcme(object):
 
     def setup_method(self):
@@ -81,16 +104,14 @@ class TestMarathonAcme(object):
         clock = Clock()
         clock.rightNow = (
             datetime.now() - datetime(1970, 1, 1)).total_seconds()
-        txacme_client = FakeClient(key, clock)
-        # Patch on support for HTTP challenge types
-        txacme_client._challenge_types.append(challenges.HTTP01)
+        self.txacme_client = FailableTxacmeClient(key, clock)
 
         self.marathon_acme = MarathonAcme(
             marathon_client,
             'external',
             self.cert_store,
             mlb_client,
-            lambda: succeed(txacme_client),
+            lambda: succeed(self.txacme_client),
             clock
         )
 
@@ -497,3 +518,108 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, failed(MatchesStructure(
             value=IsInstance(RuntimeError))))
+
+    def test_sync_acme_server_failure_acceptable(self):
+        """
+        When a sync is run and we try to issue a certificate for a domain but
+        the ACME server returns an error, if that error is of an acceptable
+        type then it should be ignored.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+        acme_error = acme_Error(typ='urn:acme:error:rateLimited', detail='bar')
+        # Server error takes an ACME error and a treq response...but we don't
+        # have a response
+        self.txacme_client.issuance_error = txacme_ServerError(
+            acme_error, None)
+
+        d = self.marathon_acme.sync()
+
+        assert_that(d, succeeded(Equals([None])))
+        # Nothing stored, nothing notified
+        assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(),
+                    Equals(False))
+
+    def test_sync_acme_server_failure_unacceptable(self):
+        """
+        When a sync is run and we try to issue a certificate for a domain but
+        the ACME server returns an error, if that error is of an unacceptable
+        type then a failure should be returned.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+        acme_error = acme_Error(typ='urn:acme:error:badCSR', detail='bar')
+        # Server error takes an ACME error and a treq response...but we don't
+        # have a response
+        self.txacme_client.issuance_error = txacme_ServerError(
+            acme_error, None)
+
+        d = self.marathon_acme.sync()
+
+        # Oh god
+        assert_that(d, failed(MatchesStructure(
+            value=MatchesStructure(subFailure=MatchesStructure(
+                value=MatchesAll(IsInstance(txacme_ServerError),
+                    MatchesStructure(message=MatchesAll(
+                        IsInstance(acme_Error),
+                        MatchesStructure(
+                            typ=Equals('urn:acme:error:badCSR'),
+                            detail=Equals('bar')
+                        )
+                    ))
+                )
+            ))
+        )))
+        # Nothing stored, nothing notified
+        assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(),
+                    Equals(False))
+
+    def test_sync_other_issue_failure(self):
+        """
+        When a sync is run and we try to issue a certificate for a domain but
+        some non-ACME server error occurs, the sync should fail.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+        self.txacme_client.issuance_error = RuntimeError('Something bad')
+
+        d = self.marathon_acme.sync()
+
+        assert_that(d, failed(MatchesStructure(
+            value=MatchesStructure(subFailure=MatchesStructure(
+                value=MatchesAll(
+                    IsInstance(RuntimeError),
+                    MatchesPredicate(str, 'Something bad')
+                )
+            ))
+        )))
+        # Nothing stored, nothing notified
+        assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(),
+                    Equals(False))
