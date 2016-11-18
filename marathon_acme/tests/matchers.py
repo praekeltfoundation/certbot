@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
+from operator import methodcaller
 
 from testtools.content import text_content
+from testtools.matchers import AfterPreprocessing as After
 from testtools.matchers import (
-    AfterPreprocessing, Equals, GreaterThan, IsInstance, LessThan, MatchesAll,
-    MatchesAny, MatchesDict, MatchesStructure, Mismatch
-)
+    Equals, GreaterThan, IsInstance, LessThan, MatchesAll, MatchesAny,
+    MatchesDict, MatchesStructure, Mismatch)
 from uritools import urisplit
 
 
@@ -71,7 +72,7 @@ def WithErrorTypeAndMessage(error_type, message):
     """
     return MatchesAll(
         MatchesStructure(value=IsInstance(error_type)),
-        AfterPreprocessing(lambda f: f.getErrorMessage(), Equals(message))
+        After(methodcaller('getErrorMessage'), Equals(message))
     )
 
 
@@ -94,30 +95,23 @@ def HasRequestProperties(method=None, url=None, query={}):
     return MatchesStructure(
         method=Equals(method.encode('ascii')),
         path=Equals(url.encode('ascii')),
-        uri=AfterPreprocessing(lambda u: urisplit(u).getquerydict(),
-                               Equals(query))
+        uri=After(lambda u: urisplit(u).getquerydict(), Equals(query))
     )
 
 
-def IsBetween(minimum, maximum):
+def matches_time_or_just_before(time, tolerance=timedelta(seconds=10)):
     """
-    Match if a value is greater than or equal to minimum or less than or equal
-    to maximum.
+    Match a time to be equal to a certain time or just before it. Useful when
+    checking for a time that is now +/- some amount of time.
     """
     return MatchesAll(
-        MatchesAny(GreaterThan(minimum), Equals(minimum)),
-        MatchesAny(LessThan(maximum), Equals(maximum)))
+        GreaterThan(time - tolerance),
+        MatchesAny(LessThan(time), Equals(time)))
 
 
-def IsRecentMarathonTimestamp():
-    """
-    Match whether a Marathon timestamp string describes a time within the last
-    few seconds.
-    """
-    return AfterPreprocessing(
-        lambda ts: datetime.strptime(ts, '%Y-%m-%dT%H:%M:%S.%fZ'),
-        IsBetween(datetime.utcnow() - timedelta(seconds=3),
-                  datetime.utcnow()))
+def _parse_marathon_event_timestamp(timestamp):
+    """ Parse Marathon's ISO8601-like timestamps into a datetime. """
+    return datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 def IsMarathonEvent(event_type, **kwargs):
@@ -130,7 +124,8 @@ def IsMarathonEvent(event_type, **kwargs):
     """
     matching_dict = {
         'eventType': Equals(event_type),
-        'timestamp': IsRecentMarathonTimestamp()
+        'timestamp': After(_parse_marathon_event_timestamp,
+                           matches_time_or_just_before(datetime.utcnow()))
     }
     matching_dict.update(kwargs)
     return MatchesDict(matching_dict)
