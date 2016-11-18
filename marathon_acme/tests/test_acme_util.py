@@ -9,8 +9,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    Equals, GreaterThan, HasLength, IsInstance, LessThan, MatchesAll,
-    MatchesAny, MatchesListwise, MatchesStructure)
+    Equals, GreaterThan, HasLength, IsInstance, MatchesListwise,
+    MatchesStructure)
 from testtools.twistedsupport import succeeded, failed
 from twisted.internet.defer import succeed
 from twisted.python.filepath import FilePath
@@ -21,7 +21,8 @@ from marathon_acme.acme_util import (
     generate_wildcard_pem_bytes, maybe_key, MlbCertificateStore)
 from marathon_acme.clients import MarathonLbClient
 from marathon_acme.tests.fake_marathon import FakeMarathonLb
-from marathon_acme.tests.matchers import WithErrorTypeAndMessage
+from marathon_acme.tests.matchers import (
+    matches_time_or_just_before, WithErrorTypeAndMessage)
 
 
 class TestMaybeKey(object):
@@ -102,25 +103,12 @@ def test_generate_wildcard_pem_bytes():
         subject=MatchesListwise([
             MatchesStructure(value=Equals(u'*'))
         ]),
-        not_valid_before=matches_datetime_roughly(
-            expected_before, timedelta(seconds=5)),
-        not_valid_after=matches_datetime_roughly(
-            expected_after, timedelta(seconds=5)),
+        not_valid_before=matches_time_or_just_before(expected_before),
+        not_valid_after=matches_time_or_just_before(expected_after),
         signature_hash_algorithm=IsInstance(hashes.SHA256)
     ))
     assert_that(cert.public_key().public_numbers(), Equals(
                 key.public_key().public_numbers()))
-
-
-def matches_datetime_roughly(expected, tolerance):
-    """
-    Matcher for datetimes to assert that
-    ``expected - tolerance < actual <= expected``
-    """
-    return MatchesAll(
-        GreaterThan(expected - tolerance),
-        MatchesAny(LessThan(expected), Equals(expected))
-    )
 
 
 # From txacme
