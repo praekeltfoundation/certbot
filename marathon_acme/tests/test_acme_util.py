@@ -9,8 +9,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    Equals, GreaterThan, HasLength, IsInstance, MatchesListwise,
-    MatchesStructure)
+    Equals, HasLength, IsInstance, MatchesListwise, MatchesStructure)
 from testtools.twistedsupport import succeeded, failed
 from twisted.internet.defer import succeed
 from twisted.python.filepath import FilePath
