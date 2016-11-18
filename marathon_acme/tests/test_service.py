@@ -6,7 +6,7 @@ from acme.messages import Error as acme_Error
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing, Equals, HasLength, Is, IsInstance, MatchesAll,
-    MatchesDict, MatchesListwise, MatchesStructure, Not)
+    MatchesDict, MatchesListwise, MatchesPredicate, MatchesStructure, Not)
 from testtools.twistedsupport import failed, succeeded
 from twisted.internet.defer import succeed
 from twisted.internet.task import Clock
@@ -69,20 +69,20 @@ class FailableTxacmeClient(FakeClient):
     """
     A fake txacme client that raises an error during the CSR issuance phase if
     the 'error' attribute has been set. Used to very *very* roughly simulate
-    an error from the ACME server while issuing a certificate.
+    an error while issuing a certificate.
     """
 
     def __init__(self, *args, **kwargs):
         super(FailableTxacmeClient, self).__init__(*args, **kwargs)
         # Patch on support for HTTP challenge types
         self._challenge_types.append(challenges.HTTP01)
-        self.acme_error = None
+        self.issuance_error = None
 
     def request_issuance(self, csr):
-        if self.acme_error is not None:
+        if self.issuance_error is not None:
             # Server error takes an ACME error and a treq response...but we
             # don't have a response
-            raise txacme_ServerError(self.acme_error, None)
+            raise self.issuance_error
         return super(FailableTxacmeClient, self).request_issuance(csr)
 
 
@@ -535,8 +535,11 @@ class TestMarathonAcme(object):
                 {'port': 9000, 'protocol': 'tcp', 'labels': {}}
             ]
         })
-        self.txacme_client.acme_error = acme_Error(
-            typ='urn:acme:error:rateLimited', detail='bar')
+        acme_error = acme_Error(typ='urn:acme:error:rateLimited', detail='bar')
+        # Server error takes an ACME error and a treq response...but we don't
+        # have a response
+        self.txacme_client.issuance_error = txacme_ServerError(
+            acme_error, None)
 
         d = self.marathon_acme.sync()
 
@@ -562,8 +565,11 @@ class TestMarathonAcme(object):
                 {'port': 9000, 'protocol': 'tcp', 'labels': {}}
             ]
         })
-        self.txacme_client.acme_error = acme_Error(
-            typ='urn:acme:error:badCSR', detail='bar')
+        acme_error = acme_Error(typ='urn:acme:error:badCSR', detail='bar')
+        # Server error takes an ACME error and a treq response...but we don't
+        # have a response
+        self.txacme_client.issuance_error = txacme_ServerError(
+            acme_error, None)
 
         d = self.marathon_acme.sync()
 
@@ -578,6 +584,38 @@ class TestMarathonAcme(object):
                             detail=Equals('bar')
                         )
                     ))
+                )
+            ))
+        )))
+        # Nothing stored, nothing notified
+        assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(),
+                    Equals(False))
+
+    def test_sync_other_issue_failure(self):
+        """
+        When a sync is run and we try to issue a certificate for a domain but
+        some non-ACME server error occurs, the sync should fail.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+        self.txacme_client.issuance_error = RuntimeError('Something bad')
+
+        d = self.marathon_acme.sync()
+
+        assert_that(d, failed(MatchesStructure(
+            value=MatchesStructure(subFailure=MatchesStructure(
+                value=MatchesAll(
+                    IsInstance(RuntimeError),
+                    MatchesPredicate(str, 'Something bad')
                 )
             ))
         )))
