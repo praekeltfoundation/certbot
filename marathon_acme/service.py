@@ -216,8 +216,9 @@ class MarathonAcme(object):
                                    'connection', 'unknownHost']:
                 # TODO: Fire off an error to Sentry or something?
                 self.log.error(
-                    'Error issuing certificate for "{domain}": {detail}',
-                    domain=domain, detail=acme_error.detail)
+                    'Error ({code}) issuing certificate for "{domain}": '
+                    '{detail}', code=acme_error_code, domain=domain,
+                    detail=acme_error.detail)
             else:
                 # There are more error codes but if they happen then something
                 # serious has gone wrong-- carry on error-ing.
