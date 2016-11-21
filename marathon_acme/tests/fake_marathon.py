@@ -67,9 +67,16 @@ class FakeMarathonAPI(object):
         self._marathon = marathon
         self.client = StubTreq(self.app.resource())
         self.event_requests = []
+        self._called_get_apps = False
+
+    def check_called_get_apps(self):
+        """ Check and reset the ``_get_apps_called`` flag. """
+        was_called, self._called_get_apps = self._called_get_apps, False
+        return was_called
 
     @app.route('/v2/apps', methods=['GET'])
     def get_apps(self, request):
+        self._called_get_apps = True
         response = {
             'apps': self._marathon.get_apps()
         }

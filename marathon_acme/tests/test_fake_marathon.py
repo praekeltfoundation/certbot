@@ -76,6 +76,28 @@ class TestFakeMarathonAPI(object):
             After(json_content, succeeded(Equals({'apps': [app]})))
         )))
 
+    def test_get_apps_check_called(self):
+        """
+        When a client makes a call to the GET /v2/apps API, a flag should be
+        set to indicate that the API has been called. Checking the flag should
+        reset it.
+        """
+        # The flag should start out False
+        assert_that(self.marathon_api.check_called_get_apps(), Equals(False))
+
+        # Make a call to get_apps()
+        response = self.client.get('http://localhost/v2/apps')
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(Equals({'apps': []})))
+        )))
+
+        # After the call the flag should be True
+        assert_that(self.marathon_api.check_called_get_apps(), Equals(True))
+
+        # Checking the flag should reset it to False
+        assert_that(self.marathon_api.check_called_get_apps(), Equals(False))
+
     def test_get_events(self):
         """
         When a request is made to the event stream endpoint, an SSE stream
