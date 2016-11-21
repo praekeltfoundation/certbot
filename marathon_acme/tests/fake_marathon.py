@@ -70,7 +70,7 @@ class FakeMarathonAPI(object):
         self._called_get_apps = False
 
     def check_called_get_apps(self):
-        """ Check and reset the ``_get_apps_called`` flag. """
+        """ Check and reset the ``_called_get_apps`` flag. """
         was_called, self._called_get_apps = self._called_get_apps, False
         return was_called
 
@@ -123,12 +123,12 @@ class FakeMarathonLb(object):
         self._signalled_usr1 = False
 
     def check_signalled_hup(self):
-        """ Check and reset the ``signalled_hup`` flag. """
+        """ Check and reset the ``_signalled_hup`` flag. """
         was_signalled, self._signalled_hup = self._signalled_hup, False
         return was_signalled
 
     def check_signalled_usr1(self):
-        """ Check and reset the ``signalled_usr1`` flag. """
+        """ Check and reset the ``_signalled_usr1`` flag. """
         was_signalled, self._signalled_usr1 = self._signalled_usr1, False
         return was_signalled
 
