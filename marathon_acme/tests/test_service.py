@@ -398,7 +398,9 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Nothing stored, nothing notified
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
@@ -422,7 +424,9 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Nothing stored, nothing notified
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
@@ -448,7 +452,9 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Nothing stored, nothing notified
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
@@ -475,7 +481,9 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Nothing stored, nothing notified
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
@@ -501,7 +509,10 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Existing cert unchanged, marathon-lb not notified
+        # Existing cert unchanged, marathon-lb not notified, but Marathon
+        # checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(
             Equals({'example.com': 'certcontent'})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
