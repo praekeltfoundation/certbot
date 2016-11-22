@@ -3,7 +3,7 @@ import json
 
 from requests.exceptions import HTTPError
 from treq.client import HTTPClient as treq_HTTPClient
-from twisted.internet.defer import gatherResults
+from twisted.internet.defer import DeferredList
 from twisted.logger import Logger, LogLevel
 from twisted.web.http import OK
 from uritools import uricompose, uridecode, urisplit
@@ -331,18 +331,63 @@ class MarathonLbClient(HTTPClient):
     def __init__(self, endpoints, *args, **kwargs):
         """
         :param endpoints:
-        The list of marathon-lb endpoints. All marathon-lb endpoints will be
-        called at once for any request.
+            The list of marathon-lb endpoints. All marathon-lb endpoints will
+            be called at once for any request.
         """
         super(MarathonLbClient, self).__init__(*args, **kwargs)
         self.endpoints = endpoints
 
     def request(self, *args, **kwargs):
-        requests = []
-        for endpoint in self.endpoints:
-            requests.append(super(MarathonLbClient, self).request(
-                *args, url=endpoint, **kwargs))
-        return gatherResults(requests)
+        return (
+            DeferredList(
+                [self._request(e, *args, **kwargs) for e in self.endpoints],
+                consumeErrors=True)
+            .addCallback(self._check_request_results))
+
+    def _request(self, endpoint, *args, **kwargs):
+        """
+        Perform a request to a specific endpoint. Raise an error if the status
+        code indicates a client or server error.
+        """
+        kwargs['url'] = endpoint
+        return (super(MarathonLbClient, self).request(*args, **kwargs)
+                .addCallback(raise_for_status))
+
+    def _check_request_results(self, results):
+        """
+        Check the result of each request that we made. If a failure occurred,
+        but some requests succeeded, log and count the failures. If all
+        requests failed, raise an error.
+
+        :return:
+            The list of responses, with a None value for any requests that
+            failed.
+        """
+        responses = []
+        failed_endpoints = []
+        for index, result_tuple in enumerate(results):
+            success, result = result_tuple
+            if success:
+                responses.append(result)
+            else:
+                endpoint = self.endpoints[index]
+                self.log.failure(
+                    'Failed to make a request to a marathon-lb instance: '
+                    '{endpoint}', result, LogLevel.error, endpoint=endpoint)
+                responses.append(None)
+                failed_endpoints.append(endpoint)
+
+        if len(failed_endpoints) == len(self.endpoints):
+            raise RuntimeError(
+                'Failed to make a request to all marathon-lb instances')
+
+        if failed_endpoints:
+            self.log.error(
+                'Failed to make a request to {x}/{y} marathon-lb instances: '
+                '{endpoints}', x=len(failed_endpoints), y=len(self.endpoints),
+                endpoints=failed_endpoints)
+
+        return responses
 
     def mlb_signal_hup(self):
         """
