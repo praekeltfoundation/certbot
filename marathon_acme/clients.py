@@ -270,7 +270,9 @@ class MarathonClient(JsonClient):
         self.endpoints = endpoints
 
     def request(self, *args, **kwargs):
-        return self._request(None, list(self.endpoints), *args, **kwargs)
+        d = self._request(None, list(self.endpoints), *args, **kwargs)
+        d.addErrback(self._log_all_endpoints_failed)
+        return d
 
     def _request(self, failure, endpoints, *args, **kwargs):
         """
@@ -287,6 +289,13 @@ class MarathonClient(JsonClient):
         # endpoints
         d.addErrback(self._request, endpoints, *args, **kwargs)
         return d
+
+    def _log_all_endpoints_failed(self, failure):
+        # Just log an error so it is clear what has happened and return the
+        # final failure. Individual failures should have been logged via
+        # _log_request_error().
+        self.log.error('Failed to make a request to all Marathon endpoints')
+        return failure
 
     def get_json_field(self, field, **kwargs):
         """
