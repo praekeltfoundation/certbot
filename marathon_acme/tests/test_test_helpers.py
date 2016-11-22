@@ -25,7 +25,7 @@ class TestPerLocationAgent(object):
         When a request is made using the agent and no delegate agent has been
         added for the URI location/authority, a KeyError is expected.
         """
-        with ExpectedException(KeyError, "b'foo:8080'"):
+        with ExpectedException(KeyError, r"b?'foo:8080'"):
             agent.request(b'GET', b'http://foo:8080')
 
     def test_delegates_to_agent_for_location(self, agent):
