@@ -92,7 +92,7 @@ class TestMarathonAcme(object):
         self.fake_marathon = FakeMarathon()
         self.fake_marathon_api = FakeMarathonAPI(self.fake_marathon)
         marathon_client = MarathonClient(
-            'http://localhost:8080', client=self.fake_marathon_api.client)
+            ['http://localhost:8080'], client=self.fake_marathon_api.client)
 
         self.cert_store = MemoryStore()
 

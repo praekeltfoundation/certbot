@@ -259,6 +259,35 @@ def sse_content(response, handler):
 
 class MarathonClient(JsonClient):
 
+    def __init__(self, endpoints, *args, **kwargs):
+        """
+        :param endpoints:
+            A priority-ordered list of Marathon endpoints. Each endpoint will
+            be tried one-by-one until the request succeeds or all endpoints
+            fail.
+        """
+        super(MarathonClient, self).__init__(*args, **kwargs)
+        self.endpoints = endpoints
+
+    def request(self, *args, **kwargs):
+        return self._request(None, list(self.endpoints), *args, **kwargs)
+
+    def _request(self, failure, endpoints, *args, **kwargs):
+        """
+        Recursively make requests to each endpoint in ``endpoints``.
+        """
+        # We've run out of endpoints, fail
+        if not endpoints:
+            return failure
+
+        endpoint = endpoints.pop(0)
+        d = super(MarathonClient, self).request(*args, url=endpoint, **kwargs)
+
+        # If something goes wrong, call ourselves again with the remaining
+        # endpoints
+        d.addErrback(self._request, endpoints, *args, **kwargs)
+        return d
+
     def get_json_field(self, field, **kwargs):
         """
         Perform a GET request and get the contents of the JSON response.
@@ -331,8 +360,8 @@ class MarathonLbClient(HTTPClient):
     def __init__(self, endpoints, *args, **kwargs):
         """
         :param endpoints:
-        The list of marathon-lb endpoints. All marathon-lb endpoints will be
-        called at once for any request.
+            The list of marathon-lb endpoints. All marathon-lb endpoints will
+            be called at once for any request.
         """
         super(MarathonLbClient, self).__init__(*args, **kwargs)
         self.endpoints = endpoints
