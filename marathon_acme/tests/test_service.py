@@ -140,6 +140,33 @@ class TestMarathonAcme(object):
         })))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
 
+    def test_listen_events_attach_only_first(self):
+        """
+        When we're listening for events and receive multiple
+        ``event_stream_attached`` events, only the first received event should
+        trigger the initial sync.
+        """
+        self.marathon_acme.listen_events()
+
+        # First attach event is from ourselves attaching...
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
+
+        # Some other client attaches
+        other_client = MarathonClient(
+            'http://localhost:8080', client=self.fake_marathon_api.client)
+        other_client_events = []
+        other_client.get_events(
+            {'event_stream_attached': other_client_events.append})
+
+        # Make very sure that two clients are attached and event sent
+        assert_that(other_client_events, HasLength(1))
+        assert_that(self.fake_marathon_api.event_requests, HasLength(2))
+
+        # No second sync from marathon-acme
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(False))
+
     def test_listen_events_api_request_triggers_sync(self):
         """
         When we listen for events from Marathon, and something happens that
@@ -222,6 +249,30 @@ class TestMarathonAcme(object):
             'example.com': Not(Is(None))
         })))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
+    def test_listen_events_syncs_each_reconnect(self):
+        """
+        When we're listening for events and receive multiple
+        ``event_stream_attached`` events, each reconnect should trigger another
+        sync as we re-attach.
+        """
+        self.marathon_acme.listen_events()
+
+        # Check the initial sync happens
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
+
+        # Trigger a lost connection
+        requests = self.fake_marathon_api.event_requests
+        assert_that(requests, HasLength(1))
+        request = requests[0]
+
+        request.loseConnection()
+        self.fake_marathon_api.client.flush()
+
+        # We reconnect and another sync should occur as we re-attach
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
 
     def test_sync_app(self):
         """
@@ -398,7 +449,9 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Nothing stored, nothing notified
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
@@ -422,7 +475,9 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Nothing stored, nothing notified
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
@@ -448,7 +503,9 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Nothing stored, nothing notified
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
@@ -475,7 +532,9 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Nothing stored, nothing notified
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
@@ -501,7 +560,10 @@ class TestMarathonAcme(object):
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
-        # Existing cert unchanged, marathon-lb not notified
+        # Existing cert unchanged, marathon-lb not notified, but Marathon
+        # checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
         assert_that(self.cert_store.as_dict(), succeeded(
             Equals({'example.com': 'certcontent'})))
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),

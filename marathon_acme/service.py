@@ -81,6 +81,7 @@ class MarathonAcme(object):
         successfully subscribe and triggering a sync on API request events.
         """
         self.log.info('Listening for events from Marathon...')
+        self._attached = False
 
         def on_finished(result, reconnects):
             # If the callback fires then the HTTP request to the event stream
@@ -103,6 +104,15 @@ class MarathonAcme(object):
         }).addCallbacks(on_finished, log_failure, callbackArgs=[reconnects])
 
     def _sync_on_event_stream_attached(self, event):
+        if self._attached:
+            self.log.debug(
+                'event_stream_attached event received (timestamp: '
+                '"{timestamp}", remoteAddress: "{remoteAddress}"), but '
+                'already attached', timestamp=event['timestamp'],
+                remoteAddress=event['remoteAddress'])
+            return
+
+        self._attached = True
         self.log.info(
             'event_stream_attached event received (timestamp: "{timestamp}", '
             'remoteAddress: "{remoteAddress}"), running initial sync...',
