@@ -67,9 +67,16 @@ class FakeMarathonAPI(object):
         self._marathon = marathon
         self.client = StubTreq(self.app.resource())
         self.event_requests = []
+        self._called_get_apps = False
+
+    def check_called_get_apps(self):
+        """ Check and reset the ``_called_get_apps`` flag. """
+        was_called, self._called_get_apps = self._called_get_apps, False
+        return was_called
 
     @app.route('/v2/apps', methods=['GET'])
     def get_apps(self, request):
+        self._called_get_apps = True
         response = {
             'apps': self._marathon.get_apps()
         }
@@ -109,30 +116,30 @@ def _write_request_event(request, event):
 
 class FakeMarathonLb(object):
     app = Klein()
-    signalled_hup = False
-    signalled_usr1 = False
 
     def __init__(self):
         self.client = StubTreq(self.app.resource())
+        self._signalled_hup = False
+        self._signalled_usr1 = False
 
     def check_signalled_hup(self):
-        """ Check and reset the ``signalled_hup`` flag. """
-        was_signalled, self.signalled_hup = self.signalled_hup, False
+        """ Check and reset the ``_signalled_hup`` flag. """
+        was_signalled, self._signalled_hup = self._signalled_hup, False
         return was_signalled
 
     def check_signalled_usr1(self):
-        """ Check and reset the ``signalled_usr1`` flag. """
-        was_signalled, self.signalled_usr1 = self.signalled_usr1, False
+        """ Check and reset the ``_signalled_usr1`` flag. """
+        was_signalled, self._signalled_usr1 = self._signalled_usr1, False
         return was_signalled
 
     @app.route('/_mlb_signal/hup')
     def signal_hup(self, request):
-        self.signalled_hup = True
+        self._signalled_hup = True
         request.setHeader('content-type', 'text/plain')
         return u'Sent SIGHUP signal to marathon-lb'
 
     @app.route('/_mlb_signal/usr1')
     def signal_usr1(self, request):
-        self.signalled_usr1 = True
+        self._signalled_usr1 = True
         request.setHeader('content-type', 'text/plain')
         return u'Sent SIGUSR1 signal to marathon-lb'
