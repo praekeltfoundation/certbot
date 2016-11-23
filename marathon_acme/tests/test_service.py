@@ -154,7 +154,7 @@ class TestMarathonAcme(object):
 
         # Some other client attaches
         other_client = MarathonClient(
-            'http://localhost:8080', client=self.fake_marathon_api.client)
+            ['http://localhost:8080'], client=self.fake_marathon_api.client)
         other_client_events = []
         other_client.get_events(
             {'event_stream_attached': other_client_events.append})
