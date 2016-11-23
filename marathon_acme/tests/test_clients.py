@@ -522,6 +522,9 @@ class TestMarathonClient(TestHTTPClientBase):
     def get_client(self, client):
         return MarathonClient(['http://localhost:8080'], client=client)
 
+    def uri(self, path, index=0):
+        return ''.join((self.client.endpoints[index], path))
+
     @inlineCallbacks
     def test_request_success(self):
         """
@@ -606,7 +609,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/my-path'))
+            method='GET', url=self.uri('/my-path')))
 
         json_response(request, {
             'field-key': 'field-value',
@@ -627,7 +630,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/my-path'))
+            method='GET', url=self.uri('/my-path')))
 
         request.setResponseCode(404)
         request.write(b'Not found\n')
@@ -635,8 +638,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
-            HTTPError,
-            '404 Client Error for url: http://localhost:8080/my-path')))
+            HTTPError, '404 Client Error for url: %s' % self.uri('/my-path'))))
 
     @inlineCallbacks
     def test_get_json_field_missing(self):
@@ -650,7 +652,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/my-path'))
+            method='GET', url=self.uri('/my-path')))
 
         json_response(request, {'other-field-key': 'do-not-care'})
 
@@ -671,7 +673,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/v2/apps'))
+            method='GET', url=self.uri('/v2/apps')))
 
         apps = {
             'apps': [
@@ -723,7 +725,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/v2/events'))
+            method='GET', url=self.uri('/v2/events')))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
@@ -756,7 +758,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/v2/events'))
+            method='GET', url=self.uri('/v2/events')))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
@@ -798,7 +800,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/v2/events'))
+            method='GET', url=self.uri('/v2/events')))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
@@ -836,7 +838,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/v2/events'))
+            method='GET', url=self.uri('/v2/events')))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
@@ -870,7 +872,7 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url='http://localhost:8080/v2/events'))
+            method='GET', url=self.uri('/v2/events')))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
