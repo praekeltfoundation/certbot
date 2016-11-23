@@ -46,7 +46,6 @@ class MarathonAcme(object):
             mlb_cert_store, txacme_client_creator, reactor, [responder])
 
         self._server_listening = None
-        self._attached = False
 
     def run(self, host, port):
         self.log.info('Starting marathon-acme...')
@@ -82,13 +81,13 @@ class MarathonAcme(object):
         successfully subscribe and triggering a sync on API request events.
         """
         self.log.info('Listening for events from Marathon...')
+        self._attached = False
 
         def on_finished(result, reconnects):
             # If the callback fires then the HTTP request to the event stream
             # went fine, but the persistent connection for the SSE stream was
             # dropped. Just reconnect for now- if we can't actually connect
             # then the errback will fire rather.
-            self._attached = False
             self.log.warn('Connection lost listening for events, '
                           'reconnecting... ({reconnects} so far)',
                           reconnects=reconnects)
