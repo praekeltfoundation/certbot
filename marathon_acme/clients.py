@@ -259,6 +259,44 @@ def sse_content(response, handler):
 
 class MarathonClient(JsonClient):
 
+    def __init__(self, endpoints, *args, **kwargs):
+        """
+        :param endpoints:
+            A priority-ordered list of Marathon endpoints. Each endpoint will
+            be tried one-by-one until the request succeeds or all endpoints
+            fail.
+        """
+        super(MarathonClient, self).__init__(*args, **kwargs)
+        self.endpoints = endpoints
+
+    def request(self, *args, **kwargs):
+        d = self._request(None, list(self.endpoints), *args, **kwargs)
+        d.addErrback(self._log_all_endpoints_failed)
+        return d
+
+    def _request(self, failure, endpoints, *args, **kwargs):
+        """
+        Recursively make requests to each endpoint in ``endpoints``.
+        """
+        # We've run out of endpoints, fail
+        if not endpoints:
+            return failure
+
+        endpoint = endpoints.pop(0)
+        d = super(MarathonClient, self).request(*args, url=endpoint, **kwargs)
+
+        # If something goes wrong, call ourselves again with the remaining
+        # endpoints
+        d.addErrback(self._request, endpoints, *args, **kwargs)
+        return d
+
+    def _log_all_endpoints_failed(self, failure):
+        # Just log an error so it is clear what has happened and return the
+        # final failure. Individual failures should have been logged via
+        # _log_request_error().
+        self.log.error('Failed to make a request to all Marathon endpoints')
+        return failure
+
     def get_json_field(self, field, **kwargs):
         """
         Perform a GET request and get the contents of the JSON response.

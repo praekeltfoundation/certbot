@@ -22,7 +22,7 @@ parser.add_argument('-a', '--acme',
                          '(default: %(default)s)',
                     default=(
                         'https://acme-v01.api.letsencrypt.org/directory'))
-parser.add_argument('-m', '--marathon',
+parser.add_argument('-m', '--marathon', nargs='+',
                     help='The address for the Marathon HTTP API (default: '
                          '%(default)s)',
                     default='http://marathon.mesos:8080')
@@ -69,7 +69,7 @@ def main(reactor, raw_args=sys.argv[1:]):
 
 
 def create_marathon_acme(storage_dir, acme_directory,
-                         marathon_addr, mlb_addrs, group,
+                         marathon_addrs, mlb_addrs, group,
                          reactor):
     """
     Create a marathon-acme instance.
@@ -93,7 +93,7 @@ def create_marathon_acme(storage_dir, acme_directory,
     key = maybe_key(storage_path)
 
     return MarathonAcme(
-        MarathonClient(marathon_addr, reactor=reactor),
+        MarathonClient(marathon_addrs, reactor=reactor),
         group,
         DirectoryStore(certs_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),

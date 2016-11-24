@@ -22,7 +22,8 @@ from marathon_acme.clients import (
     json_content, JsonClient, MarathonClient, MarathonLbClient,
     raise_for_status)
 from marathon_acme.server import write_request_json
-from marathon_acme.tests.helpers import failing_client
+from marathon_acme.tests.helpers import (
+    failing_client, FailingAgent, PerLocationAgent)
 from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
 
@@ -127,10 +128,10 @@ class TestHTTPClientBase(TestCase):
         super(TestHTTPClientBase, self).setUp()
 
         self.requests = DeferredQueue()
-        fake_server = FakeHttpServer(self.handle_request)
+        self.fake_server = FakeHttpServer(self.handle_request)
 
-        inner_client = treq_HTTPClient(fake_server.get_agent())
-        self.client = self.get_client(inner_client)
+        fake_client = treq_HTTPClient(self.fake_server.get_agent())
+        self.client = self.get_client(fake_client)
 
         # Spin the reactor once at the end of each test to clean up any
         # cancelled deferreds
@@ -519,7 +520,82 @@ class TestJsonClient(TestHTTPClientBase):
 
 class TestMarathonClient(TestHTTPClientBase):
     def get_client(self, client):
-        return MarathonClient('http://localhost:8080', client=client)
+        return MarathonClient(['http://localhost:8080'], client=client)
+
+    def uri(self, path, index=0):
+        return ''.join((self.client.endpoints[index], path))
+
+    @inlineCallbacks
+    def test_request_success(self):
+        """
+        When we make a request and there are multiple Marathon endpoints
+        specified, the first endpoint is used.
+        """
+        agent = PerLocationAgent()
+        agent.add_agent(b'localhost:8080', self.fake_server.get_agent())
+        agent.add_agent(b'localhost:9090', FailingAgent())
+        client = MarathonClient(
+            ['http://localhost:8080', 'http://localhost:9090'],
+            client=treq_HTTPClient(agent))
+
+        d = self.cleanup_d(client.request('GET', path='/my-path'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url='http://localhost:8080/my-path'))
+
+        request.setResponseCode(200)
+        request.finish()
+
+        yield d
+
+    @inlineCallbacks
+    def test_request_fallback(self):
+        """
+        When we make a request and there are multiple Marathon endpoints
+        specified, and an endpoint fails, the next endpoint is used.
+        """
+        agent = PerLocationAgent()
+        agent.add_agent(b'localhost:8080', FailingAgent())
+        agent.add_agent(b'localhost:9090', self.fake_server.get_agent())
+        client = MarathonClient(
+            ['http://localhost:8080', 'http://localhost:9090'],
+            client=treq_HTTPClient(agent))
+
+        d = self.cleanup_d(client.request('GET', path='/my-path'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url='http://localhost:9090/my-path'))
+
+        request.setResponseCode(200)
+        request.finish()
+
+        yield d
+
+        flush_logged_errors(RuntimeError)
+
+    @inlineCallbacks
+    def test_request_fallback_all_failed(self):
+        """
+        When we make a request and there are multiple Marathon endpoints
+        specified, and all the endpoints fail, the last failure should be
+        returned.
+        """
+        agent = PerLocationAgent()
+        agent.add_agent(b'localhost:8080', FailingAgent(RuntimeError('8080')))
+        agent.add_agent(b'localhost:9090', FailingAgent(RuntimeError('9090')))
+        client = MarathonClient(
+            ['http://localhost:8080', 'http://localhost:9090'],
+            client=treq_HTTPClient(agent))
+
+        d = self.cleanup_d(client.request('GET', path='/my-path'))
+
+        yield wait0()
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            RuntimeError, '9090')))
+
+        flush_logged_errors(RuntimeError)
 
     @inlineCallbacks
     def test_get_json_field(self):
