@@ -23,8 +23,8 @@ The ACME provider that most people are likely to use is [Let's Encrypt](https://
 
 ```
 > $ docker run --rm praekeltfoundation/marathon-acme:develop marathon-acme --help
-usage: marathon-acme [-h] [-a ACME] [-m MARATHON] [-l LB] [-g GROUP]
-                     [--listen LISTEN]
+usage: marathon-acme [-h] [-a ACME] [-m MARATHON[,MARATHON,...]]
+                     [-l LB[,LB,...]] [-g GROUP] [--listen LISTEN]
                      [--log-level {debug,info,warn,error,critical}]
                      storage-dir
 
@@ -37,12 +37,12 @@ optional arguments:
   -h, --help            show this help message and exit
   -a ACME, --acme ACME  The address for the ACME Directory Resource (default:
                         https://acme-v01.api.letsencrypt.org/directory)
-  -m MARATHON, --marathon MARATHON
-                        The addresses for the Marathon HTTP API (comma-
-                        separated) (default: http://marathon.mesos:8080)
-  -l LB, --lb LB        The addresses for the marathon-lb HTTP API (comma-
-                        separated) (default: http://marathon-
-                        lb.marathon.mesos:9090)
+  -m MARATHON[,MARATHON,...], --marathon MARATHON[,MARATHON,...]
+                        The addresses for the Marathon HTTP API (default:
+                        http://marathon.mesos:8080)
+  -l LB[,LB,...], --lb LB[,LB,...]
+                        The addresses for the marathon-lb HTTP API (default:
+                        http://marathon-lb.marathon.mesos:9090)
   -g GROUP, --group GROUP
                         The marathon-lb group to issue certificates for
                         (default: external)

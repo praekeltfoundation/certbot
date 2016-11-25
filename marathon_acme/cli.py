@@ -24,13 +24,13 @@ parser.add_argument('-a', '--acme',
                          '(default: %(default)s)',
                     default=(
                         'https://acme-v01.api.letsencrypt.org/directory'))
-parser.add_argument('-m', '--marathon',
-                    help='The addresses for the Marathon HTTP API (comma-'
-                         'separated) (default: %(default)s)',
+parser.add_argument('-m', '--marathon', metavar='MARATHON[,MARATHON,...]',
+                    help='The addresses for the Marathon HTTP API (default: '
+                         '%(default)s)',
                     default='http://marathon.mesos:8080')
-parser.add_argument('-l', '--lb',
-                    help='The addresses for the marathon-lb HTTP API (comma-'
-                         'separated) (default: %(default)s)',
+parser.add_argument('-l', '--lb', metavar='LB[,LB,...]',
+                    help='The addresses for the marathon-lb HTTP API '
+                         '(default: %(default)s)',
                     default='http://marathon-lb.marathon.mesos:9090')
 parser.add_argument('-g', '--group',
                     help='The marathon-lb group to issue certificates for '
