@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
+from operator import methodcaller
+
 from testtools.assertions import assert_that
-from testtools.matchers import Equals, Is
+from testtools.matchers import AfterPreprocessing as After
+from testtools.matchers import (
+    Equals, Is, IsInstance, MatchesAll, MatchesStructure)
 from testtools.twistedsupport import succeeded
+from treq.response import _Response  # FIXME
+from treq.testing import StubTreq
+from twisted.internet.defer import DeferredQueue
+from twisted.web.http import Request
+from twisted.web.resource import Resource
+from twisted.web.server import NOT_DONE_YET
 
 from marathon_acme.sse_protocol import SseProtocol
+from marathon_acme.tests.matchers import HasHeader
 
 
 class DummyTransport(object):
@@ -263,3 +274,115 @@ class TestSseProtocol(object):
             ('status', 'hello'),
             ('message', 'world')
         ]))
+
+
+class FakeSseResource(Resource):
+    """
+    A leaf resource that just writes SSE headers to incoming requests and
+    stores them to a queue.
+    """
+    isLeaf = True
+
+    def __init__(self):
+        self.requests = DeferredQueue()
+
+    def render(self, request):
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'text/event-stream')
+        request.write(b'')  # Write empty bytes to flush headers
+        self.requests.put(request)
+        return NOT_DONE_YET
+
+
+def is_sse_request():
+    return MatchesAll(
+        IsInstance(Request),
+        MatchesStructure(method=Equals(b'GET')),
+        After(
+            methodcaller('getHeader', b'accept'), Equals(b'text/event-stream'))
+    )
+
+
+def is_sse_response():
+    return MatchesAll(
+        IsInstance(_Response),
+        MatchesStructure(
+            code=Equals(200),
+            headers=HasHeader('content-type', ['text/event-stream'])
+        )
+    )
+
+
+class TestSseProtocolIntegration(object):
+    """
+    These are only integration tests in the sense that they test the way the
+    protocol interacts with HTTP transport machinery that it is likely to be
+    used with.
+    """
+
+    def setup_method(self):
+        self.messages = []
+
+        def append_message(event, data):
+            self.messages.append((event, data))
+        self.protocol = SseProtocol(append_message)
+
+        resource = FakeSseResource()
+        self.requests = resource.requests
+        self.client = StubTreq(resource)
+
+    def make_request(self):
+        """
+        Make an SSE request.
+        :return: The Twisted request object and the Treq response object
+        """
+        request_d = self.requests.get()
+
+        def deliver_body(response):
+            response.deliverBody(self.protocol)
+            return response
+
+        response_d = self.client.get(
+            'http://localhost', headers={'accept': 'text/event-stream'})
+        response_d.addCallback(deliver_body)
+
+        # The HTTP parts of the protocol (headers, etc.) we don't really care
+        # about at the transport-level but we sanity-check that the deferreds
+        # have what we expect.
+        assert_that(request_d, succeeded(is_sse_request()))
+        assert_that(response_d, succeeded(is_sse_response()))
+
+        return request_d.result, response_d.result
+
+    def write(self, request, data):
+        """ Write data to a Request object. """
+        request.write(data)
+        self.client.flush()
+
+    def lose_connection(self, request):
+        """ Lose the connection on a Request object. """
+        request.loseConnection()
+        self.client.flush()
+
+    def test_write(self):
+        """
+        When SSE data is written to the request, messages should be interpreted
+        by the protocol.
+        """
+        request, response = self.make_request()
+
+        self.write(request, b'data:hello\r\n\r\n')
+        assert_that(self.messages, Equals([('message', 'hello')]))
+
+    def test_lose_connection(self):
+        """
+        When the request connection is lost, a finished deferred on the
+        protocol should be fired with a None value.
+        """
+        request, response = self.make_request()
+
+        finished = self.protocol.when_finished()
+
+        self.lose_connection(request)
+
+        assert_that(finished, succeeded(Is(None)))
