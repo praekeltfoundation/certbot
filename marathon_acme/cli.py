@@ -3,7 +3,7 @@ import sys
 
 from twisted.internet.task import react
 from twisted.logger import (
-    FilteringLogObserver, globalLogPublisher, LogLevel,
+    FilteringLogObserver, globalLogPublisher, Logger, LogLevel,
     LogLevelFilterPredicate, textFileLogObserver)
 from twisted.python.filepath import FilePath
 from twisted.python.url import URL
@@ -15,6 +15,8 @@ from marathon_acme.clients import MarathonClient, MarathonLbClient
 from marathon_acme.service import MarathonAcme
 
 
+log = Logger()
+
 parser = argparse.ArgumentParser(
     description='Automatically manage ACME certificates for Marathon apps')
 parser.add_argument('-a', '--acme',
@@ -22,13 +24,13 @@ parser.add_argument('-a', '--acme',
                          '(default: %(default)s)',
                     default=(
                         'https://acme-v01.api.letsencrypt.org/directory'))
-parser.add_argument('-m', '--marathon', nargs='+',
-                    help='The address for the Marathon HTTP API (default: '
-                         '%(default)s)',
+parser.add_argument('-m', '--marathon',
+                    help='The addresses for the Marathon HTTP API (comma-'
+                         'separated) (default: %(default)s)',
                     default='http://marathon.mesos:8080')
-parser.add_argument('-l', '--lb', nargs='+',
-                    help='The address for the marathon-lb HTTP API '
-                         '(default: %(default)s)',
+parser.add_argument('-l', '--lb',
+                    help='The addresses for the marathon-lb HTTP API (comma-'
+                         'separated) (default: %(default)s)',
                     default='http://marathon-lb.marathon.mesos:9090')
 parser.add_argument('-g', '--group',
                     help='The marathon-lb group to issue certificates for '
@@ -58,13 +60,24 @@ def main(reactor, raw_args=sys.argv[1:]):
     init_logging(args.log_level)
 
     # Set up marathon-acme
+    marathon_addrs = args.marathon.split(',')
+    mlb_addrs = args.lb.split(',')
+
     marathon_acme = create_marathon_acme(
         args.storage_dir, args.acme,
-        args.marathon, args.lb, args.group,
+        marathon_addrs, mlb_addrs, args.group,
         reactor)
 
     # Run the thing
     host, port = args.listen.split(':', 1)  # TODO: better validation
+
+    log.info('Running marathon-acme with: storage-dir="{storage_dir}", '
+             'acme="{acme}", marathon={marathon_addrs}, lb={mlb_addrs}, '
+             'group="{group}", listen_host={host}, listen_port={port}',
+             storage_dir=args.storage_dir, acme=args.acme,
+             marathon_addrs=marathon_addrs, mlb_addrs=mlb_addrs,
+             group=args.group, host=host, port=port)
+
     return marathon_acme.run(host, int(port))
 
 
