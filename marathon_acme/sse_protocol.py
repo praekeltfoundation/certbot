@@ -55,6 +55,13 @@ class SseProtocol(Protocol):
         elif hasattr(self.transport, 'stopProducing'):
             self.transport.stopProducing()
 
+    def makeConnection(self, transport):
+        if (not hasattr(transport, 'loseConnection') and
+                not hasattr(transport, 'stopProducing')):
+            raise ValueError("Transport '%r' does not have a 'loseConnection' "
+                             "or 'stopProducing' method" % (transport,))
+        super(SseProtocol, self).makeConnection(transport)
+
     def dataReceived(self, data):
         """
         Translates bytes into lines, and calls lineReceived.

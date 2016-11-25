@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from operator import methodcaller
 
+from testtools import ExpectedException
 from testtools.assertions import assert_that
 from testtools.matchers import AfterPreprocessing as After
 from testtools.matchers import (
@@ -34,7 +35,7 @@ class TestSseProtocol(object):
         self.protocol = SseProtocol(append_message)
 
         self.transport = DummyTransport()
-        self.protocol.transport = self.transport
+        self.protocol.makeConnection(self.transport)
 
     def test_default_event(self):
         """
@@ -275,6 +276,18 @@ class TestSseProtocol(object):
             ('status', 'hello'),
             ('message', 'world')
         ]))
+
+    def test_transport_without_methods_connected(self):
+        """
+        When a connection is made with a transport object that does not have
+        the methods we need to be able to close the connection, an error should
+        be raised.
+        """
+        with ExpectedException(
+            ValueError,
+            r"^Transport '<object.*>' does not have a 'loseConnection' or "
+                "'stopProducing' method"):
+            self.protocol.makeConnection(object())
 
 
 class FakeSseResource(Resource):
