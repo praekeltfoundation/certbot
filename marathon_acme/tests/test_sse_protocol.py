@@ -5,16 +5,17 @@ from testtools.assertions import assert_that
 from testtools.matchers import AfterPreprocessing as After
 from testtools.matchers import (
     Equals, Is, IsInstance, MatchesAll, MatchesStructure)
-from testtools.twistedsupport import succeeded
+from testtools.twistedsupport import failed, succeeded
 from treq.response import _Response  # FIXME
 from treq.testing import StubTreq
 from twisted.internet.defer import DeferredQueue
+from twisted.internet.error import ConnectionDone
 from twisted.web.http import Request
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 
 from marathon_acme.sse_protocol import SseProtocol
-from marathon_acme.tests.matchers import HasHeader
+from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
 
 
 class DummyTransport(object):
@@ -386,3 +387,25 @@ class TestSseProtocolIntegration(object):
         self.lose_connection(request)
 
         assert_that(finished, succeeded(Is(None)))
+
+    def test_cancel_finished_deferred(self):
+        """
+        When a finished deferred is cancelled, the underlying connection should
+        be lost and any other finished deferreds should be fired.
+        """
+        # Make a request so that a transport is attached
+        request, _ = self.make_request()
+        request_finished = request.notifyFinish()
+
+        # Get two finished deferreds...
+        finished1 = self.protocol.when_finished()
+        finished2 = self.protocol.when_finished()
+
+        # ...and cancel one of them
+        finished1.cancel()
+        self.client.flush()
+
+        assert_that(request_finished, failed(WithErrorTypeAndMessage(
+            ConnectionDone, 'Connection was closed cleanly: Connection done.'
+        )))
+        assert_that(finished2, succeeded(Is(None)))
