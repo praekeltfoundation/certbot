@@ -320,7 +320,8 @@ class TestMarathonAcme(object):
             'portDefinitions': [
                 {'port': 9000, 'protocol': 'tcp', 'labels': {}},
                 {'port': 9001, 'protocol': 'tcp', 'labels': {}}
-            ]
+            ],
+            'ports': [10007]
         })
 
         d = self.marathon_acme.sync()
@@ -332,6 +333,33 @@ class TestMarathonAcme(object):
         assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
             'example.com': Not(Is(None)),
             'example2.com': Not(Is(None))
+        })))
+
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
+    def test_sync_app_no_port_definitions(self):
+        """
+        When a sync is run and this Marathon doesn't return the
+        'portDefinitions' field with the app definitions, the 'ports' field
+        should be used instead and a regular sync is completed.
+        """
+        # Store an app in Marathon with a marathon-acme domain
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'ports': [10007]  # Some random service port
+        })
+
+        d = self.marathon_acme.sync()
+        assert_that(d, succeeded(MatchesListwise([  # Per domain
+            is_marathon_lb_sigusr_response
+        ])))
+
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None))
         })))
 
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
