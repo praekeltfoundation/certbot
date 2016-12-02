@@ -166,12 +166,12 @@ class MarathonAcme(object):
         # Prefer the 'portDefinitions' field added in Marathon 1.0.0 but fall
         # back to the deprecated 'ports' array if that's not present.
         if 'portDefinitions' in app:
-            num_ports = len(app['portDefinitions'])
+            ports = app['portDefinitions']
         else:
-            num_ports = len(app['ports'])
+            ports = app['ports']
 
         # Iterate through the ports, checking for corresponding labels
-        for port_index in range(num_ports):
+        for port_index, _ in enumerate(ports):
             # Get the port group label, defaulting to the app group label
             port_group = labels.get(
                 'HAPROXY_%d_GROUP' % (port_index,), app_group)
