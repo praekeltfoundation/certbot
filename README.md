@@ -125,6 +125,7 @@ The environment variables available correspond to the CLI options as follows:
 | Environment variable      | CLI option    |
 |---------------------------|---------------|
 | `MARATHON_ACME_ACME`      | `--acme`      |
+| `MARATHON_ACME_EMAIL`     | `--email`     |
 | `MARATHON_ACME_MARATHON`  | `--marathon`  |
 | `MARATHON_ACME_LB`        | `--lb`        |
 | `MARATHON_ACME_GROUP`     | `--group`     |
