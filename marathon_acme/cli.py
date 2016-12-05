@@ -75,7 +75,7 @@ def main(reactor, raw_args=sys.argv[1:]):
     host, port = args.listen.split(':', 1)  # TODO: better validation
 
     log.info('Running marathon-acme with: storage-dir="{storage_dir}", '
-             'acme="{acme}", email={email}, marathon={marathon_addrs}, '
+             'acme="{acme}", email="{email}", marathon={marathon_addrs}, '
              'lb={mlb_addrs}, group="{group}", listen_host={host}, '
              'listen_port={port}', storage_dir=args.storage_dir,
              acme=args.acme, email=args.email, marathon_addrs=marathon_addrs,
