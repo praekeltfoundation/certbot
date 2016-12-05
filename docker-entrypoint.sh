@@ -2,6 +2,7 @@
 
 # Options can be set using environment variables:
 # MARATHON_ACME_ACME:      --acme
+# MARATHON_ACME_EMAIL:     --email
 # MARATHON_ACME_MARATHON:  --marathon
 # MARATHON_ACME_LB:        --lb
 # MARATHON_ACME_GROUP:     --group
@@ -13,6 +14,7 @@
 
 exec marathon-acme \
   ${MARATHON_ACME_ACME:+--acme "$MARATHON_ACME_ACME"} \
+  ${MARATHON_ACME_EMAIL:+--email "$MARATHON_ACME_EMAIL"} \
   ${MARATHON_ACME_MARATHON:+--marathon "$MARATHON_ACME_MARATHON"} \
   ${MARATHON_ACME_LB:+--lb "$MARATHON_ACME_LB"} \
   ${MARATHON_ACME_GROUP:+--group "$MARATHON_ACME_GROUP"} \

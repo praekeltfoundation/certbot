@@ -23,7 +23,7 @@ class MarathonAcme(object):
     log = Logger()
 
     def __init__(self, marathon_client, group, cert_store, mlb_client,
-                 txacme_client_creator, reactor):
+                 txacme_client_creator, reactor, email=None):
         """
         Create the marathon-acme service.
 
@@ -33,6 +33,7 @@ class MarathonAcme(object):
         :param mlb_clinet: The marathon-lb API client.
         :param txacme_client_creator: Callable to create the txacme client.
         :param reactor: The reactor to use.
+        :param email: The ACME registration email.
         """
         self.marathon_client = marathon_client
         self.group = group
@@ -43,7 +44,7 @@ class MarathonAcme(object):
 
         mlb_cert_store = MlbCertificateStore(cert_store, mlb_client)
         self.txacme_service = AcmeIssuingService(
-            mlb_cert_store, txacme_client_creator, reactor, [responder])
+            mlb_cert_store, txacme_client_creator, reactor, [responder], email)
 
         self._server_listening = None
 
