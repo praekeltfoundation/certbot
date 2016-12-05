@@ -24,6 +24,9 @@ parser.add_argument('-a', '--acme',
                          '(default: %(default)s)',
                     default=(
                         'https://acme-v01.api.letsencrypt.org/directory'))
+parser.add_argument('-e', '--email',
+                    help='An email address to register with the ACME service '
+                         '(optional)')
 parser.add_argument('-m', '--marathon', metavar='MARATHON[,MARATHON,...]',
                     help='The addresses for the Marathon HTTP API (default: '
                          '%(default)s)',
@@ -64,7 +67,7 @@ def main(reactor, raw_args=sys.argv[1:]):
     mlb_addrs = args.lb.split(',')
 
     marathon_acme = create_marathon_acme(
-        args.storage_dir, args.acme,
+        args.storage_dir, args.acme, args.email,
         marathon_addrs, mlb_addrs, args.group,
         reactor)
 
@@ -72,16 +75,16 @@ def main(reactor, raw_args=sys.argv[1:]):
     host, port = args.listen.split(':', 1)  # TODO: better validation
 
     log.info('Running marathon-acme with: storage-dir="{storage_dir}", '
-             'acme="{acme}", marathon={marathon_addrs}, lb={mlb_addrs}, '
-             'group="{group}", listen_host={host}, listen_port={port}',
-             storage_dir=args.storage_dir, acme=args.acme,
-             marathon_addrs=marathon_addrs, mlb_addrs=mlb_addrs,
-             group=args.group, host=host, port=port)
+             'acme="{acme}", email={email}, marathon={marathon_addrs}, '
+             'lb={mlb_addrs}, group="{group}", listen_host={host}, '
+             'listen_port={port}', storage_dir=args.storage_dir,
+             acme=args.acme, email=args.email, marathon_addrs=marathon_addrs,
+             mlb_addrs=mlb_addrs, group=args.group, host=host, port=port)
 
     return marathon_acme.run(host, int(port))
 
 
-def create_marathon_acme(storage_dir, acme_directory,
+def create_marathon_acme(storage_dir, acme_directory, acme_email,
                          marathon_addrs, mlb_addrs, group,
                          reactor):
     """
@@ -90,6 +93,8 @@ def create_marathon_acme(storage_dir, acme_directory,
     :param storage_dir:
         Path to the storage directory for certificates and the client key.
     :param acme_directory: Address for the ACME directory to use.
+    :param acme_email:
+        Email address to use when registering with the ACME service.
     :param marathon_addr:
         Address for the Marathon instance to find app domains that require
         certificates.
@@ -111,7 +116,8 @@ def create_marathon_acme(storage_dir, acme_directory,
         DirectoryStore(certs_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),
         create_txacme_client_creator(reactor, acme_url, key),
-        reactor)
+        reactor,
+        acme_email)
 
 
 def init_storage_dir(storage_dir):
