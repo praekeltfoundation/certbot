@@ -49,8 +49,7 @@ optional arguments:
   -g GROUP, --group GROUP
                         The marathon-lb group to issue certificates for
                         (default: external)
-  --listen LISTEN       The address for the port to listen on (default:
-                        0.0.0.0:8000)
+  --listen LISTEN       The address for the port to listen on (default: :8000)
   --log-level {debug,info,warn,error,critical}
                         The minimum severity level to log messages at
                         (default: info)
