@@ -121,9 +121,9 @@ class TestParseListenAddr(object):
         is raised.
         """
         with ExpectedException(
-                ValueError,
-                r"'localhost' does not appear to be an IPv4 or IPv6 address"):
-            parse_listen_addr('localhost:8080')
+            ValueError,
+                r"u?'hello' does not appear to be an IPv4 or IPv6 address"):
+            parse_listen_addr('hello:8080')
 
     def test_parse_invalid_port(self):
         """

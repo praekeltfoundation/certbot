@@ -6,6 +6,7 @@ from twisted.internet.task import react
 from twisted.logger import (
     FilteringLogObserver, globalLogPublisher, Logger, LogLevel,
     LogLevelFilterPredicate, textFileLogObserver)
+from twisted.python.compat import _PY3
 from twisted.python.filepath import FilePath
 from twisted.python.url import URL
 from txacme.store import DirectoryStore
@@ -86,6 +87,10 @@ def main(reactor, raw_args=sys.argv[1:]):
     return marathon_acme.run(endpoint_description)
 
 
+def _to_unicode(string):
+    return unicode(string) if not _PY3 else string
+
+
 def parse_listen_addr(listen_addr):
     """
     Parse an address of the form [ipaddress]:port into a tcp or tcp6 Twisted
@@ -105,7 +110,7 @@ def parse_listen_addr(listen_addr):
     else:
         if host.startswith('[') and host.endswith(']'):  # IPv6 wrapped in []
             host = host[1:-1]
-        ip_address = ipaddress.ip_address(host)
+        ip_address = ipaddress.ip_address(_to_unicode(host))
         protocol = 'tcp6' if ip_address.version == 6 else 'tcp'
         interface = str(ip_address)
 
@@ -148,7 +153,7 @@ def create_marathon_acme(storage_dir, acme_directory, acme_email,
     :param reactor: The reactor to use.
     """
     storage_path, certs_path = init_storage_dir(storage_dir)
-    acme_url = URL.fromText(acme_directory)
+    acme_url = URL.fromText(_to_unicode(acme_directory))
     key = maybe_key(storage_path)
 
     return MarathonAcme(
