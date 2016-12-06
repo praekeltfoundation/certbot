@@ -14,6 +14,7 @@ setup(
     install_requires=[
         'acme',
         'cryptography',
+        "ipaddress; python_version < '3.3'",
         'klein==15.3.1',
         'requests',
         'treq',
