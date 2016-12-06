@@ -1,5 +1,19 @@
+import sys
+
 from setuptools import setup, find_packages
 
+install_requires = [
+    'acme',
+    'cryptography',
+    'klein==15.3.1',
+    'requests',
+    'treq',
+    'Twisted',
+    'txacme',
+    'uritools>=1.0.0'
+]
+if sys.version_info < (3, 3):
+    install_requires.append('ipaddress')
 
 setup(
     name='marathon-acme',
@@ -11,17 +25,7 @@ setup(
     author='Jamie Hewland',
     author_email='jamie@praekelt.com',
     packages=find_packages(),
-    install_requires=[
-        'acme',
-        'cryptography',
-        "ipaddress; python_version < '3.3'",
-        'klein==15.3.1',
-        'requests',
-        'treq',
-        'Twisted',
-        'txacme',
-        'uritools>=1.0.0'
-    ],
+    install_requires=install_requires,
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Framework :: Twisted',
