@@ -6,7 +6,7 @@ from twisted.internet.task import react
 from twisted.logger import (
     FilteringLogObserver, globalLogPublisher, Logger, LogLevel,
     LogLevelFilterPredicate, textFileLogObserver)
-from twisted.python.compat import _PY3
+from twisted.python.compat import unicode
 from twisted.python.filepath import FilePath
 from twisted.python.url import URL
 from txacme.store import DirectoryStore
@@ -88,7 +88,10 @@ def main(reactor, raw_args=sys.argv[1:]):
 
 
 def _to_unicode(string):
-    return unicode(string) if not _PY3 else string
+    if isinstance(string, unicode):
+        return string
+    elif isinstance(string, bytes):
+        return unicode(string, 'utf-8')
 
 
 def parse_listen_addr(listen_addr):
