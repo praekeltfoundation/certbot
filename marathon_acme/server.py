@@ -1,6 +1,7 @@
 import json
 
 from klein import Klein
+from twisted.internet.endpoints import serverFromString
 from twisted.logger import Logger
 from twisted.web.http import OK, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE
 from twisted.web.server import Site
@@ -25,18 +26,19 @@ class MarathonAcmeServer(object):
         self.responder_resource = responder_resource
         self.health_handler = None
 
-    def listen(self, host, port, reactor):
+    def listen(self, reactor, endpoint_description):
         """
         Run the server, i.e. start listening for requests on the given host and
         port.
 
-        :param host: The address for the interface to listen on.
-        :param port: The port to bind to.
         :param reactor: The ``IReactorTCP`` to use.
-        :return: An object that provides ``IListeningPort``.
+        :param endpoint_description:
+            The Twisted description for the endpoint to listen on.
+        :return:
+            A deferred that returns an object that provides ``IListeningPort``.
         """
-        site = Site(self.app.resource())
-        return reactor.listenTCP(port, site, interface=host)
+        endpoint = serverFromString(reactor, endpoint_description)
+        return endpoint.listen(Site(self.app.resource()))
 
     @app.route('/.well-known/acme-challenge/', branch=True, methods=['GET'])
     def acme_challenge(self, request):

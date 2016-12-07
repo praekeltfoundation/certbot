@@ -1,10 +1,13 @@
 import argparse
+import ipaddress
 import sys
 
+from twisted.internet.endpoints import quoteStringArgument
 from twisted.internet.task import react
 from twisted.logger import (
     FilteringLogObserver, globalLogPublisher, Logger, LogLevel,
     LogLevelFilterPredicate, textFileLogObserver)
+from twisted.python.compat import unicode
 from twisted.python.filepath import FilePath
 from twisted.python.url import URL
 from txacme.store import DirectoryStore
@@ -42,7 +45,7 @@ parser.add_argument('-g', '--group',
 parser.add_argument('--listen',
                     help='The address for the port to listen on (default: '
                          '%(default)s)',
-                    default='0.0.0.0:8000')
+                    default=':8000')
 parser.add_argument('--log-level',
                     help='The minimum severity level to log messages at '
                          '(default: %(default)s)',
@@ -72,16 +75,64 @@ def main(reactor, raw_args=sys.argv[1:]):
         reactor)
 
     # Run the thing
-    host, port = args.listen.split(':', 1)  # TODO: better validation
+    endpoint_description = parse_listen_addr(args.listen)
 
     log.info('Running marathon-acme with: storage-dir="{storage_dir}", '
              'acme="{acme}", email="{email}", marathon={marathon_addrs}, '
-             'lb={mlb_addrs}, group="{group}", listen_host={host}, '
-             'listen_port={port}', storage_dir=args.storage_dir,
-             acme=args.acme, email=args.email, marathon_addrs=marathon_addrs,
-             mlb_addrs=mlb_addrs, group=args.group, host=host, port=port)
+             'lb={mlb_addrs}, group="{group}", '
+             'endpoint_description="{endpoint_desc}", ',
+             storage_dir=args.storage_dir, acme=args.acme, email=args.email,
+             marathon_addrs=marathon_addrs, mlb_addrs=mlb_addrs,
+             group=args.group, endpoint_desc=endpoint_description)
 
-    return marathon_acme.run(host, int(port))
+    return marathon_acme.run(endpoint_description)
+
+
+def _to_unicode(string):
+    if isinstance(string, unicode):
+        return string
+    elif isinstance(string, bytes):
+        return unicode(string, 'utf-8')
+
+
+def parse_listen_addr(listen_addr):
+    """
+    Parse an address of the form [ipaddress]:port into a tcp or tcp6 Twisted
+    endpoint description string for use with
+    ``twisted.internet.endpoints.serverFromString``.
+    """
+    if ':' not in listen_addr:
+        raise ValueError(
+            "'%s' does not have the correct form for a listen address: "
+            '[ipaddress]:port' % (listen_addr,))
+    host, port = listen_addr.rsplit(':', 1)
+
+    # Validate the host
+    if host == '':
+        protocol = 'tcp'
+        interface = None
+    else:
+        if host.startswith('[') and host.endswith(']'):  # IPv6 wrapped in []
+            host = host[1:-1]
+        ip_address = ipaddress.ip_address(_to_unicode(host))
+        protocol = 'tcp6' if ip_address.version == 6 else 'tcp'
+        interface = str(ip_address)
+
+    # Validate the port
+    if not port.isdigit() or int(port) < 1 or int(port) > 65535:
+        raise ValueError(
+            "'%s' does not appear to be a valid port number" % (port,))
+
+    args = [protocol, port]
+    kwargs = {'interface': interface} if interface is not None else {}
+
+    return _create_tx_endpoints_string(args, kwargs)
+
+
+def _create_tx_endpoints_string(args, kwargs):
+    _kwargs = (
+        ['='.join((k, quoteStringArgument(v))) for k, v in kwargs.items()])
+    return ':'.join(args + _kwargs)
 
 
 def create_marathon_acme(storage_dir, acme_directory, acme_email,
@@ -107,7 +158,7 @@ def create_marathon_acme(storage_dir, acme_directory, acme_email,
     :param reactor: The reactor to use.
     """
     storage_path, certs_path = init_storage_dir(storage_dir)
-    acme_url = URL.fromText(acme_directory)
+    acme_url = URL.fromText(_to_unicode(acme_directory))
     key = maybe_key(storage_path)
 
     return MarathonAcme(

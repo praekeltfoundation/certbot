@@ -48,15 +48,19 @@ class MarathonAcme(object):
 
         self._server_listening = None
 
-    def run(self, host, port):
+    def run(self, endpoint_description):
         self.log.info('Starting marathon-acme...')
 
         # Start the server
-        self._server_listening = self.server.listen(host, port, self.reactor)
+        d = self.server.listen(self.reactor, endpoint_description)
 
-        # Start the txacme service and wait for the initial check
-        self.txacme_service.startService()
-        d = self.txacme_service.when_certs_valid()
+        def on_server_listening(listening_port):
+            self._server_listening = listening_port
+
+            # Start the txacme service and wait for the initial check
+            self.txacme_service.startService()
+            return self.txacme_service.when_certs_valid()
+        d.addCallback(on_server_listening)
 
         # Then listen for events...
         d.addCallback(lambda _: self.listen_events())
@@ -71,10 +75,12 @@ class MarathonAcme(object):
             self.log.failure('Unhandle error during operation', result)
         self.log.warn('Stopping marathon-acme...')
 
-        return gatherResults([
-            self._server_listening.stopListening(),
-            self.txacme_service.stopService()
-        ], consumeErrors=True)
+        # If the server failed to start we have nothing to cancel yet
+        if self._server_listening is not None:
+            return gatherResults([
+                self._server_listening.stopListening(),
+                self.txacme_service.stopService()
+            ], consumeErrors=True)
 
     def listen_events(self, reconnects=0):
         """
