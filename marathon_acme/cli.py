@@ -2,6 +2,7 @@ import argparse
 import ipaddress
 import sys
 
+from twisted.internet.endpoints import quoteStringArgument
 from twisted.internet.task import react
 from twisted.logger import (
     FilteringLogObserver, globalLogPublisher, Logger, LogLevel,
@@ -129,7 +130,8 @@ def parse_listen_addr(listen_addr):
 
 
 def _create_tx_endpoints_string(args, kwargs):
-    _kwargs = ['='.join((k, v.replace(':', '\:'))) for k, v in kwargs.items()]
+    _kwargs = (
+        ['='.join((k, quoteStringArgument(v))) for k, v in kwargs.items()])
     return ':'.join(args + _kwargs)
 
 
