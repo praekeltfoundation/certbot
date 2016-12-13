@@ -1,5 +1,6 @@
 # marathon-acme
 
+[![PyPI](https://img.shields.io/pypi/v/marathon-acme.svg)](https://pypi.python.org/pypi/marathon-acme)
 [![Build Status](https://travis-ci.org/praekeltfoundation/marathon-acme.svg?branch=develop)](https://travis-ci.org/praekeltfoundation/marathon-acme)
 [![codecov](https://codecov.io/gh/praekeltfoundation/marathon-acme/branch/develop/graph/badge.svg)](https://codecov.io/gh/praekeltfoundation/marathon-acme)
 
