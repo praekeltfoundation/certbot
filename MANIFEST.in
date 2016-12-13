@@ -1,0 +1,1 @@
+include README.md LICENSE .coveragerc pytest.ini setup.cfg

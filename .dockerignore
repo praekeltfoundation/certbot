@@ -1,0 +1,3 @@
+# Don't copy Python cached files into the Docker image
+**/*.pyc
+**/__pycache__
