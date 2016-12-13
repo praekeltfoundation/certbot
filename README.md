@@ -166,7 +166,7 @@ We decided not to reuse the `HAPROXY_{n}_VHOST` label so as to limit the number 
 The current biggest limitation with `marathon-acme` is that it will only issue one certificate for one domain per app port. This is to limit the number of certificates issued so as to prevent hitting Let's Encrypt rate limits.
 
 The library used for ACME certificate management, `txacme`, is currently quite limited in its functionality. The two biggest limitations are:
-* Only anonymous ACME registrations are supported ([#72](https://github.com/mithrandi/txacme/issues/72)). This means you will not receive reminder emails from Let's Encrypt when your certificates are about to expire.
 * There is no [Subject Alternative Name](https://en.wikipedia.org/wiki/Subject_Alternative_Name) (SAN) support yet ([#37](https://github.com/mithrandi/txacme/issues/37)). Each certificate will correspond to exactly one domain name. This limitation makes it easier to hit Let's Encrypt's rate limits.
+* There is no support for *removing* certificates from `txacme`'s certificate store ([#77](https://github.com/mithrandi/txacme/issues/77)). Once `marathon-acme` issues a certificate for an app it will try to renew that certificate *forever* unless it is manually deleted from the certificate store.
 
 For a more complete list of issues, see the issues page for this repo.
