@@ -124,10 +124,10 @@ This is where it gets complicated... It’s possible to edit the templates used 
 
 #### Docker images
 Docker images are available from [Docker Hub](https://hub.docker.com/r/praekeltfoundation/marathon-acme/). There are two different streams of Docker images available:
-* `:latest`/`:<version>`: Tracks the latest released version of `marathon-acme` on [PyPI](https://pypi.python.org/pypi/marathon-acme). The Dockerfile for these is in the [`praekeltfoundation/docker-marathon-acme`](https://github.com/praekeltfoundation/marathon-acme) repo.
+* `:latest`/`:<version>`: Tracks the latest released version of `marathon-acme` on [PyPI](https://pypi.python.org/pypi/marathon-acme). The Dockerfile for these is in the [`praekeltfoundation/docker-marathon-acme`](https://github.com/praekeltfoundation/docker-marathon-acme) repo.
 * `:develop`: Tracks the `develop` branch of this repo and is built using the [Dockerfile](Dockerfile) in this repo.
 
-For more details on the Docker images, see the [`praekeltfoundation/docker-marathon-acme`](https://github.com/praekeltfoundation/marathon-acme) repo.
+For more details on the Docker images, see the [`praekeltfoundation/docker-marathon-acme`](https://github.com/praekeltfoundation/docker-marathon-acme) repo.
 
 ##### Volumes and ports
 The `marathon-acme` container defaults to the `/var/lib/marathon-acme` directory to store certificates and the ACME client private key. This is the path inside the container that should be mounted as a shared volume.
