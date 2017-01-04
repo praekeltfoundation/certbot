@@ -20,7 +20,7 @@ There is one big requirement for deploying `marathon-acme`: there must be shared
 The ACME provider that most people are likely to use is [Let's Encrypt](https://letsencrypt.org/). Before using `marathon-acme` with Let's Encrypt, make sure you are aware of their [rate limits](https://letsencrypt.org/docs/rate-limits/).
 
 ## Usage
-`marathon-acme` will eventually be available as a pip-installable Python package on PyPi. For now, a development Docker image is available [here](https://hub.docker.com/r/praekeltfoundation/marathon-acme/).
+`marathon-acme` is available as a pip-installable Python package on [PyPI](https://pypi.python.org/pypi/marathon-acme). However, most users will probably want to use the Docker image available from [Docker Hub](https://hub.docker.com/r/praekeltfoundation/marathon-acme/).
 
 ```
 > $ docker run --rm praekeltfoundation/marathon-acme --help
