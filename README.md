@@ -67,7 +67,8 @@ optional arguments:
   "args": [
     "--email", "letsencrypt@example.com",
     "--marathon", "http://marathon1:8080,http://marathon2:8080,http://marathon3:8080",
-    "--lb", "http://lb1:9090,http://lb2:9090"
+    "--lb", "http://lb1:9090,http://lb2:9090",
+    "/var/lib/marathon-acme"
   ],
   "labels": {
     "HAPROXY_GROUP": "external",

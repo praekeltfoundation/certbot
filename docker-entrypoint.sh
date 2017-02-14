@@ -1,24 +1,17 @@
 #!/usr/bin/env sh
+set -e
 
-# Options can be set using environment variables:
-# MARATHON_ACME_ACME:      --acme
-# MARATHON_ACME_EMAIL:     --email
-# MARATHON_ACME_MARATHON:  --marathon
-# MARATHON_ACME_LB:        --lb
-# MARATHON_ACME_GROUP:     --group
-# MARATHON_ACME_LOG_LEVEL: --log-level
+# Assume the user wants to run marathon-acme if the first argument...
+# * starts with '-', i.e. is a marathon-acme CLI option, or
+# * is an existing directory, i.e. is the path to the storage directory
+if [ "${1#-}" != "$1" ] || [ -d "$1" ]; then
+	set -- marathon-acme "$@"
+fi
 
-# The following options are hard-coded:
-# --listen:    0.0.0.0:8000
-# storage-dir: /var/lib/marathon-acme
+# If a user has been provided to run as, add the user switch to the command
+if [ -n "$MARATHON_ACME_USER" ] && [ "$1" == 'marathon-acme' ]; then
+  set -- su-exec "$MARATHON_ACME_USER" "$@"
+fi
 
-exec marathon-acme \
-  ${MARATHON_ACME_ACME:+--acme "$MARATHON_ACME_ACME"} \
-  ${MARATHON_ACME_EMAIL:+--email "$MARATHON_ACME_EMAIL"} \
-  ${MARATHON_ACME_MARATHON:+--marathon "$MARATHON_ACME_MARATHON"} \
-  ${MARATHON_ACME_LB:+--lb "$MARATHON_ACME_LB"} \
-  ${MARATHON_ACME_GROUP:+--group "$MARATHON_ACME_GROUP"} \
-  ${MARATHON_ACME_LOG_LEVEL:+--log-level "$MARATHON_ACME_LOG_LEVEL"} \
-  --listen 0.0.0.0:8000 \
-  /var/lib/marathon-acme \
-  "$@"
+# No init system -- marathon-acme is a single process
+exec "$@"
