@@ -12,7 +12,7 @@ cache:
     - ~/.pyenv_cache
 addons:
   apt_packages:
-  - pandoc
+    - pandoc
 
 before_install:
   - |

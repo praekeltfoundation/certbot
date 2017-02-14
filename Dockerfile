@@ -1,7 +1,6 @@
 # NOTE: This is a development Dockerfile for testing unreleased versions of
 # marathon-acme
 FROM praekeltfoundation/python3-base:alpine
-MAINTAINER Praekelt.org <sre@praekelt.org>
 
 # Copy in the source and install
 COPY marathon_acme /marathon-acme/marathon_acme
@@ -16,3 +15,4 @@ CMD ["marathon-acme-entrypoint.sh"]
 EXPOSE 8000
 VOLUME /var/lib/marathon-acme
 WORKDIR /var/lib/marathon-acme
+CMD ["/var/lib/marathon-acme"]
