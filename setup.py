@@ -27,7 +27,9 @@ install_requires = [
     'klein == 15.3.1',
     'requests',
     'treq',
-    'Twisted',
+    # Twisted 17.1.0 causes problems with treq.testing
+    # https://github.com/twisted/treq/issues/164
+    'Twisted != 17.1.0',
     'txacme >= 0.9.1',
     'uritools >= 1.0.0'
 ]
