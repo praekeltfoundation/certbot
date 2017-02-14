@@ -4,7 +4,7 @@ FROM praekeltfoundation/python3-base:alpine
 
 # Copy in the source and install
 COPY marathon_acme /marathon-acme/marathon_acme
-COPY setup.py LICENSE /marathon-acme/
+COPY setup.py LICENSE README.md /marathon-acme/
 RUN pip install -e /marathon-acme/.
 
 # Set up the entrypoint script
