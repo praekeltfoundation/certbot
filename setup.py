@@ -26,10 +26,11 @@ install_requires = [
     'cryptography',
     'klein == 15.3.1',
     'requests',
-    'treq',
-    # Twisted 17.1.0 causes problems with treq.testing
-    # https://github.com/twisted/treq/issues/164
-    'Twisted != 17.1.0',
+    # treq.testing broken on older versions of treq with Twisted 17.1.0
+    'treq >= 17.3.1',
+    # Despite treq & txacme depending on Twisted[tls], we don't get all the tls
+    # extras unless we depend on the option too, I guess, because pip.
+    'Twisted[tls]',
     'txacme >= 0.9.1',
     'uritools >= 1.0.0'
 ]
