@@ -22,7 +22,7 @@ def readme():
 
 
 install_requires = [
-    'acme',
+    'acme >= 0.10.0',
     'cryptography',
     'klein == 15.3.1',
     'requests',
