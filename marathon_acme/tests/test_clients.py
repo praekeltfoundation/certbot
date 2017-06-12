@@ -19,8 +19,7 @@ from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
     default_client, default_reactor, get_single_header, HTTPClient, HTTPError,
-    json_content, JsonClient, MarathonClient, MarathonLbClient,
-    raise_for_status)
+    JsonClient, MarathonClient, MarathonLbClient, raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import (
     failing_client, FailingAgent, PerLocationAgent)
@@ -426,86 +425,6 @@ class TestJsonClient(TestHTTPClientBase):
 
         request.setResponseCode(200)
         request.finish()
-
-    @inlineCallbacks
-    def test_json_content(self):
-        """
-        When a request is made with the json_content callback and the
-        'application/json' content type is set in the response headers then the
-        JSON should be successfully parsed.
-        """
-        d = self.cleanup_d(self.client.request('GET', path='/hello'))
-        d.addCallback(json_content)
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/hello')))
-        self.assertThat(request.requestHeaders,
-                        HasHeader('accept', ['application/json']))
-
-        request.setResponseCode(200)
-        request.setHeader('Content-Type', 'application/json')
-        request.write(json.dumps({}).encode('utf-8'))
-        request.finish()
-
-        response = yield d
-        self.assertThat(response, Equals({}))
-
-    @inlineCallbacks
-    def test_json_content_incorrect_content_type(self):
-        """
-        When a request is made with the json_content callback and the
-        content-type header is set to a value other than 'application/json' in
-        the response headers then an error should be raised.
-        """
-        d = self.cleanup_d(self.client.request('GET', path='/hello'))
-        d.addCallback(json_content)
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/hello')))
-        self.assertThat(request.requestHeaders,
-                        HasHeader('accept', ['application/json']))
-
-        request.setResponseCode(200)
-        request.setHeader('Content-Type', 'application/octet-stream')
-        request.write(json.dumps({}).encode('utf-8'))
-        request.finish()
-
-        yield wait0()
-        self.assertThat(d, failed(WithErrorTypeAndMessage(
-            HTTPError,
-            'Expected header "Content-Type" to be "application/json" but '
-            'found "application/octet-stream" instead')))
-
-    @inlineCallbacks
-    def test_json_content_missing_content_type(self):
-        """
-        When a request is made with the json_content callback and the
-        content-type header is not set in the response headers then an error
-        should be raised.
-        """
-        d = self.cleanup_d(self.client.request('GET', path='/hello'))
-        d.addCallback(json_content)
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/hello')))
-        self.assertThat(request.requestHeaders,
-                        HasHeader('accept', ['application/json']))
-
-        request.setResponseCode(200)
-        # Twisted will set the content type to "text/html" by default but this
-        # can be disabled by setting the default content type to None:
-        # https://twistedmatrix.com/documents/current/api/twisted.web.server.Request.html#defaultContentType
-        request.defaultContentType = None
-        request.write(json.dumps({}).encode('utf-8'))
-        request.finish()
-
-        yield wait0()
-        self.assertThat(d, failed(WithErrorTypeAndMessage(
-            HTTPError, 'Expected header "Content-Type" to be '
-                       '"application/json" but header not found in response')))
 
     def test_json_data_and_data_not_allowed(self):
         """
