@@ -3,6 +3,7 @@ import json
 
 from requests.exceptions import HTTPError
 from treq.client import HTTPClient as treq_HTTPClient
+from treq.content import json_content
 from twisted.internet.defer import DeferredList
 from twisted.logger import Logger, LogLevel
 from twisted.web.http import OK
@@ -27,17 +28,6 @@ def get_single_header(headers, key):
     # Take the final header as the authorative
     header, _ = cgi.parse_header(raw_headers[-1])
     return header
-
-
-def json_content(response):
-    # Raise if content type is not application/json
-    raise_for_header(response, 'Content-Type', 'application/json')
-
-    # Workaround for treq not treating JSON as UTF-8 by default (RFC7158)
-    # https://github.com/twisted/treq/pull/126
-    # See this discussion: http://stackoverflow.com/q/9254891
-    d = response.text(encoding='utf-8')
-    return d.addCallback(json.loads)
 
 
 def raise_for_status(response):
@@ -312,6 +302,7 @@ class MarathonClient(JsonClient):
         """
         d = self.request('GET', **kwargs)
         d.addCallback(raise_for_status)
+        d.addCallback(raise_for_header, 'Content-Type', 'application/json')
         d.addCallback(json_content)
         d.addCallback(self._get_json_field, field)
         return d
