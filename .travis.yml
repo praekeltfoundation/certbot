@@ -19,18 +19,19 @@ addons:
 before_install:
   - |
     if [[ -n "$PYENV_VERSION" ]]; then
-      wget https://github.com/praekeltfoundation/travis-pyenv/releases/download/0.2.0/setup-pyenv.sh
+      wget https://github.com/praekeltfoundation/travis-pyenv/releases/download/0.3.0/setup-pyenv.sh
       source setup-pyenv.sh
     fi
+  - pip install --upgrade pip
 
 install:
-  - pip install --upgrade pip
   - pip install -r requirements-dev.txt
   - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
 script:
   - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
   - py.test marathon_acme $COVERAGE_OPT
   - flake8 .
+
 after_success:
   - if [[ -z "$NO_COVERAGE" ]]; then codecov; fi
 
@@ -41,6 +42,6 @@ deploy:
   user: praekelt.org
   password:
     secure: YeufUcQa0CkVMJ+1KMAYvfKmAeODrxxxnoFx0Id9jpUeCc6OmLNzX60KgMf/1nW7VLksB+qwx/nXmXCfuwJ2y5C2Cgqn0LhM3aBXagvoqePTqrnGLuoE1YkYrNb6Q5l/QKJrVzYgINzNT2lHTwzM9cA0d3eEsUm58wtt7zRrkmgRGdLz4eL2ApgKI9rtc3fx2iiwOjPwHnuclIvv4IWE+IxzUZQ5PMlZzpV3X2mqkGir0+WL4ySo+lgY+Em96A2vWkfyfBSTxAKI+If9KhqcIZVVsYSoMktPiqM4XYqloZ62TaZgvgdd/gQ+Kcn0WMBO7pfGnV3TixJ8nId7uURDbM1p6qt1SRN0VNzXn38TK1TQuj0D4cUS/xrIO+Y6qP6akiG6RVA0ty4Rx/pi/5TIWOk3G4Mgfli/6X2ndE3jFVMK+JwEtfxHZAZYaHJ0c1wZoaFUtaKjVdvH7sOlyuuPsXYH5KUoN5j9zzxR8p+YB8iqGl4KMmW0F4PcLPKv8EoHjU4GjR6I0dfGB4BhE/m2YW9TclDbDCtr9nHVcOEImgefjuAdw70pYeYrVpKVO7MBKqbl2HjqoHhkU5QneShwuEP+kVLVAWJGwd73TRobvMgXwu4upzLEer5RweuhtV8526zXJKZGUp3pz0YDEc9VwfvuxT42ayGODi8JfP9s46Q=
-  distributions: 'sdist bdist_wheel'
+  distributions: sdist bdist_wheel
   on:
     tags: true
