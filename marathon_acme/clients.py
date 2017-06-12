@@ -302,6 +302,7 @@ class MarathonClient(JsonClient):
         """
         d = self.request('GET', **kwargs)
         d.addCallback(raise_for_status)
+        d.addCallback(raise_for_header, 'Content-Type', 'application/json')
         d.addCallback(json_content)
         d.addCallback(self._get_json_field, field)
         return d

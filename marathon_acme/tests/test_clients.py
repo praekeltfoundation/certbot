@@ -560,6 +560,58 @@ class TestMarathonClient(TestHTTPClientBase):
             HTTPError, '404 Client Error for url: %s' % self.uri('/my-path'))))
 
     @inlineCallbacks
+    def test_get_json_field_incorrect_content_type(self):
+        """
+        When get_json_field is used to make a request and the content-type
+        header is set to a value other than 'application/json' in the response
+        headers then an error should be raised.
+        """
+        d = self.cleanup_d(
+            self.client.get_json_field('field-key', path='/my-path'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/my-path')))
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'application/octet-stream')
+        request.write(json.dumps({}).encode('utf-8'))
+        request.finish()
+
+        yield wait0()
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError,
+            'Expected header "Content-Type" to be "application/json" but '
+            'found "application/octet-stream" instead')))
+
+    @inlineCallbacks
+    def test_get_json_field_missing_content_type(self):
+        """
+        When get_json_field is used to make a request and the content-type
+        header is not set in the response headers then an error should be
+        raised.
+        """
+        d = self.cleanup_d(
+            self.client.get_json_field('field-key', path='/my-path'))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/my-path')))
+
+        request.setResponseCode(200)
+        # Twisted will set the content type to "text/html" by default but this
+        # can be disabled by setting the default content type to None:
+        # https://twistedmatrix.com/documents/current/api/twisted.web.server.Request.html#defaultContentType
+        request.defaultContentType = None
+        request.write(json.dumps({}).encode('utf-8'))
+        request.finish()
+
+        yield wait0()
+        self.assertThat(d, failed(WithErrorTypeAndMessage(
+            HTTPError, 'Expected header "Content-Type" to be '
+                       '"application/json" but header not found in response')))
+
+    @inlineCallbacks
     def test_get_json_field_missing(self):
         """
         When get_json_field is used to make a request, the response is
