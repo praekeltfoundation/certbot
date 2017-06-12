@@ -9,8 +9,6 @@ matrix:
       dist: trusty
     - env: PYENV_VERSION=pypy3.5-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0-beta0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
       dist: trusty
-  allow_failures:
-    - env: PYENV_VERSION=pypy3.5-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0-beta0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
 cache:
   - pip
   - directories:
