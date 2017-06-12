@@ -9,6 +9,30 @@ matrix:
     - python: '3.6'
     - env: PYENV_VERSION=pypy2.7-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
     - env: PYENV_VERSION=pypy3.5-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0-beta0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
+    # Docker dev image
+    - sudo: required
+      services: [docker]
+      env:
+        - REGISTRY_USER=praekeltorgdeploy
+        - secure: "JSuiWKoxXNr77SYOuYC1RBXl4vXthOBmMxdKJ5ZjPNCkcAC1WeiFlEAYSA1rw+iuNIi0SWhU8ATTOVj+iKWH3aYx3RolCngMf18juFKGktUdQ17EimK2KzGeieyaBIuwRg+sYelgydC4J+d7pqDGAwhaqvU+xTJeKQUhavUIiymNrAZee008f/ncrporBHPTFHQIWbexYdd2ta/zO9Y3VOQqxJP5qp9E6uRAvvl9ZkNIFGcuRYylPbFIiR5QF6guEXks8bnhlnfflxSJUoX9z6NYeG/kQXyk84p4a2fRm7wuFn4XSbjY+G0Rik4tPq1+rBI7QdKM1YOctiej/Mmb0WD8sEkBGlQDwBb5oozdPY3MtqmtFcSXgf7o0yJWaoLt+l1LBKY1NQg+n59Ls7jnxX+pmR5d42W9lDLHPVVadyun+n4aMUhkbTYxlr1y4vAaAoogB6V9K4QRKekJ4i9mnTiVg29XLuqkZpKQjH6BNMMpy1kPML9tGx9cV+5dUGn2qC097YqmepvUCEIcRs0GJt1I7fNgb0VvyFQu3S/gFqVKVL8qZLWJFCs+TrII6x6ePp+iq5SQvST5YvWQ7JvZY9bnUnqsCBpa0Q1te2jyRk4AVJvd8oPBmt4z2OiJFahWnUvAbXduTW9fH9KhwbSw1nxi1lTSbpw/l+PLbocORKc="
+
+      # Clear unused steps
+      addons: {}
+      before_install: []
+      install: []
+      after_success: []
+
+      script: docker build -t praekeltfoundation/marathon-acme .
+
+      before_deploy:
+        - pip install docker-ci-deploy==0.3.0
+        - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
+      deploy:
+        provider: script
+        script: dcd -t develop -V "$(git rev-parse --short HEAD)" -L praekeltfoundation/marathon-acme
+        on:
+          branch: develop
+
 cache:
   - pip
   - directories:
