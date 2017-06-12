@@ -5,15 +5,12 @@ matrix:
     - python: '2.7'
     - python: '3.5'
     - python: '3.6'
-    - python: pypy
-      env: PYENV_VERSION=pypy2.7-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0' NO_COVERAGE=1
+    - env: PYENV_VERSION=pypy2.7-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
       dist: trusty
-    - python: pypy
-      env: PYENV_VERSION=pypy3.5-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0-beta0' NO_COVERAGE=1
+    - env: PYENV_VERSION=pypy3.5-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0-beta0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
       dist: trusty
   allow_failures:
-    - python: pypy
-      env: PYENV_VERSION=pypy3.5-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0-beta0' NO_COVERAGE=1
+    - env: PYENV_VERSION=pypy3.5-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0-beta0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
 cache:
   - pip
   - directories:
