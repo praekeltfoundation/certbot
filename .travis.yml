@@ -13,16 +13,23 @@ matrix:
     - sudo: required
       services: [docker]
       env:
+        - IMAGE_NAME=praekeltfoundation/marathon-acme
         - REGISTRY_USER=praekeltorgdeploy
         - secure: "JSuiWKoxXNr77SYOuYC1RBXl4vXthOBmMxdKJ5ZjPNCkcAC1WeiFlEAYSA1rw+iuNIi0SWhU8ATTOVj+iKWH3aYx3RolCngMf18juFKGktUdQ17EimK2KzGeieyaBIuwRg+sYelgydC4J+d7pqDGAwhaqvU+xTJeKQUhavUIiymNrAZee008f/ncrporBHPTFHQIWbexYdd2ta/zO9Y3VOQqxJP5qp9E6uRAvvl9ZkNIFGcuRYylPbFIiR5QF6guEXks8bnhlnfflxSJUoX9z6NYeG/kQXyk84p4a2fRm7wuFn4XSbjY+G0Rik4tPq1+rBI7QdKM1YOctiej/Mmb0WD8sEkBGlQDwBb5oozdPY3MtqmtFcSXgf7o0yJWaoLt+l1LBKY1NQg+n59Ls7jnxX+pmR5d42W9lDLHPVVadyun+n4aMUhkbTYxlr1y4vAaAoogB6V9K4QRKekJ4i9mnTiVg29XLuqkZpKQjH6BNMMpy1kPML9tGx9cV+5dUGn2qC097YqmepvUCEIcRs0GJt1I7fNgb0VvyFQu3S/gFqVKVL8qZLWJFCs+TrII6x6ePp+iq5SQvST5YvWQ7JvZY9bnUnqsCBpa0Q1te2jyRk4AVJvd8oPBmt4z2OiJFahWnUvAbXduTW9fH9KhwbSw1nxi1lTSbpw/l+PLbocORKc="
 
       # Clear unused steps
       addons: {}
-      before_install: []
       install: []
       after_success: []
 
-      script: docker build -t praekeltfoundation/marathon-acme .
+      before_install:
+        - sudo apt-get update
+        - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-engine
+
+      before_script:
+        - docker pull $IMAGE_NAME:develop || true
+      script:
+        - docker build --pull --cache-from $IMAGE_NAME:develop -t $IMAGE_NAME .
 
       before_deploy:
         - pip install docker-ci-deploy==0.3.0
