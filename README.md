@@ -1,5 +1,6 @@
 # marathon-acme
 
+[![PyPI](https://img.shields.io/pypi/v/marathon-acme.svg)](https://pypi.python.org/pypi/marathon-acme)
 [![Build Status](https://travis-ci.org/praekeltfoundation/marathon-acme.svg?branch=develop)](https://travis-ci.org/praekeltfoundation/marathon-acme)
 [![codecov](https://codecov.io/gh/praekeltfoundation/marathon-acme/branch/develop/graph/badge.svg)](https://codecov.io/gh/praekeltfoundation/marathon-acme)
 
@@ -19,10 +20,10 @@ There is one big requirement for deploying `marathon-acme`: there must be shared
 The ACME provider that most people are likely to use is [Let's Encrypt](https://letsencrypt.org/). Before using `marathon-acme` with Let's Encrypt, make sure you are aware of their [rate limits](https://letsencrypt.org/docs/rate-limits/).
 
 ## Usage
-`marathon-acme` will eventually be available as a pip-installable Python package on PyPi. For now, a development Docker image is available [here](https://hub.docker.com/r/praekeltfoundation/marathon-acme/).
+`marathon-acme` is available as a pip-installable Python package on [PyPI](https://pypi.python.org/pypi/marathon-acme). However, most users will probably want to use the Docker image available from [Docker Hub](https://hub.docker.com/r/praekeltfoundation/marathon-acme/).
 
 ```
-> $ docker run --rm praekeltfoundation/marathon-acme:develop marathon-acme --help
+> $ docker run --rm praekeltfoundation/marathon-acme --help
 usage: marathon-acme [-h] [-a ACME] [-e EMAIL] [-m MARATHON[,MARATHON,...]]
                      [-l LB[,LB,...]] [-g GROUP] [--listen LISTEN]
                      [--log-level {debug,info,warn,error,critical}]
@@ -63,6 +64,12 @@ optional arguments:
   "id": "/marathon-acme",
   "cpus": 0.01,
   "mem": 128.0,
+  "args": [
+    "--email", "letsencrypt@example.com",
+    "--marathon", "http://marathon1:8080,http://marathon2:8080,http://marathon3:8080",
+    "--lb", "http://lb1:9090,http://lb2:9090",
+    "/var/lib/marathon-acme"
+  ],
   "labels": {
     "HAPROXY_GROUP": "external",
     "HAPROXY_0_VHOST": "example.com",
@@ -74,14 +81,14 @@ optional arguments:
   "container": {
     "type": "DOCKER",
     "docker": {
-      "image": "praekeltfoundation/marathon-acme:develop",
+      "image": "praekeltfoundation/marathon-acme",
       "network": "BRIDGE",
       "portMappings": [
         { "containerPort": 8000, "hostPort": 0 }
       ],
       "parameters": [
         {
-          "value": "xylem",
+          "value": "my-volume-driver",
           "key": "volume-driver"
         },
         {
@@ -116,26 +123,19 @@ This is where it gets complicated... It’s possible to edit the templates used 
 ##### `HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH`
 `marathon-lb` exposes apps via port 443/HTTPS by default and there doesn’t seem to be a way to switch it off. We change the ACL template here so that HAProxy doesn’t try to do an SNI match on the hostname. The ACME Simple HTTP spec allows for challenges to occur over HTTPS if the client requests as such and will ignore the certificate presented on our side.
 
-#### Environment variables
-The `marathon-acme` Docker container can be configured either using command-line options (by setting the app definition's `args` field) or by environment variables (by setting the app definition's `env` field).
+#### Docker images
+Docker images are available from [Docker Hub](https://hub.docker.com/r/praekeltfoundation/marathon-acme/). There are two different streams of Docker images available:
+* `:latest`/`:<version>`: Tracks the latest released version of `marathon-acme` on [PyPI](https://pypi.python.org/pypi/marathon-acme). The Dockerfile for these is in the [`praekeltfoundation/docker-marathon-acme`](https://github.com/praekeltfoundation/docker-marathon-acme) repo.
+* `:develop`: Tracks the `develop` branch of this repo and is built using the [Dockerfile](Dockerfile) in this repo.
 
-The environment variables available correspond to the CLI options as follows:
+For more details on the Docker images, see the [`praekeltfoundation/docker-marathon-acme`](https://github.com/praekeltfoundation/docker-marathon-acme) repo.
 
-| Environment variable      | CLI option    |
-|---------------------------|---------------|
-| `MARATHON_ACME_ACME`      | `--acme`      |
-| `MARATHON_ACME_EMAIL`     | `--email`     |
-| `MARATHON_ACME_MARATHON`  | `--marathon`  |
-| `MARATHON_ACME_LB`        | `--lb`        |
-| `MARATHON_ACME_GROUP`     | `--group`     |
-| `MARATHON_ACME_LOG_LEVEL` | `--log-level` |
-
-#### Volumes and ports
+##### Volumes and ports
 The `marathon-acme` container defaults to the `/var/lib/marathon-acme` directory to store certificates and the ACME client private key. This is the path inside the container that should be mounted as a shared volume.
 
 The container also defaults to listening on port 8000 on all interfaces.
 
-To override these values you must provide a custom command to the Docker container.
+You can override these values by providing arguments to the Docker container.
 
 #### Certificate files
 `marathon-acme` creates the following directory/file structure:

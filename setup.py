@@ -22,12 +22,15 @@ def readme():
 
 
 install_requires = [
-    'acme',
+    'acme >= 0.10.0',
     'cryptography',
-    'klein == 15.3.1',
+    'klein',
     'requests',
-    'treq',
-    'Twisted',
+    # treq.testing broken on older versions of treq with Twisted 17.1.0
+    'treq >= 17.3.1',
+    # Despite treq & txacme depending on Twisted[tls], we don't get all the tls
+    # extras unless we depend on the option too, I guess, because pip.
+    'Twisted[tls]',
     'txacme >= 0.9.1',
     'uritools >= 1.0.0'
 ]
@@ -36,7 +39,7 @@ if sys.version_info < (3, 3):
 
 setup(
     name='marathon-acme',
-    version='0.1.0',
+    version='0.1.1',
     license='MIT',
     url='https://github.com/praekeltfoundation/marathon-acme',
     description=("Automated management of Let's Encrypt certificates for apps "
@@ -53,8 +56,11 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Programming Language :: Python',
+        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy'
     ],

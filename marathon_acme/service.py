@@ -232,16 +232,12 @@ class MarathonAcme(object):
             failure.trap(txacme_ServerError)
             acme_error = failure.value.message
 
-            # FIXME: The acme error code stuff is a mess pre- the unreleased
-            # 0.10 version. Update this to use the 'code' attribute when the
-            # new acme library is released.
-            acme_error_code = str(acme_error.typ).split(':')[-1]
-            if acme_error_code in ['rateLimited', 'serverInternal',
+            if acme_error.code in ['rateLimited', 'serverInternal',
                                    'connection', 'unknownHost']:
                 # TODO: Fire off an error to Sentry or something?
                 self.log.error(
                     'Error ({code}) issuing certificate for "{domain}": '
-                    '{detail}', code=acme_error_code, domain=domain,
+                    '{detail}', code=acme_error.code, domain=domain,
                     detail=acme_error.detail)
             else:
                 # There are more error codes but if they happen then something
