@@ -24,7 +24,7 @@ def readme():
 install_requires = [
     'acme >= 0.10.0',
     'cryptography',
-    'klein == 15.3.1',
+    'klein',
     'requests',
     # treq.testing broken on older versions of treq with Twisted 17.1.0
     'treq >= 17.3.1',
