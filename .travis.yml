@@ -22,10 +22,6 @@ matrix:
       install: []
       after_success: []
 
-      before_install:
-        - sudo apt-get update
-        - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-engine
-
       before_script:
         - docker pull $IMAGE_NAME:develop || true
       script:
