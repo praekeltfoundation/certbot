@@ -7,6 +7,7 @@ from txacme.service import AcmeIssuingService
 
 from marathon_acme.server import MarathonAcmeServer
 from marathon_acme.acme_util import MlbCertificateStore
+from marathon_acme.marathon_util import get_number_of_app_ports
 
 
 def parse_domain_label(domain_label):
@@ -170,15 +171,8 @@ class MarathonAcme(object):
         labels = app['labels']
         app_group = labels.get('HAPROXY_GROUP')
 
-        # Prefer the 'portDefinitions' field added in Marathon 1.0.0 but fall
-        # back to the deprecated 'ports' array if that's not present.
-        if 'portDefinitions' in app:
-            ports = app['portDefinitions']
-        else:
-            ports = app['ports']
-
         # Iterate through the ports, checking for corresponding labels
-        for port_index, _ in enumerate(ports):
+        for port_index in range(get_number_of_app_ports(app)):
             # Get the port group label, defaulting to the app group label
             port_group = labels.get(
                 'HAPROXY_%d_GROUP' % (port_index,), app_group)
