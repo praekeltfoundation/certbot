@@ -9,7 +9,7 @@ RUN pip install -e /marathon-acme/.
 
 # Set up the entrypoint script
 COPY docker-entrypoint.sh /scripts/marathon-acme-entrypoint.sh
-CMD ["marathon-acme-entrypoint.sh"]
+ENTRYPOINT ["marathon-acme-entrypoint.sh"]
 
 # Listening port and storage directory volume
 EXPOSE 8000
