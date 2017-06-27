@@ -209,9 +209,9 @@ def init_logging(log_level):
     globalLogPublisher.addObserver(log_observer)
 
 
-def _main():
+def _main():  # pragma: no cover
     react(main)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     _main()
