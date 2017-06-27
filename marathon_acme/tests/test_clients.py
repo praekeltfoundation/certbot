@@ -217,6 +217,17 @@ class TestHTTPClient(TestHTTPClientBase):
         request.setResponseCode(200)
         request.finish()
 
+    def test_request_no_url(self):
+        """
+        When a request is made without the url parameter and the client doesn't
+        have a url, an error should be raised
+        """
+        self.client.url = None
+        with ExpectedException(
+            ValueError,
+                r'url not provided and this client has no url attribute'):
+            self.client.request('GET', path='/hello')
+
     @inlineCallbacks
     def test_client_error_response(self):
         """
