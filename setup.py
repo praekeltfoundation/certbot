@@ -45,7 +45,7 @@ setup(
     description=("Automated management of Let's Encrypt certificates for apps "
                  "running on Mesosphere Marathon"),
     author='Jamie Hewland',
-    author_email='jamie@praekelt.com',
+    author_email='jamie@praekelt.org',
     long_description=readme(),
     packages=find_packages(),
     install_requires=install_requires,
