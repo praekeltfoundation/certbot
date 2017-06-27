@@ -25,7 +25,7 @@ class HasHeader(Equals):
         self.key = key
 
     def __str__(self):
-        return 'HasHeader(%s, %r)' % (self.key, self.values,)
+        return 'HasHeader(%s, %r)' % (self.key, self.expected,)
 
     def match(self, headers):
         """

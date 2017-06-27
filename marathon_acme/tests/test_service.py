@@ -336,67 +336,6 @@ class TestMarathonAcme(object):
 
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
 
-    def test_sync_app_no_port_definitions(self):
-        """
-        When a sync is run and this Marathon doesn't return the
-        'portDefinitions' field with the app definitions, the 'ports' field
-        should be used instead and a regular sync is completed.
-        """
-        # Store an app in Marathon with a marathon-acme domain
-        self.fake_marathon.add_app({
-            'id': '/my-app_1',
-            'labels': {
-                'HAPROXY_GROUP': 'external',
-                'MARATHON_ACME_0_DOMAIN': 'example.com'
-            },
-            'ports': [10007]  # Some random service port
-        })
-
-        d = self.marathon_acme.sync()
-        assert_that(d, succeeded(MatchesListwise([  # Per domain
-            is_marathon_lb_sigusr_response
-        ])))
-
-        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
-            'example.com': Not(Is(None))
-        })))
-
-        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
-
-    def test_sync_app_port_definitions_preferred(self):
-        """
-        When a sync is run and this Marathon returns both the
-        'portDefinitions' field and 'ports' field with the app definitions,
-        the 'portsDefinition' field should be used and 'ports' ignored.
-        """
-        # Store an app in Marathon with a marathon-acme domain
-        self.fake_marathon.add_app({
-            'id': '/my-app_1',
-            'labels': {
-                'HAPROXY_GROUP': 'external',
-                'MARATHON_ACME_0_DOMAIN': 'example.com'
-            },
-            'portDefinitions': [
-                {'port': 9000, 'protocol': 'tcp', 'labels': {}},
-                {'port': 9001, 'protocol': 'tcp', 'labels': {}}
-            ],
-            # There should never be a different number of elements in
-            # 'portDefinitions' and 'ports' but 'ports' is deprecated and we
-            # want to make sure it is ignored if 'portDefinitions' is present
-            'ports': []
-        })
-
-        d = self.marathon_acme.sync()
-        assert_that(d, succeeded(MatchesListwise([  # Per domain
-            is_marathon_lb_sigusr_response
-        ])))
-
-        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
-            'example.com': Not(Is(None))
-        })))
-
-        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
-
     def test_sync_multiple_apps(self):
         """
         When a sync is run and there are multiple apps, certificates are
@@ -527,6 +466,34 @@ class TestMarathonAcme(object):
             'id': '/my-app_1',
             'labels': {
                 'HAPROXY_0_VHOST': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+
+        d = self.marathon_acme.sync()
+        assert_that(d, succeeded(Equals([])))
+
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
+        assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(),
+                    Equals(False))
+
+    def test_sync_app_label_but_no_domains(self):
+        """
+        When a sync is run and Marathon has an app and that app has a domain
+        label but that label has no domains, then no certificates should be
+        fetched and marathon-lb should not be notified.
+        """
+        # Store an app in Marathon with a marathon-acme domain
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': '',
             },
             'portDefinitions': [
                 {'port': 9000, 'protocol': 'tcp', 'labels': {}}

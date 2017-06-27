@@ -39,18 +39,18 @@ if sys.version_info < (3, 3):
 
 setup(
     name='marathon-acme',
-    version='0.1.1',
+    version='0.2.0',
     license='MIT',
     url='https://github.com/praekeltfoundation/marathon-acme',
     description=("Automated management of Let's Encrypt certificates for apps "
                  "running on Mesosphere Marathon"),
     author='Jamie Hewland',
-    author_email='jamie@praekelt.com',
+    author_email='jamie@praekelt.org',
     long_description=readme(),
     packages=find_packages(),
     install_requires=install_requires,
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Framework :: Twisted',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',

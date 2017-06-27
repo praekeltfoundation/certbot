@@ -1,12 +1,12 @@
 from twisted.internet.defer import gatherResults
 from twisted.logger import Logger, LogLevel
-from twisted.python.failure import Failure
 from txacme.challenges import HTTP01Responder
 from txacme.client import ServerError as txacme_ServerError
 from txacme.service import AcmeIssuingService
 
 from marathon_acme.server import MarathonAcmeServer
 from marathon_acme.acme_util import MlbCertificateStore
+from marathon_acme.marathon_util import get_number_of_app_ports
 
 
 def parse_domain_label(domain_label):
@@ -65,14 +65,13 @@ class MarathonAcme(object):
         # Then listen for events...
         d.addCallback(lambda _: self.listen_events())
 
-        # If anything goes wrong or listening for events returns, stop
-        d.addBoth(self._stop)
+        # If anything goes wrong, stop
+        d.addErrback(self._stop_failure)
 
         return d
 
-    def _stop(self, result):
-        if isinstance(result, Failure):
-            self.log.failure('Unhandle error during operation', result)
+    def _stop_failure(self, failure):
+        self.log.failure('Unhandled error during operation', failure)
         self.log.warn('Stopping marathon-acme...')
 
         # If the server failed to start we have nothing to cancel yet
@@ -170,15 +169,8 @@ class MarathonAcme(object):
         labels = app['labels']
         app_group = labels.get('HAPROXY_GROUP')
 
-        # Prefer the 'portDefinitions' field added in Marathon 1.0.0 but fall
-        # back to the deprecated 'ports' array if that's not present.
-        if 'portDefinitions' in app:
-            ports = app['portDefinitions']
-        else:
-            ports = app['ports']
-
         # Iterate through the ports, checking for corresponding labels
-        for port_index, _ in enumerate(ports):
+        for port_index in range(get_number_of_app_ports(app)):
             # Get the port group label, defaulting to the app group label
             port_group = labels.get(
                 'HAPROXY_%d_GROUP' % (port_index,), app_group)
