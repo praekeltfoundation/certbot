@@ -29,7 +29,7 @@ TEST_APP = {
     'dependencies': [],
     'upgradeStrategy': {
         'minimumHealthCapacity': 1,
-        'maximumOverCapacity': 1
+        'maximumOverCapacity': 1,
     },
     'labels': {},
     'ipAddress': None,
@@ -39,12 +39,12 @@ TEST_APP = {
     'taskKillGracePeriodSeconds': None,
     'unreachableStrategy': {
         'inactiveAfterSeconds': 300,
-        'expungeAfterSeconds': 600
+        'expungeAfterSeconds': 600,
     },
     'killSelection': 'YOUNGEST_FIRST',
     'versionInfo': {
         'lastScalingAt': '2017-05-22T08:53:15.476Z',
-        'lastConfigChangeAt': '2017-05-22T08:53:15.476Z'
+        'lastConfigChangeAt': '2017-05-22T08:53:15.476Z',
     },
     'tasksStaged': 0,
     'tasksRunning': 1,
@@ -66,14 +66,14 @@ CONTAINER_USER_NETWORKING = {
                 'protocol': 'tcp',
                 'name': 'foovu1http',
                 'labels': {
-                    'VIP_0': '/foovu1:8080'
-                }
-            }
+                    'VIP_0': '/foovu1:8080',
+                },
+            },
         ],
         'privileged': False,
         'parameters': [],
-        'forcePullImage': False
-    }
+        'forcePullImage': False,
+    },
 }
 
 CONTAINER_BRIDGE_NETWORKING = {
@@ -88,13 +88,13 @@ CONTAINER_BRIDGE_NETWORKING = {
                 'hostPort': 0,
                 'servicePort': 10008,
                 'protocol': 'tcp',
-                'labels': {}
-            }
+                'labels': {},
+            },
         ],
         'privileged': False,
         'parameters': [],
-        'forcePullImage': True
-    }
+        'forcePullImage': True,
+    },
 }
 
 # We've never run a container with the Mesos containerizer before. This is from
@@ -119,9 +119,9 @@ IP_ADDRESS_NO_PORTS = {
     'groups': [],
     'labels': {},
     'discovery': {
-        'ports': []
+        'ports': [],
     },
-    'networkName': 'dcos'
+    'networkName': 'dcos',
 }
 
 IP_ADDRESS_TWO_PORTS = {
@@ -131,8 +131,8 @@ IP_ADDRESS_TWO_PORTS = {
         'ports': [
             {'number': 80, 'name': 'http', 'protocol': 'tcp'},
             {'number': 443, 'name': 'http', 'protocol': 'tcp'},
-        ]
-    }
+        ],
+    },
 }
 
 PORT_DEFINITIONS_ONE_PORT = [
@@ -140,8 +140,8 @@ PORT_DEFINITIONS_ONE_PORT = [
         'port': 10008,
         'protocol': 'tcp',
         'name': 'default',
-        'labels': {}
-    }
+        'labels': {},
+    },
 ]
 
 
