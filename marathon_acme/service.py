@@ -1,6 +1,5 @@
 from twisted.internet.defer import gatherResults
 from twisted.logger import Logger, LogLevel
-from twisted.python.failure import Failure
 from txacme.challenges import HTTP01Responder
 from txacme.client import ServerError as txacme_ServerError
 from txacme.service import AcmeIssuingService
