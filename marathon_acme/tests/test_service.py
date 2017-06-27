@@ -482,6 +482,34 @@ class TestMarathonAcme(object):
         assert_that(self.fake_marathon_lb.check_signalled_usr1(),
                     Equals(False))
 
+    def test_sync_app_label_but_no_domains(self):
+        """
+        When a sync is run and Marathon has an app and that app has a domain
+        label but that label has no domains, then no certificates should be
+        fetched and marathon-lb should not be notified.
+        """
+        # Store an app in Marathon with a marathon-acme domain
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': '',
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+
+        d = self.marathon_acme.sync()
+        assert_that(d, succeeded(Equals([])))
+
+        # Nothing stored, nothing notified, but Marathon checked
+        assert_that(
+            self.fake_marathon_api.check_called_get_apps(), Equals(True))
+        assert_that(self.cert_store.as_dict(), succeeded(Equals({})))
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(),
+                    Equals(False))
+
     def test_sync_app_group_mismatch(self):
         """
         When a sync is run and Marathon has an app but that app has a different

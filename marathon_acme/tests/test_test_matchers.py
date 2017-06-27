@@ -52,3 +52,11 @@ class TestHasHeader(object):
 
         assert_that(match.describe(),
                     Equals("['def', 'abc'] != ['abc', 'def']"))
+
+    def test_str(self):
+        """
+        The string representation of the matcher should include the header key
+        and values.
+        """
+        matcher = HasHeader('test', ['abc', 'def'])
+        assert_that(str(matcher), Equals("HasHeader(test, ['abc', 'def'])"))

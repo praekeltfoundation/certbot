@@ -122,21 +122,24 @@ class HTTPClient(object):
         if url is None:
             url = self.url
 
-        if url is not None:
-            split_result = urisplit(url)
-            userinfo = split_result.userinfo
+        if url is None:
+            raise ValueError(
+                'url not provided and this client has no url attribute')
+
+        split_result = urisplit(url)
+        userinfo = split_result.userinfo
 
         # Build up the kwargs to pass to uricompose
         compose_kwargs = {}
         for key in ['scheme', 'host', 'port', 'path', 'fragment']:
             if key in kwargs:
                 compose_kwargs[key] = kwargs.pop(key)
-            elif split_result is not None:
+            else:
                 compose_kwargs[key] = getattr(split_result, key)
 
         if 'params' in kwargs:
             compose_kwargs['query'] = kwargs.pop('params')
-        elif split_result is not None:
+        else:
             compose_kwargs['query'] = split_result.query
 
         # Take the userinfo out of the URL and pass as 'auth' to treq so it can

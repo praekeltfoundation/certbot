@@ -45,12 +45,12 @@ setup(
     description=("Automated management of Let's Encrypt certificates for apps "
                  "running on Mesosphere Marathon"),
     author='Jamie Hewland',
-    author_email='jamie@praekelt.com',
+    author_email='jamie@praekelt.org',
     long_description=readme(),
     packages=find_packages(),
     install_requires=install_requires,
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Framework :: Twisted',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',

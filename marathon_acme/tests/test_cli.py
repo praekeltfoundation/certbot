@@ -3,7 +3,8 @@ import os
 from fixtures import TempDir
 from testtools import ExpectedException, run_test_with, TestCase
 from testtools.assertions import assert_that
-from testtools.matchers import Equals, MatchesStructure
+from testtools.matchers import (
+    Contains, DirExists, Equals, FileContains, FileExists, MatchesStructure)
 from testtools.twistedsupport import (
     AsynchronousDeferredRunTest, flush_logged_errors)
 from twisted.internet import reactor
@@ -11,7 +12,7 @@ from twisted.internet.defer import inlineCallbacks
 from twisted.internet.error import CannotListenError, ConnectionRefusedError
 from txacme.urls import LETSENCRYPT_STAGING_DIRECTORY
 
-from marathon_acme.cli import main, parse_listen_addr
+from marathon_acme.cli import init_storage_dir, main, parse_listen_addr
 
 
 class TestCli(TestCase):
@@ -149,3 +150,39 @@ class TestParseListenAddr(object):
                 ValueError,
                 r"'' does not appear to be a valid port number"):
             parse_listen_addr(':')
+
+
+class TestInitStorageDir(object):
+    def test_files_created_if_not_exist(self, tmpdir):
+        """
+        When the certificate directory does not contain a 'default.pem' file
+        and a 'certs' directory, calling init_storage_dir() should create a
+        'default.pem' file with x509 certificate data and create a 'certs'
+        directory.
+        """
+        init_storage_dir(str(tmpdir))
+
+        assert_that(str(tmpdir.join('default.pem')), FileExists())
+        # Check that this *looks* like a x509 cert
+        assert_that(str(tmpdir.join('default.pem')),
+                    FileContains(matcher=Contains(
+                        '-----BEGIN RSA PRIVATE KEY-----')))
+
+        assert_that(str(tmpdir.join('certs')), DirExists())
+
+    def test_files_not_created_if_exist(self, tmpdir):
+        """
+        When the certificate directory does contain a 'default.pem' file
+        and a 'certs' directory, calling init_storage_dir() should not attempt
+        to create those files.
+        """
+        tmpdir.join('default.pem').write('blah')
+        tmpdir.join('certs').mkdir()
+
+        init_storage_dir(str(tmpdir))
+
+        assert_that(str(tmpdir.join('default.pem')), FileExists())
+        # Check that the file hasn't changed
+        assert_that(str(tmpdir.join('default.pem')), FileContains('blah'))
+
+        assert_that(str(tmpdir.join('certs')), DirExists())
