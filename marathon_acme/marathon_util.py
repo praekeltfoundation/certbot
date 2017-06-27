@@ -1,5 +1,3 @@
-
-
 def get_number_of_app_ports(app):
     """
     Get the number of ports for the given app JSON. This roughly follows the
