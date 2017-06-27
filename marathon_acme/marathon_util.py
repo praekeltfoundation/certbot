@@ -1,3 +1,5 @@
+
+
 def get_number_of_app_ports(app):
     """
     Get the number of ports for the given app JSON. This roughly follows the
@@ -37,7 +39,7 @@ def _is_user_network(app):
     :param app: The application to check.
     :return: True if using USER network, False otherwise.
     """
-    container = app['container']
+    container = app.get('container')
     if container is None:
         return False
 
