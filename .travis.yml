@@ -19,6 +19,7 @@ matrix:
 
       # Clear unused steps
       addons: {}
+      before_install: []
       install: []
       after_success: []
 
