@@ -51,6 +51,18 @@ class TestMarathonAcmeServer(object):
             'http://localhost/.well-known/acme-challenge/baz')
         assert_that(response, succeeded(MatchesStructure(code=Equals(404))))
 
+    def test_acme_challenge_ping(self):
+        """
+        When a GET request is made to the ACME challenge path ping endpoint,
+        a pong message should be returned.
+        """
+        response = self.client.get(
+            'http://localhost/.well-known/acme-challenge/ping')
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(Equals({'message': 'pong'})))
+        )))
+
     def test_health_healthy(self):
         """
         When a GET request is made to the health endpoint, and the health
