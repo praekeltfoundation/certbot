@@ -42,6 +42,11 @@ parser.add_argument('-g', '--group',
                     help='The marathon-lb group to issue certificates for '
                          '(default: %(default)s)',
                     default='external')
+parser.add_argument('--allow-multiple-certs',
+                    help=('Allow multiple certificates for a single app port. '
+                          'This allows multiple domains for an app, but is '
+                          'not recommended.'),
+                    action='store_true')
 parser.add_argument('--listen',
                     help='The address for the port to listen on (default: '
                          '%(default)s)',
@@ -70,7 +75,7 @@ def main(reactor, raw_args=sys.argv[1:]):
     mlb_addrs = args.lb.split(',')
 
     marathon_acme = create_marathon_acme(
-        args.storage_dir, args.acme, args.email,
+        args.storage_dir, args.acme, args.email, args.allow_multiple_certs,
         marathon_addrs, mlb_addrs, args.group,
         reactor)
 
@@ -135,9 +140,10 @@ def _create_tx_endpoints_string(args, kwargs):
     return ':'.join(args + _kwargs)
 
 
-def create_marathon_acme(storage_dir, acme_directory, acme_email,
-                         marathon_addrs, mlb_addrs, group,
-                         reactor):
+def create_marathon_acme(
+    storage_dir, acme_directory, acme_email, allow_multiple_certs,
+    marathon_addrs, mlb_addrs, group,
+        reactor):
     """
     Create a marathon-acme instance.
 
@@ -146,6 +152,8 @@ def create_marathon_acme(storage_dir, acme_directory, acme_email,
     :param acme_directory: Address for the ACME directory to use.
     :param acme_email:
         Email address to use when registering with the ACME service.
+    :param allow_multiple_certs:
+        Whether to allow multiple certificates per app port.
     :param marathon_addr:
         Address for the Marathon instance to find app domains that require
         certificates.
@@ -168,7 +176,8 @@ def create_marathon_acme(storage_dir, acme_directory, acme_email,
         MarathonLbClient(mlb_addrs, reactor=reactor),
         create_txacme_client_creator(reactor, acme_url, key),
         reactor,
-        acme_email)
+        acme_email,
+        allow_multiple_certs)
 
 
 def init_storage_dir(storage_dir):

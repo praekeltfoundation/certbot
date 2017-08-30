@@ -417,7 +417,7 @@ class TestMarathonAcme(object):
     def test_sync_app_multiple_domains(self):
         """
         When a sync is run and there is an app with a domain label containing
-        multiple domains, all domains are considered.
+        multiple domains, then only the first domain is considered.
         """
         self.fake_marathon.add_app({
             'id': '/my-app_1',
@@ -432,13 +432,11 @@ class TestMarathonAcme(object):
 
         d = self.marathon_acme.sync()
         assert_that(d, succeeded(MatchesListwise([  # Per domain
-            is_marathon_lb_sigusr_response,
-            is_marathon_lb_sigusr_response,
+            is_marathon_lb_sigusr_response
         ])))
 
         assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
-            'example.com': Not(Is(None)),
-            'example2.com': Not(Is(None))
+            'example.com': Not(Is(None))
         })))
 
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
