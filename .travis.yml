@@ -13,7 +13,7 @@ matrix:
       env: NO_COVERAGE=1
     # Docker dev image
     - sudo: required
-      services: [docker]
+      services: docker
       env:
         - IMAGE_NAME=praekeltfoundation/marathon-acme
         - REGISTRY_USER=praekeltorgdeploy
