@@ -13,13 +13,22 @@ language: python
 matrix:
   include:
     - python: '2.7'
+      env: TOXENV=py27
+    - python: '3.4'
+      env: TOXENV=py34
     - python: '3.5'
+      env: TOXENV=py35
     - python: '3.6'
+      env: TOXENV=py36
       addons: { apt_packages: [pandoc] }
     - python: pypy2.7-5.8.0
-      env: NO_COVERAGE=1
+      env: TOXENV=pypy-nocoverage
     - python: pypy3.5-5.8.0
-      env: NO_COVERAGE=1
+      env: TOXENV=pypy3-nocoverage
+    - python: '2.7'
+      env: TOXENV=pep8
+    - python: '3.6'
+      env: TOXENV=py3pep8
     # Docker dev image
     - sudo: required
       services: docker
@@ -52,16 +61,13 @@ cache: pip
 before_install:
   - pip install --upgrade pip
 install:
-  - pip install -r requirements-dev.txt
-  - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
+  - pip install tox codecov
 
 script:
-  - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
-  - py.test marathon_acme $COVERAGE_OPT
-  - flake8 .
+  - tox
 
 after_success:
-  - if [[ -z "$NO_COVERAGE" ]]; then codecov; fi
+  - if [[ $TOXENV == py* ]] && [[ $TOXENV != *-nocoverage ]]; then codecov; fi
 
 before_deploy:
   - pandoc --from=markdown --to=rst --output=README.rst README.md

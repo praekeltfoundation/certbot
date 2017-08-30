@@ -109,8 +109,8 @@ class FakeMarathonAPI(object):
 
 def _write_request_event(request, event):
     event_type = event['eventType']
-    request.write(b'event: %s\n' % (event_type.encode('utf-8'),))
-    request.write(b'data: %s\n' % (json.dumps(event).encode('utf-8'),))
+    request.write('event: {}\n'.format(event_type).encode('utf-8'))
+    request.write('data: {}\n'.format(json.dumps(event)).encode('utf-8'))
     request.write(b'\n')
 
 

@@ -38,6 +38,12 @@ def json_response(request, json_data, response_code=200):
     request.finish()
 
 
+def write_json_event(request, event, json_data):
+    request.write('event: {}\n'.format(event).encode('utf-8'))
+    request.write('data: {}\n'.format(json.dumps(json_data)).encode('utf-8'))
+    request.write(b'\n')
+
+
 class TestGetSingleHeader(object):
     def test_single_value(self):
         """
@@ -716,7 +722,8 @@ class TestMarathonClient(TestHTTPClientBase):
 
         json_data = {'hello': 'world'}
         request.write(b'event: test\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
+        request.write(
+            'data: {}\n'.format(json.dumps(json_data)).encode('utf-8'))
         request.write(b'\n')
 
         yield wait0()
@@ -749,11 +756,13 @@ class TestMarathonClient(TestHTTPClientBase):
 
         json_data1 = {'hello': 'world'}
         request.write(b'event: test\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data1).encode('utf-8')))
+        request.write(
+            'data: {}\n'.format(json.dumps(json_data1)).encode('utf-8'))
         request.write(b'\n')
 
         json_data2 = {'hi': 'planet'}
-        request.write(b'data: %s\n' % (json.dumps(json_data2).encode('utf-8')))
+        request.write(
+            'data: {}\n'.format(json.dumps(json_data2)).encode('utf-8'))
         request.write(b'event: test\n')
         request.write(b'\n')
 
@@ -790,14 +799,10 @@ class TestMarathonClient(TestHTTPClientBase):
         request.setHeader('Content-Type', 'text/event-stream')
 
         json_data1 = {'hello': 'world'}
-        request.write(b'event: test1\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data1).encode('utf-8')))
-        request.write(b'\n')
+        write_json_event(request, 'test1', json_data1)
 
         json_data2 = {'hello': 'computer'}
-        request.write(b'event: test2\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data2).encode('utf-8')))
-        request.write(b'\n')
+        write_json_event(request, 'test2', json_data2)
 
         yield wait0()
         self.assertThat(data1, Equals([json_data1]))
@@ -828,9 +833,7 @@ class TestMarathonClient(TestHTTPClientBase):
         request.setHeader('Content-Type', 'text/event-stream')
 
         json_data = {'hello': 'world'}
-        request.write(b'event: test\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
-        request.write(b'\n')
+        write_json_event(request, 'test', json_data)
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
@@ -862,9 +865,7 @@ class TestMarathonClient(TestHTTPClientBase):
         request.setHeader('Content-Type', 'application/json')
 
         json_data = {'hello': 'world'}
-        request.write(b'event: test\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
-        request.write(b'\n')
+        write_json_event(request, 'test', json_data)
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
