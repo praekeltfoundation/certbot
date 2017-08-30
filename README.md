@@ -156,15 +156,15 @@ The only real configuration needed for `marathon-lb` is to add the path to `mara
 ```
 
 ### App configuration
-`marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma-separated domain names, although currently only the first domain name will be considered.
+`marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma-separated domain names.
+
+**Note:** `marathon-acme` can only currently issue certificates with a single domain. This means multiple certificates will be issued for apps with multiple configured domains.
 
 The app or its port must must be in the same `HAPROXY_GROUP` as `marathon-acme` was configured with at start-up.
 
 We decided not to reuse the `HAPROXY_{n}_VHOST` label so as to limit the number of domains that certificates are issued for.
 
 ## Limitations
-The current biggest limitation with `marathon-acme` is that it will only issue one certificate for one domain per app port. This is to limit the number of certificates issued so as to prevent hitting Let's Encrypt rate limits.
-
 The library used for ACME certificate management, `txacme`, is currently quite limited in its functionality. The two biggest limitations are:
 * There is no [Subject Alternative Name](https://en.wikipedia.org/wiki/Subject_Alternative_Name) (SAN) support yet ([#37](https://github.com/mithrandi/txacme/issues/37)). Each certificate will correspond to exactly one domain name. This limitation makes it easier to hit Let's Encrypt's rate limits.
 * There is no support for *removing* certificates from `txacme`'s certificate store ([#77](https://github.com/mithrandi/txacme/issues/77)). Once `marathon-acme` issues a certificate for an app it will try to renew that certificate *forever* unless it is manually deleted from the certificate store.
