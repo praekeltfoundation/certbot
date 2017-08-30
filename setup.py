@@ -49,6 +49,15 @@ setup(
     long_description=readme(),
     packages=find_packages(),
     install_requires=install_requires,
+    extras_require={
+        'test': [
+            'fixtures',
+            'pem >= 16.1.0',
+            'pytest >= 3.0.0',
+            'testtools',
+            'txfake >= 0.1.1',
+        ]
+    },
     classifiers=[
         'Development Status :: 4 - Beta',
         'Framework :: Twisted',
