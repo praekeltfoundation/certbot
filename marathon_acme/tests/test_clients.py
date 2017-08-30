@@ -723,7 +723,7 @@ class TestMarathonClient(TestHTTPClientBase):
         json_data = {'hello': 'world'}
         request.write(b'event: test\n')
         request.write(
-            (u'data: %s\n' % (json.dumps(json_data),)).encode('utf-8'))
+            'data: {}\n'.format(json.dumps(json_data)).encode('utf-8'))
         request.write(b'\n')
 
         yield wait0()
@@ -757,12 +757,12 @@ class TestMarathonClient(TestHTTPClientBase):
         json_data1 = {'hello': 'world'}
         request.write(b'event: test\n')
         request.write(
-            (u'data: %s\n' % (json.dumps(json_data1),)).encode('utf-8'))
+            'data: {}\n'.format(json.dumps(json_data1)).encode('utf-8'))
         request.write(b'\n')
 
         json_data2 = {'hi': 'planet'}
         request.write(
-            b'data: %s\n' % (json.dumps(json_data2).encode('utf-8')))
+            'data: {}\n'.format(json.dumps(json_data2)).encode('utf-8'))
         request.write(b'event: test\n')
         request.write(b'\n')
 
