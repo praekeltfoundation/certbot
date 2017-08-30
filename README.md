@@ -158,7 +158,7 @@ The only real configuration needed for `marathon-lb` is to add the path to `mara
 ### App configuration
 `marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma-separated domain names.
 
-**Note:** `marathon-acme` can only currently issue certificates with a single domain. This means multiple certificates will be issued for apps with multiple configured domains.
+**Note:** Currently, `marathon-acme` can only issue certificates with a single domain. This means multiple certificates will be issued for apps with multiple configured domains.
 
 The app or its port must must be in the same `HAPROXY_GROUP` as `marathon-acme` was configured with at start-up.
 
