@@ -13,13 +13,13 @@ language: python
 matrix:
   include:
     - python: '2.7'
-      env: TOX_ENV=py27
+      env: TOXENV=py27
     - python: '3.4'
-      env: TOX_ENV=py34
+      env: TOXENV=py34
     - python: '3.5'
-      env: TOX_ENV=py35
+      env: TOXENV=py35
     - python: '3.6'
-      env: TOX_ENV=py36
+      env: TOXENV=py36
       addons: { apt_packages: [pandoc] }
     - python: pypy2.7-5.8.0
       env: TOXENV=pypy-nocoverage
