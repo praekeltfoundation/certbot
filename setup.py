@@ -56,7 +56,10 @@ setup(
             'pytest >= 3.0.0',
             'testtools',
             'txfake >= 0.1.1',
-        ]
+        ],
+        'pep8test': [
+            'flake8',
+        ],
     },
     classifiers=[
         'Development Status :: 4 - Beta',

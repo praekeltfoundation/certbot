@@ -1,3 +1,2 @@
--e .[test]
-flake8
+-e .[test,pep8test]
 pytest-coverage
