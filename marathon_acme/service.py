@@ -180,15 +180,9 @@ class MarathonAcme(object):
                     'MARATHON_ACME_%d_DOMAIN' % (port_index,), '')
                 port_domains = parse_domain_label(domain_label)
 
-                if port_domains:
-                    # TODO: Support SANs- for now just use the first domain
-                    if len(port_domains) > 1:
-                        self.log.warn(
-                            'Multiple domains found for port {port} of app '
-                            '{app}, only the first will be used',
-                            port=port_index, app=app['id'])
-
-                    app_domains.append(port_domains[0])
+                # TODO: Support SANs- for now we issue one certificate per
+                # domain.
+                app_domains.extend(port_domains)
 
         self.log.debug(
             'Found {len_domains} domains for app {app}: {domains}',
