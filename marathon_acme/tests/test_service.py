@@ -87,33 +87,34 @@ class FailableTxacmeClient(FakeClient):
 
 
 class TestMarathonAcme(object):
-
     def setup_method(self):
         self.fake_marathon = FakeMarathon()
         self.fake_marathon_api = FakeMarathonAPI(self.fake_marathon)
-        marathon_client = MarathonClient(
-            ['http://localhost:8080'], client=self.fake_marathon_api.client)
 
         self.cert_store = MemoryStore()
 
         self.fake_marathon_lb = FakeMarathonLb()
+
+        key = JWKRSA(key=generate_private_key(u'rsa'))
+        self._clock = Clock()
+        self._clock.rightNow = (
+            datetime.now() - datetime(1970, 1, 1)).total_seconds()
+        self.txacme_client = FailableTxacmeClient(key, self._clock)
+
+    def mk_marathon_acme(self, **kwargs):
+        marathon_client = MarathonClient(
+            ['http://localhost:8080'], client=self.fake_marathon_api.client)
         mlb_client = MarathonLbClient(
             ['http://localhost:9090'], client=self.fake_marathon_lb.client)
 
-        key = JWKRSA(key=generate_private_key(u'rsa'))
-        clock = Clock()
-        clock.rightNow = (
-            datetime.now() - datetime(1970, 1, 1)).total_seconds()
-        self.txacme_client = FailableTxacmeClient(key, clock)
-
-        self.marathon_acme = MarathonAcme(
+        return MarathonAcme(
             marathon_client,
             'external',
             self.cert_store,
             mlb_client,
             lambda: succeed(self.txacme_client),
-            clock
-        )
+            self._clock,
+            **kwargs)
 
     def test_listen_events_attach_initial_sync(self):
         """
@@ -132,7 +133,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        self.marathon_acme.listen_events()
+        marathon_acme = self.mk_marathon_acme()
+        marathon_acme.listen_events()
 
         # Observe that the certificate was stored and marathon-lb notified
         assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
@@ -146,7 +148,8 @@ class TestMarathonAcme(object):
         ``event_stream_attached`` events, only the first received event should
         trigger the initial sync.
         """
-        self.marathon_acme.listen_events()
+        marathon_acme = self.mk_marathon_acme()
+        marathon_acme.listen_events()
 
         # First attach event is from ourselves attaching...
         assert_that(
@@ -173,7 +176,8 @@ class TestMarathonAcme(object):
         triggers an API request event, a sync should be performed and
         certificates issued for any new domains.
         """
-        self.marathon_acme.listen_events()
+        marathon_acme = self.mk_marathon_acme()
+        marathon_acme.listen_events()
 
         self.fake_marathon.add_app({
             'id': '/my-app_1',
@@ -216,7 +220,8 @@ class TestMarathonAcme(object):
         persistent connection drops, we should reconnect to the event stream
         and be able to receive new events.
         """
-        self.marathon_acme.listen_events()
+        marathon_acme = self.mk_marathon_acme()
+        marathon_acme.listen_events()
 
         # Trigger a lost connection
         requests = self.fake_marathon_api.event_requests
@@ -256,7 +261,8 @@ class TestMarathonAcme(object):
         ``event_stream_attached`` events, each reconnect should trigger another
         sync as we re-attach.
         """
-        self.marathon_acme.listen_events()
+        marathon_acme = self.mk_marathon_acme()
+        marathon_acme.listen_events()
 
         # Check the initial sync happens
         assert_that(
@@ -293,7 +299,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(MatchesListwise([  # Per domain
             is_marathon_lb_sigusr_response
         ])))
@@ -323,7 +330,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(MatchesListwise([  # Per domain
             is_marathon_lb_sigusr_response,
             is_marathon_lb_sigusr_response
@@ -362,7 +370,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(MatchesListwise([  # Per domain
             is_marathon_lb_sigusr_response,
             is_marathon_lb_sigusr_response
@@ -403,7 +412,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(MatchesListwise([  # Per domain
             is_marathon_lb_sigusr_response
         ])))
@@ -417,7 +427,7 @@ class TestMarathonAcme(object):
     def test_sync_app_multiple_domains(self):
         """
         When a sync is run and there is an app with a domain label containing
-        multiple domains, then only the first domain is considered.
+        multiple domains, by default only the first domain is considered.
         """
         self.fake_marathon.add_app({
             'id': '/my-app_1',
@@ -430,7 +440,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(MatchesListwise([  # Per domain
             is_marathon_lb_sigusr_response
         ])))
@@ -441,12 +452,44 @@ class TestMarathonAcme(object):
 
         assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
 
+    def test_sync_app_multiple_domains_multiple_certs_allowed(self):
+        """
+        When a sync is run and there is an app with a domain label containing
+        multiple domains, and ``allow_multiple_certs`` is True, all domains
+        are considered.
+        """
+        self.fake_marathon.add_app({
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com,example2.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        })
+
+        marathon_acme = self.mk_marathon_acme(allow_multiple_certs=True)
+        d = marathon_acme.sync()
+        assert_that(d, succeeded(MatchesListwise([  # Per domain
+            is_marathon_lb_sigusr_response,
+            is_marathon_lb_sigusr_response,
+        ])))
+
+        assert_that(self.cert_store.as_dict(), succeeded(MatchesDict({
+            'example.com': Not(Is(None)),
+            'example2.com': Not(Is(None)),
+        })))
+
+        assert_that(self.fake_marathon_lb.check_signalled_usr1(), Equals(True))
+
     def test_sync_no_apps(self):
         """
         When a sync is run and Marathon has no apps for us then no certificates
         should be fetched and marathon-lb should not be notified.
         """
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
         # Nothing stored, nothing notified, but Marathon checked
@@ -472,7 +515,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
         # Nothing stored, nothing notified, but Marathon checked
@@ -500,7 +544,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
         # Nothing stored, nothing notified, but Marathon checked
@@ -528,7 +573,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
         # Nothing stored, nothing notified, but Marathon checked
@@ -557,7 +603,8 @@ class TestMarathonAcme(object):
             ]
         })
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
         # Nothing stored, nothing notified, but Marathon checked
@@ -585,7 +632,8 @@ class TestMarathonAcme(object):
         })
         self.cert_store.store('example.com', 'certcontent')
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
         assert_that(d, succeeded(Equals([])))
 
         # Existing cert unchanged, marathon-lb not notified, but Marathon
@@ -602,10 +650,11 @@ class TestMarathonAcme(object):
         When a sync is run and something fails, the failure is propagated to
         the sync's deferred.
         """
-        self.marathon_acme.marathon_client = MarathonClient(
+        marathon_acme = self.mk_marathon_acme()
+        marathon_acme.marathon_client = MarathonClient(
             'http://localhost:8080', client=failing_client)
 
-        d = self.marathon_acme.sync()
+        d = marathon_acme.sync()
         assert_that(d, failed(MatchesStructure(
             value=IsInstance(RuntimeError))))
 
@@ -631,7 +680,8 @@ class TestMarathonAcme(object):
         self.txacme_client.issuance_error = txacme_ServerError(
             acme_error, None)
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
 
         assert_that(d, succeeded(Equals([None])))
         # Nothing stored, nothing notified
@@ -661,7 +711,8 @@ class TestMarathonAcme(object):
         self.txacme_client.issuance_error = txacme_ServerError(
             acme_error, None)
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
 
         # Oh god
         assert_that(d, failed(MatchesStructure(
@@ -699,7 +750,8 @@ class TestMarathonAcme(object):
         })
         self.txacme_client.issuance_error = RuntimeError('Something bad')
 
-        d = self.marathon_acme.sync()
+        marathon_acme = self.mk_marathon_acme()
+        d = marathon_acme.sync()
 
         assert_that(d, failed(MatchesStructure(
             value=MatchesStructure(subFailure=MatchesStructure(
