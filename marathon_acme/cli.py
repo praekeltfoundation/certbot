@@ -5,8 +5,8 @@ import sys
 from twisted.internet.endpoints import quoteStringArgument
 from twisted.internet.task import react
 from twisted.logger import (
-    FilteringLogObserver, globalLogPublisher, Logger, LogLevel,
-    LogLevelFilterPredicate, textFileLogObserver)
+    FilteringLogObserver, LogLevel, LogLevelFilterPredicate, Logger,
+    globalLogPublisher, textFileLogObserver)
 from twisted.python.compat import unicode
 from twisted.python.filepath import FilePath
 from twisted.python.url import URL

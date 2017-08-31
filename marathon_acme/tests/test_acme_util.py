@@ -1,27 +1,27 @@
 from datetime import datetime, timedelta
 
-import pem
-import pytest
 from acme.jose import JWKRSA
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+import pem
+import pytest
 from testtools.assertions import assert_that
 from testtools.matchers import (
     Equals, HasLength, IsInstance, MatchesListwise, MatchesStructure)
-from testtools.twistedsupport import succeeded, failed
+from testtools.twistedsupport import failed, succeeded
 from twisted.internet.defer import succeed
 from twisted.python.filepath import FilePath
 from txacme.testing import MemoryStore
 from txacme.util import generate_private_key
 
 from marathon_acme.acme_util import (
-    generate_wildcard_pem_bytes, maybe_key, MlbCertificateStore)
+    MlbCertificateStore, generate_wildcard_pem_bytes, maybe_key)
 from marathon_acme.clients import MarathonLbClient
 from marathon_acme.tests.fake_marathon import FakeMarathonLb
 from marathon_acme.tests.matchers import (
-    matches_time_or_just_before, WithErrorTypeAndMessage)
+    WithErrorTypeAndMessage, matches_time_or_just_before)
 
 
 class TestMaybeKey(object):

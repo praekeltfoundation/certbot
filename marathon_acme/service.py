@@ -1,12 +1,12 @@
 from twisted.internet.defer import gatherResults
-from twisted.logger import Logger, LogLevel
+from twisted.logger import LogLevel, Logger
 from txacme.challenges import HTTP01Responder
 from txacme.client import ServerError as txacme_ServerError
 from txacme.service import AcmeIssuingService
 
-from marathon_acme.server import MarathonAcmeServer
 from marathon_acme.acme_util import MlbCertificateStore
 from marathon_acme.marathon_util import get_number_of_app_ports
+from marathon_acme.server import MarathonAcmeServer
 
 
 def parse_domain_label(domain_label):

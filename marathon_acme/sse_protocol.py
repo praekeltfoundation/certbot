@@ -1,6 +1,6 @@
 from twisted.internet.defer import Deferred
-from twisted.internet.protocol import connectionDone, Protocol
-from twisted.logger import Logger, LogLevel
+from twisted.internet.protocol import Protocol, connectionDone
+from twisted.logger import LogLevel, Logger
 
 
 class SseProtocol(Protocol):

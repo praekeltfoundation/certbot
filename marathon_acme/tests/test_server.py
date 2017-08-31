@@ -10,7 +10,7 @@ from treq.testing import StubTreq
 from twisted.web.resource import Resource
 from twisted.web.static import Data
 
-from marathon_acme.server import MarathonAcmeServer, Health
+from marathon_acme.server import Health, MarathonAcmeServer
 from marathon_acme.tests.matchers import HasHeader, IsJsonResponseWithCode
 
 
