@@ -30,15 +30,15 @@ class TestParseDomainLabel(object):
         domains = parse_domain_label('example.com')
         assert_that(domains, Equals(['example.com']))
 
-    def test_whitespace(self):
+    def test_separators(self):
         """
-        When the domain label contains whitespace, the whitespace should be
-        ignored.
+        When the domain label contains only the separators (commas or
+        whitespace), the separators should be ignored.
         """
-        domains = parse_domain_label(' ')
+        domains = parse_domain_label(' , ,   ')
         assert_that(domains, Equals([]))
 
-    def test_multiple_domains(self):
+    def test_multiple_domains_comma(self):
         """
         When the domain label contains multiple comma-separated domains, the
         domains should be parsed into a list of domains.
@@ -47,6 +47,14 @@ class TestParseDomainLabel(object):
         assert_that(domains, Equals(['example.com', 'example2.com']))
 
     def test_multiple_domains_whitespace(self):
+        """
+        When the domain label contains multiple whitespace-separated domains,
+        the domains should be parsed into a list of domains.
+        """
+        domains = parse_domain_label('example.com example2.com')
+        assert_that(domains, Equals(['example.com', 'example2.com']))
+
+    def test_multiple_domains_comma_whitespace(self):
         """
         When the domain label contains multiple comma-separated domains with
         whitespace inbetween, the domains should be parsed into a list of

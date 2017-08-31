@@ -11,12 +11,7 @@ from marathon_acme.server import MarathonAcmeServer
 
 def parse_domain_label(domain_label):
     """ Parse the list of comma-separated domains from the app label. """
-    domains = []
-    for domain_string in domain_label.split(','):
-        domain = domain_string.strip()
-        if domain:
-            domains.append(domain)
-    return domains
+    return domain_label.replace(',', ' ').split()
 
 
 class MarathonAcme(object):
