@@ -67,7 +67,7 @@ script:
   - tox
 
 after_success:
-  - if [[ $TOXENV == py* ]] && [[ $TOXENV != *-nocoverage ]]; then codecov; fi
+  - case $TOXENV in py27|py34|py35|py36|pypy|pypy3) codecov;; esac
 
 before_deploy:
   - pandoc --from=markdown --to=rst --output=README.rst README.md
