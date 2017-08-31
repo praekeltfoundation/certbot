@@ -2,10 +2,10 @@
 # marathon-acme
 FROM praekeltfoundation/python-base:3.6-alpine
 
-# Copy in the source and install
-COPY marathon_acme /marathon-acme/marathon_acme
-COPY setup.py LICENSE README.md /marathon-acme/
-RUN pip install -e /marathon-acme/.
+# NOTE: This requires that a wheel has been built using the command
+# `python setup.py bdist_wheel`.
+COPY dist/marathon_acme-*.whl .
+RUN pip install marathon_acme-*.whl
 
 # Set up the entrypoint script
 COPY docker-entrypoint.sh /scripts/marathon-acme-entrypoint.sh
