@@ -161,7 +161,7 @@ The only real configuration needed for `marathon-lb` is to add the path to `mara
 ```
 
 ### App configuration
-`marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma-separated domain names, although **by default only the first domain name will be considered**.
+`marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma- and/or whitespace-separated domain names, although **by default only the first domain name will be considered**.
 
 Currently, `marathon-acme` can only issue certificates with a single domain. This means multiple certificates need to be issued for apps with multiple configured domains.
 
