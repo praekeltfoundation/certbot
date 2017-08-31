@@ -3,7 +3,7 @@ import json
 from klein import Klein
 from twisted.internet.endpoints import serverFromString
 from twisted.logger import Logger
-from twisted.web.http import OK, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE
+from twisted.web.http import NOT_IMPLEMENTED, OK, SERVICE_UNAVAILABLE
 from twisted.web.server import Site
 
 

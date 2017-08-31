@@ -3,12 +3,12 @@ import json
 from testtools import ExpectedException, TestCase
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    Equals, Is, IsInstance, HasLength, MatchesStructure)
+    Equals, HasLength, Is, IsInstance, MatchesStructure)
 from testtools.twistedsupport import (
     AsynchronousDeferredRunTest, failed, flush_logged_errors)
 from treq.client import HTTPClient as treq_HTTPClient
 from twisted.internet import reactor
-from twisted.internet.defer import inlineCallbacks, DeferredQueue
+from twisted.internet.defer import DeferredQueue, inlineCallbacks
 from twisted.internet.task import Clock
 from twisted.web._newclient import ResponseDone
 from twisted.web.client import Agent
@@ -18,11 +18,11 @@ from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    default_client, default_reactor, get_single_header, HTTPClient, HTTPError,
-    JsonClient, MarathonClient, MarathonLbClient, raise_for_status)
+    HTTPClient, HTTPError, JsonClient, MarathonClient, MarathonLbClient,
+    default_client, default_reactor, get_single_header, raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import (
-    failing_client, FailingAgent, PerLocationAgent)
+    FailingAgent, PerLocationAgent, failing_client)
 from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
 
