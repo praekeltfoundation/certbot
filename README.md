@@ -177,3 +177,16 @@ The library used for ACME certificate management, `txacme`, is currently quite l
 * There is no support for *removing* certificates from `txacme`'s certificate store ([#77](https://github.com/mithrandi/txacme/issues/77)). Once `marathon-acme` issues a certificate for an app it will try to renew that certificate *forever* unless it is manually deleted from the certificate store.
 
 For a more complete list of issues, see the issues page for this repo.
+
+## Troubleshooting
+### Challenge ping endpoint
+One common problem is that `marathon-lb` is misconfigured and ACME challenge requests are unable to reach `marathon-acme`. You can test challenge request routing to `marathon-acme` using the challenge ping endpoint.
+
+It should be possible to reach the  `/.well-known/acme-challenge/ping` path from all domains served by `marathon-lb`:
+```
+> $ curl cake-service.example.com/.well-known/acme-challenge/ping
+{"message": "pong"}
+
+> $ curl soda-service.example.com/.well-known/acme-challenge/ping
+{"message": "pong"}
+```
