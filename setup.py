@@ -39,7 +39,7 @@ if sys.version_info < (3, 3):
 
 setup(
     name='marathon-acme',
-    version='0.3.0.1',
+    version='0.3.1.dev',
     license='MIT',
     url='https://github.com/praekeltfoundation/marathon-acme',
     description=("Automated management of Let's Encrypt certificates for apps "
