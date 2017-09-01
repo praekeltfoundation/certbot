@@ -77,11 +77,10 @@ optional arguments:
   ],
   "labels": {
     "HAPROXY_GROUP": "external",
-    "HAPROXY_0_VHOST": "example.com",
+    "HAPROXY_0_VHOST": "marathon-acme.example.com",
     "HAPROXY_0_BACKEND_WEIGHT": "1",
     "HAPROXY_0_PATH": "/.well-known/acme-challenge/",
-    "HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH": "  acl path_{backend} path_beg {path}\n  use_backend {backend} if path_{backend}\n",
-    "HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH": "  use_backend {backend} if path_{backend}\n"
+    "HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH": "  acl host_{cleanedUpHostname} hdr(host) -i {hostname}\n  acl path_{backend} path_beg {path}\n  redirect prefix http://{hostname} code 302 if !host_{cleanedUpHostname} path_{backend}\n  use_backend {backend} if host_{cleanedUpHostname} path_{backend}\n"
   },
   "container": {
     "type": "DOCKER",
@@ -108,25 +107,81 @@ optional arguments:
 The above should mostly be standard across different deployments. The volume parameters will depend on your particular networked storage solution.
 
 #### `HAPROXY` labels
+```json
+"labels": {
+  "HAPROXY_GROUP": "external",
+  "HAPROXY_0_VHOST": "marathon-acme.example.com",
+  "HAPROXY_0_BACKEND_WEIGHT": "1",
+  "HAPROXY_0_PATH": "/.well-known/acme-challenge/",
+  "HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH": "  acl host_{cleanedUpHostname} hdr(host) -i {hostname}\n  acl path_{backend} path_beg {path}\n  redirect prefix http://{hostname} code 302 if !host_{cleanedUpHostname} path_{backend}\n  use_backend {backend} if host_{cleanedUpHostname} path_{backend}\n"
+}
+```
 Several special `marathon-lb` labels are needed in order to forward all HTTP requests whose path begins with `/.well-known/acme-challenge/` to `marathon-acme`, in order to serve ACME [HTTP challenge](https://ietf-wg-acme.github.io/acme/#rfc.section.7.2) responses.
 
 ##### `HAPROXY_GROUP`
+```
+external
+```
 `marathon-lb` instances are assigned a group. Only Marathon apps with a `HAPROXY_GROUP` label that matches their group are routed with that instance. "external" is the common name for publicly-facing load balancers.
 
 ##### `HAPROXY_0_VHOST`
-`marathon-lb` is designed with the assumption that things have domains. `marathon-acme` doesn't technically need one, but if we don’t specify this label, the app is not exposed to the outside world. Any value will do here, since we change the templates to never include this value.
+```
+marathon-acme.example.com
+```
+`marathon-acme` needs its own domain to respond to ACME challenge requests on. This domain must resolve to your `marathon-lb` instance(s).
 
 ##### `HAPROXY_0_BACKEND_WEIGHT`
+```
+1
+```
 We want this rule in HAProxy's config file to come before any others so that requests are routed to `marathon-acme` before we do the (usually) domain-based routing for the other Marathon apps. The default weight is `0`, so we set to `1` so that the rule comes first.
 
 ##### `HAPROXY_0_PATH`
+```
+/.well-known/acme-challenge/
+```
 This is the beginning of the HTTP path to ACME validation challenges.
 
 ##### `HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH`
-This is where it gets complicated... It’s possible to edit the templates used for generating the HAProxy on a per-app basis using labels. This is necessary because by default `marathon-lb` will route based on domain first, but we don’t want to do that. You can see the standard template [here](https://github.com/mesosphere/marathon-lb/blob/master/Longhelp.md#haproxy_http_frontend_acl_with_path). We simply remove the first line containing the hostname ACL.
+```
+  acl host_{cleanedUpHostname} hdr(host) -i {hostname}
+  acl path_{backend} path_beg {path}
+  redirect prefix http://{hostname} code 302 if !host_{cleanedUpHostname} path_{backend}
+  use_backend {backend} if host_{cleanedUpHostname} path_{backend}
+```
+This is where it gets complicated... It’s possible to edit the templates used for generating the HAProxy on a per-app basis using labels. This is necessary because by default `marathon-lb` will route based on domain first, but we don’t want to do that. You can see the standard template [here](https://github.com/mesosphere/marathon-lb/blob/master/Longhelp.md#haproxy_http_frontend_acl_with_path).
+
+Here, we add an extra `redirect` rule. This redirects all requests matching the ACME challenge path to `marathon-acme`, except those requests already headed for `marathon-acme`. The Let's Encrypt server will follow redirects.
+
+#### `HAPROXY` HTTPS labels
+It is possible to have `marathon-acme` serve ACME challenge requests over HTTPS, although this is usually not necessary. In this case, a few more labels need to be added:
+```json
+"labels": {
+  ...,
+  "HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH": "  redirect prefix https://{hostname} code 302 if !{{ ssl_fc_sni {hostname} }} path_{backend}\n  use_backend {backend} if {{ ssl_fc_sni {hostname} }} path_{backend}\n",
+  "MARATHON_ACME_0_DOMAIN": "marathon-acme.example.com",
+  "HAPROXY_0_REDIRECT_TO_HTTPS": "true"
+}
+```
 
 ##### `HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH`
-`marathon-lb` exposes apps via port 443/HTTPS by default and there doesn’t seem to be a way to switch it off. We change the ACL template here so that HAProxy doesn’t try to do an SNI match on the hostname. The ACME Simple HTTP spec allows for challenges to occur over HTTPS if the client requests as such and will ignore the certificate presented on our side.
+```
+  redirect prefix https://{hostname} code 302 if !{{ ssl_fc_sni {hostname} }} path_{backend}
+  use_backend {backend} if {{ ssl_fc_sni {hostname} }} path_{backend}
+```
+This is a lot like the `HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH` template-- we just add a redirect to `marathon-acme`.
+
+##### `MARATHON_ACME_0_DOMAIN`
+```
+marathon-acme.example.com
+```
+Here we set up `marathon-acme` to fetch a certificate for itself.
+
+##### `HAPROXY_0_REDIRECT_TO_HTTPS`
+```
+true
+```
+We redirect the HTTP challenge requests to HTTPS. **Note** that this can only be switched on after the first certificate has been issued for `marathon-acme`'s domain.
 
 #### Docker images
 Docker images are available from [Docker Hub](https://hub.docker.com/r/praekeltfoundation/marathon-acme/). There are two different streams of Docker images available:
