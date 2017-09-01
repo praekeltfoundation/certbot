@@ -25,7 +25,8 @@ The ACME provider that most people are likely to use is [Let's Encrypt](https://
 ```
 > $ docker run --rm praekeltfoundation/marathon-acme --help
 usage: marathon-acme [-h] [-a ACME] [-e EMAIL] [-m MARATHON[,MARATHON,...]]
-                     [-l LB[,LB,...]] [-g GROUP] [--listen LISTEN]
+                     [-l LB[,LB,...]] [-g GROUP] [--allow-multiple-certs]
+                     [--listen LISTEN]
                      [--log-level {debug,info,warn,error,critical}]
                      storage-dir
 
@@ -50,6 +51,10 @@ optional arguments:
   -g GROUP, --group GROUP
                         The marathon-lb group to issue certificates for
                         (default: external)
+  --allow-multiple-certs
+                        Allow multiple certificates for a single app port.
+                        This allows multiple domains for an app, but is not
+                        recommended.
   --listen LISTEN       The address for the port to listen on (default: :8000)
   --log-level {debug,info,warn,error,critical}
                         The minimum severity level to log messages at
@@ -156,15 +161,17 @@ The only real configuration needed for `marathon-lb` is to add the path to `mara
 ```
 
 ### App configuration
-`marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma-separated domain names, although currently only the first domain name will be considered.
+`marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma- and/or whitespace-separated domain names, although **by default only the first domain name will be considered**.
+
+Currently, `marathon-acme` can only issue certificates with a single domain. This means multiple certificates need to be issued for apps with multiple configured domains.
+
+A limitation was added that limits apps to a single domain. This limit can be removed by passing the `--allow-multiple-certs` command-line option, although this is not recommended as it makes it possible for a large number of certificates to be issued for a single app, potentially exhausting the Let's Encrypt rate limit.
 
 The app or its port must must be in the same `HAPROXY_GROUP` as `marathon-acme` was configured with at start-up.
 
 We decided not to reuse the `HAPROXY_{n}_VHOST` label so as to limit the number of domains that certificates are issued for.
 
 ## Limitations
-The current biggest limitation with `marathon-acme` is that it will only issue one certificate for one domain per app port. This is to limit the number of certificates issued so as to prevent hitting Let's Encrypt rate limits.
-
 The library used for ACME certificate management, `txacme`, is currently quite limited in its functionality. The two biggest limitations are:
 * There is no [Subject Alternative Name](https://en.wikipedia.org/wiki/Subject_Alternative_Name) (SAN) support yet ([#37](https://github.com/mithrandi/txacme/issues/37)). Each certificate will correspond to exactly one domain name. This limitation makes it easier to hit Let's Encrypt's rate limits.
 * There is no support for *removing* certificates from `txacme`'s certificate store ([#77](https://github.com/mithrandi/txacme/issues/77)). Once `marathon-acme` issues a certificate for an app it will try to renew that certificate *forever* unless it is manually deleted from the certificate store.

@@ -3,12 +3,12 @@ import json
 from testtools import ExpectedException, TestCase
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    Equals, Is, IsInstance, HasLength, MatchesStructure)
+    Equals, HasLength, Is, IsInstance, MatchesStructure)
 from testtools.twistedsupport import (
     AsynchronousDeferredRunTest, failed, flush_logged_errors)
 from treq.client import HTTPClient as treq_HTTPClient
 from twisted.internet import reactor
-from twisted.internet.defer import inlineCallbacks, DeferredQueue
+from twisted.internet.defer import DeferredQueue, inlineCallbacks
 from twisted.internet.task import Clock
 from twisted.web._newclient import ResponseDone
 from twisted.web.client import Agent
@@ -18,11 +18,11 @@ from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    default_client, default_reactor, get_single_header, HTTPClient, HTTPError,
-    JsonClient, MarathonClient, MarathonLbClient, raise_for_status)
+    HTTPClient, HTTPError, JsonClient, MarathonClient, MarathonLbClient,
+    default_client, default_reactor, get_single_header, raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import (
-    failing_client, FailingAgent, PerLocationAgent)
+    FailingAgent, PerLocationAgent, failing_client)
 from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
 
@@ -36,6 +36,12 @@ def json_response(request, json_data, response_code=200):
     request.setResponseCode(response_code)
     write_request_json(request, json_data)
     request.finish()
+
+
+def write_json_event(request, event, json_data):
+    request.write('event: {}\n'.format(event).encode('utf-8'))
+    request.write('data: {}\n'.format(json.dumps(json_data)).encode('utf-8'))
+    request.write(b'\n')
 
 
 class TestGetSingleHeader(object):
@@ -716,7 +722,8 @@ class TestMarathonClient(TestHTTPClientBase):
 
         json_data = {'hello': 'world'}
         request.write(b'event: test\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
+        request.write(
+            'data: {}\n'.format(json.dumps(json_data)).encode('utf-8'))
         request.write(b'\n')
 
         yield wait0()
@@ -749,11 +756,13 @@ class TestMarathonClient(TestHTTPClientBase):
 
         json_data1 = {'hello': 'world'}
         request.write(b'event: test\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data1).encode('utf-8')))
+        request.write(
+            'data: {}\n'.format(json.dumps(json_data1)).encode('utf-8'))
         request.write(b'\n')
 
         json_data2 = {'hi': 'planet'}
-        request.write(b'data: %s\n' % (json.dumps(json_data2).encode('utf-8')))
+        request.write(
+            'data: {}\n'.format(json.dumps(json_data2)).encode('utf-8'))
         request.write(b'event: test\n')
         request.write(b'\n')
 
@@ -790,14 +799,10 @@ class TestMarathonClient(TestHTTPClientBase):
         request.setHeader('Content-Type', 'text/event-stream')
 
         json_data1 = {'hello': 'world'}
-        request.write(b'event: test1\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data1).encode('utf-8')))
-        request.write(b'\n')
+        write_json_event(request, 'test1', json_data1)
 
         json_data2 = {'hello': 'computer'}
-        request.write(b'event: test2\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data2).encode('utf-8')))
-        request.write(b'\n')
+        write_json_event(request, 'test2', json_data2)
 
         yield wait0()
         self.assertThat(data1, Equals([json_data1]))
@@ -828,9 +833,7 @@ class TestMarathonClient(TestHTTPClientBase):
         request.setHeader('Content-Type', 'text/event-stream')
 
         json_data = {'hello': 'world'}
-        request.write(b'event: test\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
-        request.write(b'\n')
+        write_json_event(request, 'test', json_data)
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
@@ -862,9 +865,7 @@ class TestMarathonClient(TestHTTPClientBase):
         request.setHeader('Content-Type', 'application/json')
 
         json_data = {'hello': 'world'}
-        request.write(b'event: test\n')
-        request.write(b'data: %s\n' % (json.dumps(json_data).encode('utf-8'),))
-        request.write(b'\n')
+        write_json_event(request, 'test', json_data)
 
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(

@@ -85,7 +85,8 @@ class TestSseProtocol(object):
         the start of the value, the leading space should be stripped and the
         other spaces left intact.
         """
-        self.protocol.dataReceived(b'data:%s\r\n\r\n' % (b' ' * 4,))
+        self.protocol.dataReceived(
+            'data:{}\r\n\r\n'.format(' ' * 4).encode('utf-8'))
 
         assert_that(self.messages, Equals([('message', ' ' * 3)]))
 
@@ -200,8 +201,8 @@ class TestSseProtocol(object):
         lose the connection.
         """
         self.protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
-        self.protocol.dataReceived(b'data:%s\r\n\r\n' % (
-            b'x' * (self.protocol.MAX_LENGTH + 1),))
+        self.protocol.dataReceived('data:{}\r\n\r\n'.format(
+            'x' * (self.protocol.MAX_LENGTH + 1)).encode('utf-8'))
 
         assert_that(self.transport.disconnecting, Equals(True))
 
@@ -212,8 +213,8 @@ class TestSseProtocol(object):
         request to lose the connection.
         """
         self.protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
-        self.protocol.dataReceived(b'data:%s' % (
-            b'x' * (self.protocol.MAX_LENGTH + 1),))
+        self.protocol.dataReceived('data:{}'.format(
+            'x' * (self.protocol.MAX_LENGTH + 1)).encode('utf-8'))
 
         assert_that(self.transport.disconnecting, Equals(True))
 

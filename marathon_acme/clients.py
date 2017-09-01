@@ -5,7 +5,7 @@ from requests.exceptions import HTTPError
 from treq.client import HTTPClient as treq_HTTPClient
 from treq.content import json_content
 from twisted.internet.defer import DeferredList
-from twisted.logger import Logger, LogLevel
+from twisted.logger import LogLevel, Logger
 from twisted.web.http import OK
 from uritools import uricompose, uridecode, urisplit
 
