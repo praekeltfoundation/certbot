@@ -2,7 +2,7 @@ import codecs
 import os
 import sys
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 HERE = os.path.abspath(os.path.dirname(__file__))
 
@@ -39,7 +39,7 @@ if sys.version_info < (3, 3):
 
 setup(
     name='marathon-acme',
-    version='0.2.0',
+    version='0.3.0',
     license='MIT',
     url='https://github.com/praekeltfoundation/marathon-acme',
     description=("Automated management of Let's Encrypt certificates for apps "
@@ -49,16 +49,29 @@ setup(
     long_description=readme(),
     packages=find_packages(),
     install_requires=install_requires,
+    extras_require={
+        'test': [
+            'fixtures',
+            'pem >= 16.1.0',
+            'pytest >= 3.0.0',
+            'testtools',
+            'txfake >= 0.1.1',
+        ],
+        'pep8test': [
+            'flake8',
+            'flake8-import-order',
+        ],
+    },
     classifiers=[
         'Development Status :: 4 - Beta',
         'Framework :: Twisted',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',

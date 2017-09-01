@@ -1,24 +1,44 @@
 sudo: false
 dist: trusty
 
+# Only build develop, master, and version tags (which are considered branches
+# by Travis). PRs still get built.
+branches:
+  only:
+    - develop
+    - master
+    - /\d+\.\d+(\.\d+)?/
+
 language: python
 matrix:
   include:
     - python: '2.7'
+      env: TOXENV=py27
+    - python: '3.4'
+      env: TOXENV=py34
     - python: '3.5'
+      env: TOXENV=py35
     - python: '3.6'
-    - env: PYENV_VERSION=pypy2.7-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
-    - env: PYENV_VERSION=pypy3.5-5.8.0 PYENV_VERSION_STRING='PyPy 5.8.0-beta0' PYENV_ROOT="$HOME/.pyenv-pypy" NO_COVERAGE=1
+      env: TOXENV=py36
+      addons: { apt_packages: [pandoc] }
+    - python: pypy2.7-5.8.0
+      env: TOXENV=pypy-nocoverage
+    - python: pypy3.5-5.8.0
+      env: TOXENV=pypy3-nocoverage
+    - python: '2.7'
+      env: TOXENV=pep8
+    - python: '3.6'
+      env: TOXENV=py3pep8
     # Docker dev image
     - sudo: required
-      services: [docker]
+      services: docker
+      python: '3.6'
       env:
         - IMAGE_NAME=praekeltfoundation/marathon-acme
         - REGISTRY_USER=praekeltorgdeploy
         - secure: "JSuiWKoxXNr77SYOuYC1RBXl4vXthOBmMxdKJ5ZjPNCkcAC1WeiFlEAYSA1rw+iuNIi0SWhU8ATTOVj+iKWH3aYx3RolCngMf18juFKGktUdQ17EimK2KzGeieyaBIuwRg+sYelgydC4J+d7pqDGAwhaqvU+xTJeKQUhavUIiymNrAZee008f/ncrporBHPTFHQIWbexYdd2ta/zO9Y3VOQqxJP5qp9E6uRAvvl9ZkNIFGcuRYylPbFIiR5QF6guEXks8bnhlnfflxSJUoX9z6NYeG/kQXyk84p4a2fRm7wuFn4XSbjY+G0Rik4tPq1+rBI7QdKM1YOctiej/Mmb0WD8sEkBGlQDwBb5oozdPY3MtqmtFcSXgf7o0yJWaoLt+l1LBKY1NQg+n59Ls7jnxX+pmR5d42W9lDLHPVVadyun+n4aMUhkbTYxlr1y4vAaAoogB6V9K4QRKekJ4i9mnTiVg29XLuqkZpKQjH6BNMMpy1kPML9tGx9cV+5dUGn2qC097YqmepvUCEIcRs0GJt1I7fNgb0VvyFQu3S/gFqVKVL8qZLWJFCs+TrII6x6ePp+iq5SQvST5YvWQ7JvZY9bnUnqsCBpa0Q1te2jyRk4AVJvd8oPBmt4z2OiJFahWnUvAbXduTW9fH9KhwbSw1nxi1lTSbpw/l+PLbocORKc="
 
       # Clear unused steps
-      addons: {}
       before_install: []
       install: []
       after_success: []
@@ -26,6 +46,7 @@ matrix:
       before_script:
         - docker pull $IMAGE_NAME:develop || true
       script:
+        - python setup.py bdist_wheel
         - docker build --pull --cache-from $IMAGE_NAME:develop -t $IMAGE_NAME .
 
       before_deploy:
@@ -37,32 +58,18 @@ matrix:
         on:
           branch: develop
 
-cache:
-  - pip
-  - directories:
-    - ~/.pyenv_cache
-addons:
-  apt_packages:
-    - pandoc
+cache: pip
 
 before_install:
-  - |
-    if [[ -n "$PYENV_VERSION" ]]; then
-      wget https://github.com/praekeltfoundation/travis-pyenv/releases/download/0.3.0/setup-pyenv.sh
-      source setup-pyenv.sh
-    fi
   - pip install --upgrade pip
-
 install:
-  - pip install -r requirements-dev.txt
-  - if [[ -z "$NO_COVERAGE" ]]; then pip install codecov; fi
+  - pip install tox codecov
+
 script:
-  - if [[ -z "$NO_COVERAGE" ]]; then COVERAGE_OPT="--cov"; else COVERAGE_OPT=""; fi
-  - py.test marathon_acme $COVERAGE_OPT
-  - flake8 .
+  - tox
 
 after_success:
-  - if [[ -z "$NO_COVERAGE" ]]; then codecov; fi
+  - case $TOXENV in py27|py34|py35|py36|pypy|pypy3) codecov;; esac
 
 before_deploy:
   - pandoc --from=markdown --to=rst --output=README.rst README.md
@@ -74,3 +81,4 @@ deploy:
   distributions: sdist bdist_wheel
   on:
     tags: true
+    python: '3.6'

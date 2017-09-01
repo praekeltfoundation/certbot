@@ -1,7 +1,7 @@
 import os
 
 from fixtures import TempDir
-from testtools import ExpectedException, run_test_with, TestCase
+from testtools import ExpectedException, TestCase, run_test_with
 from testtools.assertions import assert_that
 from testtools.matchers import (
     Contains, DirExists, Equals, FileContains, FileExists, MatchesStructure)

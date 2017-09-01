@@ -3,7 +3,7 @@ import json
 from klein import Klein
 from twisted.internet.endpoints import serverFromString
 from twisted.logger import Logger
-from twisted.web.http import OK, NOT_IMPLEMENTED, SERVICE_UNAVAILABLE
+from twisted.web.http import NOT_IMPLEMENTED, OK, SERVICE_UNAVAILABLE
 from twisted.web.server import Site
 
 
@@ -47,6 +47,15 @@ class MarathonAcmeServer(object):
         ``/.well-known/acme-challenge/`` using the ACME responder resource.
         """
         return self.responder_resource
+
+    @app.route('/.well-known/acme-challenge/ping', methods=['GET'])
+    def acme_challenge_ping(self, request):
+        """
+        Respond to requests on ``/.well-known/acme-challenge/ping`` to debug
+        path routing issues.
+        """
+        request.setResponseCode(OK)
+        write_request_json(request, {'message': 'pong'})
 
     def set_health_handler(self, health_handler):
         """

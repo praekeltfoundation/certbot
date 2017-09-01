@@ -1,29 +1,25 @@
 from twisted.internet.defer import gatherResults
-from twisted.logger import Logger, LogLevel
+from twisted.logger import LogLevel, Logger
 from txacme.challenges import HTTP01Responder
 from txacme.client import ServerError as txacme_ServerError
 from txacme.service import AcmeIssuingService
 
-from marathon_acme.server import MarathonAcmeServer
 from marathon_acme.acme_util import MlbCertificateStore
 from marathon_acme.marathon_util import get_number_of_app_ports
+from marathon_acme.server import MarathonAcmeServer
 
 
 def parse_domain_label(domain_label):
     """ Parse the list of comma-separated domains from the app label. """
-    domains = []
-    for domain_string in domain_label.split(','):
-        domain = domain_string.strip()
-        if domain:
-            domains.append(domain)
-    return domains
+    return domain_label.replace(',', ' ').split()
 
 
 class MarathonAcme(object):
     log = Logger()
 
     def __init__(self, marathon_client, group, cert_store, mlb_client,
-                 txacme_client_creator, reactor, email=None):
+                 txacme_client_creator, reactor, email=None,
+                 allow_multiple_certs=False):
         """
         Create the marathon-acme service.
 
@@ -34,6 +30,8 @@ class MarathonAcme(object):
         :param txacme_client_creator: Callable to create the txacme client.
         :param reactor: The reactor to use.
         :param email: The ACME registration email.
+        :param allow_multiple_certs:
+            Whether to allow multiple certificates per app port.
         """
         self.marathon_client = marathon_client
         self.group = group
@@ -46,6 +44,7 @@ class MarathonAcme(object):
         self.txacme_service = AcmeIssuingService(
             mlb_cert_store, txacme_client_creator, reactor, [responder], email)
 
+        self._allow_multiple_certs = allow_multiple_certs
         self._server_listening = None
 
     def run(self, endpoint_description):
@@ -180,8 +179,10 @@ class MarathonAcme(object):
                     'MARATHON_ACME_%d_DOMAIN' % (port_index,), '')
                 port_domains = parse_domain_label(domain_label)
 
-                if port_domains:
-                    # TODO: Support SANs- for now just use the first domain
+                # TODO: Support multiple domains per certificate (SAN).
+                if self._allow_multiple_certs:
+                    app_domains.extend(port_domains)
+                elif port_domains:
                     if len(port_domains) > 1:
                         self.log.warn(
                             'Multiple domains found for port {port} of app '

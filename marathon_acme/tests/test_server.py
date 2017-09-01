@@ -10,7 +10,7 @@ from treq.testing import StubTreq
 from twisted.web.resource import Resource
 from twisted.web.static import Data
 
-from marathon_acme.server import MarathonAcmeServer, Health
+from marathon_acme.server import Health, MarathonAcmeServer
 from marathon_acme.tests.matchers import HasHeader, IsJsonResponseWithCode
 
 
@@ -50,6 +50,18 @@ class TestMarathonAcmeServer(object):
         response = self.client.get(
             'http://localhost/.well-known/acme-challenge/baz')
         assert_that(response, succeeded(MatchesStructure(code=Equals(404))))
+
+    def test_acme_challenge_ping(self):
+        """
+        When a GET request is made to the ACME challenge path ping endpoint,
+        a pong message should be returned.
+        """
+        response = self.client.get(
+            'http://localhost/.well-known/acme-challenge/ping')
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(Equals({'message': 'pong'})))
+        )))
 
     def test_health_healthy(self):
         """

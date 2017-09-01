@@ -25,7 +25,8 @@ The ACME provider that most people are likely to use is [Let's Encrypt](https://
 ```
 > $ docker run --rm praekeltfoundation/marathon-acme --help
 usage: marathon-acme [-h] [-a ACME] [-e EMAIL] [-m MARATHON[,MARATHON,...]]
-                     [-l LB[,LB,...]] [-g GROUP] [--listen LISTEN]
+                     [-l LB[,LB,...]] [-g GROUP] [--allow-multiple-certs]
+                     [--listen LISTEN]
                      [--log-level {debug,info,warn,error,critical}]
                      storage-dir
 
@@ -50,6 +51,10 @@ optional arguments:
   -g GROUP, --group GROUP
                         The marathon-lb group to issue certificates for
                         (default: external)
+  --allow-multiple-certs
+                        Allow multiple certificates for a single app port.
+                        This allows multiple domains for an app, but is not
+                        recommended.
   --listen LISTEN       The address for the port to listen on (default: :8000)
   --log-level {debug,info,warn,error,critical}
                         The minimum severity level to log messages at
@@ -72,11 +77,10 @@ optional arguments:
   ],
   "labels": {
     "HAPROXY_GROUP": "external",
-    "HAPROXY_0_VHOST": "example.com",
+    "HAPROXY_0_VHOST": "marathon-acme.example.com",
     "HAPROXY_0_BACKEND_WEIGHT": "1",
     "HAPROXY_0_PATH": "/.well-known/acme-challenge/",
-    "HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH": "  acl path_{backend} path_beg {path}\n  use_backend {backend} if path_{backend}\n",
-    "HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH": "  use_backend {backend} if path_{backend}\n"
+    "HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH": "  acl host_{cleanedUpHostname} hdr(host) -i {hostname}\n  acl path_{backend} path_beg {path}\n  redirect prefix http://{hostname} code 302 if !host_{cleanedUpHostname} path_{backend}\n  use_backend {backend} if host_{cleanedUpHostname} path_{backend}\n"
   },
   "container": {
     "type": "DOCKER",
@@ -103,25 +107,81 @@ optional arguments:
 The above should mostly be standard across different deployments. The volume parameters will depend on your particular networked storage solution.
 
 #### `HAPROXY` labels
+```json
+"labels": {
+  "HAPROXY_GROUP": "external",
+  "HAPROXY_0_VHOST": "marathon-acme.example.com",
+  "HAPROXY_0_BACKEND_WEIGHT": "1",
+  "HAPROXY_0_PATH": "/.well-known/acme-challenge/",
+  "HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH": "  acl host_{cleanedUpHostname} hdr(host) -i {hostname}\n  acl path_{backend} path_beg {path}\n  redirect prefix http://{hostname} code 302 if !host_{cleanedUpHostname} path_{backend}\n  use_backend {backend} if host_{cleanedUpHostname} path_{backend}\n"
+}
+```
 Several special `marathon-lb` labels are needed in order to forward all HTTP requests whose path begins with `/.well-known/acme-challenge/` to `marathon-acme`, in order to serve ACME [HTTP challenge](https://ietf-wg-acme.github.io/acme/#rfc.section.7.2) responses.
 
 ##### `HAPROXY_GROUP`
+```
+external
+```
 `marathon-lb` instances are assigned a group. Only Marathon apps with a `HAPROXY_GROUP` label that matches their group are routed with that instance. "external" is the common name for publicly-facing load balancers.
 
 ##### `HAPROXY_0_VHOST`
-`marathon-lb` is designed with the assumption that things have domains. `marathon-acme` doesn't technically need one, but if we don’t specify this label, the app is not exposed to the outside world. Any value will do here, since we change the templates to never include this value.
+```
+marathon-acme.example.com
+```
+`marathon-acme` needs its own domain to respond to ACME challenge requests on. This domain must resolve to your `marathon-lb` instance(s).
 
 ##### `HAPROXY_0_BACKEND_WEIGHT`
+```
+1
+```
 We want this rule in HAProxy's config file to come before any others so that requests are routed to `marathon-acme` before we do the (usually) domain-based routing for the other Marathon apps. The default weight is `0`, so we set to `1` so that the rule comes first.
 
 ##### `HAPROXY_0_PATH`
+```
+/.well-known/acme-challenge/
+```
 This is the beginning of the HTTP path to ACME validation challenges.
 
 ##### `HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH`
-This is where it gets complicated... It’s possible to edit the templates used for generating the HAProxy on a per-app basis using labels. This is necessary because by default `marathon-lb` will route based on domain first, but we don’t want to do that. You can see the standard template [here](https://github.com/mesosphere/marathon-lb/blob/master/Longhelp.md#haproxy_http_frontend_acl_with_path). We simply remove the first line containing the hostname ACL.
+```
+  acl host_{cleanedUpHostname} hdr(host) -i {hostname}
+  acl path_{backend} path_beg {path}
+  redirect prefix http://{hostname} code 302 if !host_{cleanedUpHostname} path_{backend}
+  use_backend {backend} if host_{cleanedUpHostname} path_{backend}
+```
+This is where it gets complicated... It’s possible to edit the templates used for generating the HAProxy on a per-app basis using labels. This is necessary because by default `marathon-lb` will route based on domain first, but we don’t want to do that. You can see the standard template [here](https://github.com/mesosphere/marathon-lb/blob/master/Longhelp.md#haproxy_http_frontend_acl_with_path).
+
+Here, we add an extra `redirect` rule. This redirects all requests matching the ACME challenge path to `marathon-acme`, except those requests already headed for `marathon-acme`. The Let's Encrypt server will follow redirects.
+
+#### `HAPROXY` HTTPS labels
+It is possible to have `marathon-acme` serve ACME challenge requests over HTTPS, although this is usually not necessary. In this case, a few more labels need to be added:
+```json
+"labels": {
+  ...,
+  "HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH": "  redirect prefix https://{hostname} code 302 if !{{ ssl_fc_sni {hostname} }} path_{backend}\n  use_backend {backend} if {{ ssl_fc_sni {hostname} }} path_{backend}\n",
+  "MARATHON_ACME_0_DOMAIN": "marathon-acme.example.com",
+  "HAPROXY_0_REDIRECT_TO_HTTPS": "true"
+}
+```
 
 ##### `HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH`
-`marathon-lb` exposes apps via port 443/HTTPS by default and there doesn’t seem to be a way to switch it off. We change the ACL template here so that HAProxy doesn’t try to do an SNI match on the hostname. The ACME Simple HTTP spec allows for challenges to occur over HTTPS if the client requests as such and will ignore the certificate presented on our side.
+```
+  redirect prefix https://{hostname} code 302 if !{{ ssl_fc_sni {hostname} }} path_{backend}
+  use_backend {backend} if {{ ssl_fc_sni {hostname} }} path_{backend}
+```
+This is a lot like the `HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH` template—we just add a redirect to `marathon-acme`.
+
+##### `MARATHON_ACME_0_DOMAIN`
+```
+marathon-acme.example.com
+```
+Here we set up `marathon-acme` to fetch a certificate for itself.
+
+##### `HAPROXY_0_REDIRECT_TO_HTTPS`
+```
+true
+```
+We redirect the HTTP challenge requests to HTTPS. **Note** that this can only be switched on after the first certificate has been issued for `marathon-acme`'s domain.
 
 #### Docker images
 Docker images are available from [Docker Hub](https://hub.docker.com/r/praekeltfoundation/marathon-acme/). There are two different streams of Docker images available:
@@ -156,17 +216,32 @@ The only real configuration needed for `marathon-lb` is to add the path to `mara
 ```
 
 ### App configuration
-`marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma-separated domain names, although currently only the first domain name will be considered.
+`marathon-acme` uses a single `marathon-lb`-like label to assign domains to app ports: `MARATHON_ACME_{n}_DOMAIN`, where `{n}` is the port index. The value of the label is a set of comma- and/or whitespace-separated domain names, although **by default only the first domain name will be considered**.
+
+Currently, `marathon-acme` can only issue certificates with a single domain. This means multiple certificates need to be issued for apps with multiple configured domains.
+
+A limitation was added that limits apps to a single domain. This limit can be removed by passing the `--allow-multiple-certs` command-line option, although this is not recommended as it makes it possible for a large number of certificates to be issued for a single app, potentially exhausting the Let's Encrypt rate limit.
 
 The app or its port must must be in the same `HAPROXY_GROUP` as `marathon-acme` was configured with at start-up.
 
 We decided not to reuse the `HAPROXY_{n}_VHOST` label so as to limit the number of domains that certificates are issued for.
 
 ## Limitations
-The current biggest limitation with `marathon-acme` is that it will only issue one certificate for one domain per app port. This is to limit the number of certificates issued so as to prevent hitting Let's Encrypt rate limits.
-
 The library used for ACME certificate management, `txacme`, is currently quite limited in its functionality. The two biggest limitations are:
 * There is no [Subject Alternative Name](https://en.wikipedia.org/wiki/Subject_Alternative_Name) (SAN) support yet ([#37](https://github.com/mithrandi/txacme/issues/37)). Each certificate will correspond to exactly one domain name. This limitation makes it easier to hit Let's Encrypt's rate limits.
 * There is no support for *removing* certificates from `txacme`'s certificate store ([#77](https://github.com/mithrandi/txacme/issues/77)). Once `marathon-acme` issues a certificate for an app it will try to renew that certificate *forever* unless it is manually deleted from the certificate store.
 
 For a more complete list of issues, see the issues page for this repo.
+
+## Troubleshooting
+### Challenge ping endpoint
+One common problem is that `marathon-lb` is misconfigured and ACME challenge requests are unable to reach `marathon-acme`. You can test challenge request routing to `marathon-acme` using the challenge ping endpoint.
+
+It should be possible to reach the  `/.well-known/acme-challenge/ping` path from all domains served by `marathon-lb`:
+```
+> $ curl cake-service.example.com/.well-known/acme-challenge/ping
+{"message": "pong"}
+
+> $ curl soda-service.example.com/.well-known/acme-challenge/ping
+{"message": "pong"}
+```
