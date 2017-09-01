@@ -169,7 +169,7 @@ It is possible to have `marathon-acme` serve ACME challenge requests over HTTPS,
   redirect prefix https://{hostname} code 302 if !{{ ssl_fc_sni {hostname} }} path_{backend}
   use_backend {backend} if {{ ssl_fc_sni {hostname} }} path_{backend}
 ```
-This is a lot like the `HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH` template-- we just add a redirect to `marathon-acme`.
+This is a lot like the `HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH` template—we just add a redirect to `marathon-acme`.
 
 ##### `MARATHON_ACME_0_DOMAIN`
 ```
