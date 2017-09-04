@@ -154,22 +154,15 @@ This is where it gets complicated... It’s possible to edit the templates used 
 Here, we add an extra `redirect` rule. This redirects all requests matching the ACME challenge path to `marathon-acme`, except those requests already headed for `marathon-acme`. The Let's Encrypt server will follow redirects.
 
 #### `HAPROXY` HTTPS labels
-It is possible to have `marathon-acme` serve ACME challenge requests over HTTPS, although this is usually not necessary. In this case, a few more labels need to be added:
+It is possible to have `marathon-acme` serve ACME challenge requests over HTTPS, although this is usually not necessary. In this case, a certificate needs to be issued for `marathon-acme` and the HTTP redirect label needs to be modified:
 ```json
 "labels": {
   ...,
-  "HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH": "  redirect prefix https://{hostname} code 302 if !{{ ssl_fc_sni {hostname} }} path_{backend}\n  use_backend {backend} if {{ ssl_fc_sni {hostname} }} path_{backend}\n",
   "MARATHON_ACME_0_DOMAIN": "marathon-acme.example.com",
-  "HAPROXY_0_REDIRECT_TO_HTTPS": "true"
+  "HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH": "  acl host_{cleanedUpHostname} hdr(host) -i {hostname}\n  acl path_{backend} path_beg {path}\n  redirect prefix https://{hostname} code 302 if path_{backend}\n"
 }
 ```
-
-##### `HAPROXY_0_HTTPS_FRONTEND_ACL_WITH_PATH`
-```
-  redirect prefix https://{hostname} code 302 if !{{ ssl_fc_sni {hostname} }} path_{backend}
-  use_backend {backend} if {{ ssl_fc_sni {hostname} }} path_{backend}
-```
-This is a lot like the `HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH` template—we just add a redirect to `marathon-acme`.
+Note that using the `HAPROXY_0_REDIRECT_TO_HTTPS` label for `marathon-acme` will break things. This label is difficult for us to use because of the way `marathon-lb`'s templating works.
 
 ##### `MARATHON_ACME_0_DOMAIN`
 ```
@@ -177,11 +170,15 @@ marathon-acme.example.com
 ```
 Here we set up `marathon-acme` to fetch a certificate for itself.
 
-##### `HAPROXY_0_REDIRECT_TO_HTTPS`
+##### `HAPROXY_0_HTTP_FRONTEND_ACL_WITH_PATH`
 ```
-true
+  acl host_{cleanedUpHostname} hdr(host) -i {hostname}
+  acl path_{backend} path_beg {path}
+  redirect prefix https://{hostname} code 302 if path_{backend}
 ```
-We redirect the HTTP challenge requests to HTTPS. **Note** that this can only be switched on after the first certificate has been issued for `marathon-acme`'s domain.
+We redirect to the HTTPS address (`https://{hostname}`) for all domains (including `marathon-acme`'s) for requests to the ACME challenge path. The `use_backend` directive can now be removed since the backend is never used over HTTP as all requests are redirected.
+
+**Note that this label can only be set after `marathon-acme` has fetched the first certificate for its own domain.** In other words, set the `MARATHON_ACME_0_DOMAIN` _first_ and make sure it has taken effect before setting this one.
 
 #### Docker images
 Docker images are available from [Docker Hub](https://hub.docker.com/r/praekeltfoundation/marathon-acme/). There are two different streams of Docker images available:
