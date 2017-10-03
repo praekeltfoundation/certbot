@@ -1,4 +1,5 @@
 import pytest
+from testtools import ExpectedException
 from testtools.assertions import assert_that
 from testtools.matchers import Equals
 
@@ -51,6 +52,19 @@ TEST_APP = {
     'tasksHealthy': 0,
     'tasksUnhealthy': 0,
     'deployments': [],
+}
+
+CONTAINER_HOST_NETWORKING = {
+    'type': 'DOCKER',
+    'volumes': [],
+    'docker': {
+        'image': 'praekeltfoundation/marathon-lb:1.6.0',
+        'network': 'HOST',
+        'portMappings': [],
+        'privileged': True,
+        'parameters': [],
+        'forcePullImage': False
+    }
 }
 
 CONTAINER_USER_NETWORKING = {
@@ -115,6 +129,77 @@ CONTAINER_MESOS = {
     ],
 }
 
+# https://github.com/mesosphere/marathon/blob/v1.5.1/docs/docs/networking.md#host-mode
+NETWORKS_CONTAINER_HOST_MARATHON15 = [{'mode': 'host'}]
+CONTAINER_MESOS_HOST_NETWORKING_MARATHON15 = {
+    'type': 'MESOS',
+    'docker': {
+        'image': 'my-image:1.0'
+    },
+}
+
+# https://github.com/mesosphere/marathon/blob/v1.5.1/docs/docs/networking.md#specifying-ports-1
+NETWORKS_CONTAINER_BRIDGE_MARATHON15 = [{'mode': 'container/bridge'}]
+CONTAINER_BRIDGE_NETWORKING_MARATHON15 = {
+    'type': 'DOCKER',
+    'docker': {
+      'forcePullImage': True,
+      'image': 'praekeltfoundation/mc2:release-3.11.2',
+      'parameters': [
+        {
+          'key': 'add-host',
+          'value': 'servicehost:172.17.0.1'
+        }
+      ],
+      'privileged': False
+    },
+    'volumes': [],
+    'portMappings': [
+      {
+        'containerPort': 80,
+        'hostPort': 0,
+        'labels': {},
+        'protocol': 'tcp',
+        'servicePort': 10005
+      }
+    ]
+}
+CONTAINER_MESOS_BRIDGE_NETWORKING_MARATHON15 = {
+    'type': 'MESOS',
+    'docker': {
+        'image': 'my-image:1.0'
+    },
+    'portMappings': [
+        {'containerPort': 80, 'hostPort': 0, 'name': 'http'},
+        {'containerPort': 443, 'hostPort': 0, 'name': 'https'},
+        {'containerPort': 4000, 'hostPort': 0, 'name': 'mon'}
+    ]
+}
+
+# https://github.com/mesosphere/marathon/blob/v1.5.1/docs/docs/networking.md#enabling-container-mode
+NETWORKS_CONTAINER_USER_MARATHON15 = [{'mode': 'container', 'name': 'dcos'}]
+CONTAINER_USER_NETWORKING_MARATHON15 = {
+    'type': 'DOCKER',
+    'docker': {
+      'forcePullImage': False,
+      'image': 'python:3-alpine',
+      'parameters': [],
+      'privileged': False
+    },
+    'volumes': [],
+    'portMappings': [
+      {
+        'containerPort': 8080,
+        'labels': {
+          'VIP_0': '/foovu1:8080'
+        },
+        'name': 'foovu1http',
+        'protocol': 'tcp',
+        'servicePort': 10004
+      }
+    ],
+}
+
 IP_ADDRESS_NO_PORTS = {
     'groups': [],
     'labels': {},
@@ -151,6 +236,17 @@ def test_app():
 
 
 class TestGetNumberOfAppPortsFunc(object):
+    def test_host_networking(self, test_app):
+        """
+        When the app uses Docker containers with HOST networking, the ports
+        should be counted from the 'portDefinitions' field.
+        """
+        test_app['container'] = CONTAINER_HOST_NETWORKING
+        test_app['portDefinitions'] = PORT_DEFINITIONS_ONE_PORT
+
+        num_ports = get_number_of_app_ports(test_app)
+        assert_that(num_ports, Equals(1))
+
     def test_user_networking(self, test_app):
         """
         When the app uses a Docker container with USER networking, it will have
@@ -207,3 +303,64 @@ class TestGetNumberOfAppPortsFunc(object):
 
         num_ports = get_number_of_app_ports(test_app)
         assert_that(num_ports, Equals(2))
+
+    def test_host_networking_mesos_marathon15(self, test_app):
+        """
+        For Marathon 1.5+, when the app uses Mesos containers with host
+        networking, the ports should be counted from the 'portDefinitions'
+        field.
+        """
+        test_app['container'] = CONTAINER_MESOS_HOST_NETWORKING_MARATHON15
+        test_app['networks'] = NETWORKS_CONTAINER_HOST_MARATHON15
+        test_app['portDefinitions'] = PORT_DEFINITIONS_ONE_PORT
+
+        num_ports = get_number_of_app_ports(test_app)
+        assert_that(num_ports, Equals(1))
+
+    def test_bridge_networking_marathon15(self, test_app):
+        """
+        For Marathon 1.5+, when the app uses Docker containers with
+        'container/bridge' networking, the ports should be counted from the
+        ``container.portMappings`` field.
+        """
+        test_app['container'] = CONTAINER_BRIDGE_NETWORKING_MARATHON15
+        test_app['networks'] = NETWORKS_CONTAINER_BRIDGE_MARATHON15
+
+        num_ports = get_number_of_app_ports(test_app)
+        assert_that(num_ports, Equals(1))
+
+    def test_bridge_networking_mesos_marathon15(self, test_app):
+        """
+        For Marathon 1.5+, when the app uses Mesos containers with
+        'container/bridge' networking, the ports should be counted from the
+        ``container.portMappings`` field.
+        """
+        test_app['container'] = CONTAINER_MESOS_BRIDGE_NETWORKING_MARATHON15
+        test_app['networks'] = NETWORKS_CONTAINER_BRIDGE_MARATHON15
+
+        num_ports = get_number_of_app_ports(test_app)
+        assert_that(num_ports, Equals(3))
+
+    def test_user_networking_marathon15(self, test_app):
+        """
+        For Marathon 1.5+, when the app uses Docker containers with 'container'
+        networking, the ports should be counted from the
+        ``container.portMappings`` field.
+        """
+        test_app['container'] = CONTAINER_USER_NETWORKING_MARATHON15
+        test_app['networks'] = NETWORKS_CONTAINER_USER_MARATHON15
+
+        num_ports = get_number_of_app_ports(test_app)
+        assert_that(num_ports, Equals(1))
+
+    def test_unknown_networking_mode(self, test_app):
+        """
+        When an app is defined with an unknown networking mode, an error is
+        raised.
+        """
+        test_app['networks'] = [{'mode': 'container/iptables'}]
+
+        with ExpectedException(
+            RuntimeError,
+                r"Unknown Marathon networking mode 'container/iptables'"):
+            get_number_of_app_ports(test_app)
