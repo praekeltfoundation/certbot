@@ -7,7 +7,7 @@ branches:
   only:
     - develop
     - master
-    - /\d+\.\d+(\.\d+)?/
+    - /^\d+\.\d+(\.\d+)?$/
 
 language: python
 matrix:
