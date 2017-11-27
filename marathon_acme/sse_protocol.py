@@ -32,9 +32,35 @@ class SseProtocol(Protocol):
         """
         Get a deferred that will be fired when the connection is closed.
         """
-        d = Deferred()
+        d = Deferred(canceller=self._cancel)
         self._waiting.append(d)
         return d
+
+    def _cancel(self, d):
+        self.log.warn('SSE connection cancelled')
+        # Remove the deferred from the waiting list-- can't call it back, it's
+        # been cancelled.
+        self._waiting.remove(d)
+        self._lose_connection()
+
+    def _lose_connection(self):
+        assert self.transport is not None
+        self.log.warn('Purposefully losing SSE connection...')
+
+        # HACK: We don't really know what our transport will be. We could be
+        # given an ITransport (with loseConnection()) or an IPushProducer (with
+        # stopProducing()).
+        if hasattr(self.transport, 'loseConnection'):
+            self.transport.loseConnection()
+        elif hasattr(self.transport, 'stopProducing'):
+            self.transport.stopProducing()
+
+    def makeConnection(self, transport):
+        if (not hasattr(transport, 'loseConnection') and
+                not hasattr(transport, 'stopProducing')):
+            raise ValueError("Transport '%r' does not have a 'loseConnection' "
+                             "or 'stopProducing' method" % (transport,))
+        super(SseProtocol, self).makeConnection(transport)
 
     def dataReceived(self, data):
         """
@@ -83,7 +109,7 @@ class SseProtocol(Protocol):
     def lineLengthExceeded(self, line):
         self.log.error('SSE maximum line length exceeded: {length} > {max}',
                        length=len(line), max=self.MAX_LENGTH)
-        self.transport.loseConnection()
+        self._lose_connection()
 
     def _handle_field_value(self, field, value):
         """ Handle the field, value pair. """
