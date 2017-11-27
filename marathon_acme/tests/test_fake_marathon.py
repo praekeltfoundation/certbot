@@ -7,6 +7,7 @@ from testtools.matchers import AfterPreprocessing as After
 from testtools.matchers import (
     Equals, Is, MatchesAll, MatchesListwise, MatchesStructure)
 from testtools.twistedsupport import succeeded
+
 from treq.content import json_content
 
 from marathon_acme.clients import _sse_content_with_protocol, sse_content

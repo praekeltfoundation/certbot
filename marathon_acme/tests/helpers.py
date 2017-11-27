@@ -1,5 +1,7 @@
 from treq.client import HTTPClient
+
 from twisted.internet.defer import fail
+
 from uritools import urisplit
 
 
