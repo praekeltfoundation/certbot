@@ -145,6 +145,10 @@ class SseProtocol(Protocol, TimeoutMixin):
             d.callback(None)
         self._waiting = []
 
+    def timeoutConnection(self):
+        self.log.warn('SSE connection timed out.')
+        self.transport.loseConnection()
+
 
 def _parse_field_value(line):
     """ Parse the field and value from a line. """
