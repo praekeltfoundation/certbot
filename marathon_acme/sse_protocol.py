@@ -1,9 +1,10 @@
 from twisted.internet.defer import Deferred
 from twisted.internet.protocol import Protocol, connectionDone
 from twisted.logger import LogLevel, Logger
+from twisted.protocols.policies import TimeoutMixin
 
 
-class SseProtocol(Protocol):
+class SseProtocol(Protocol, TimeoutMixin):
     """
     A protocol for Server-Sent Events (SSE).
     https://html.spec.whatwg.org/multipage/comms.html#server-sent-events
@@ -12,17 +13,22 @@ class SseProtocol(Protocol):
     MAX_LENGTH = 1024 * 1024 * 1024  # 1MiB
     log = Logger()
 
-    def __init__(self, handler):
+    def __init__(self, handler, timeout=None):
         """
         :param handler:
             A 2-args callable that will be called back with the event and data
             when a complete message is received.
         """
         self._handler = handler
+        self._timeout = timeout
+
         self._waiting = []
         self._buffer = b''
 
         self._reset_event_data()
+
+    def connectionMade(self):
+        self.setTimeout(self._timeout)
 
     def _reset_event_data(self):
         self._event = 'message'
@@ -43,6 +49,7 @@ class SseProtocol(Protocol):
         Copied from ``twisted.protocols.basic.LineOnlyReceiver`` but using
         str.splitlines() to split on ``\r\n``, ``\n``, and ``\r``.
         """
+        self.resetTimeout()
         lines = (self._buffer + data).splitlines()
 
         # str.splitlines() doesn't split the string after a trailing newline
