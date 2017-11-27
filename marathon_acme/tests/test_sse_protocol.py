@@ -215,11 +215,13 @@ class TestSseProtocol(object):
         the transport should be in 'disconnecting' state due to a request to
         lose the connection.
         """
+        assert_that(protocol.transport.disconnecting, Is(False))
+
         protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
         protocol.dataReceived('data:{}\r\n\r\n'.format(
             'x' * (protocol.MAX_LENGTH + 1)).encode('utf-8'))
 
-        assert_that(protocol.transport.disconnecting, Equals(True))
+        assert_that(protocol.transport.disconnecting, Is(True))
 
     def test_incomplete_line_too_long(self, protocol):
         """
@@ -227,11 +229,13 @@ class TestSseProtocol(object):
         length, the transport should be in 'disconnecting' state due to a
         request to lose the connection.
         """
+        assert_that(protocol.transport.disconnecting, Is(False))
+
         protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
         protocol.dataReceived('data:{}'.format(
             'x' * (protocol.MAX_LENGTH + 1)).encode('utf-8'))
 
-        assert_that(protocol.transport.disconnecting, Equals(True))
+        assert_that(protocol.transport.disconnecting, Is(True))
 
     def test_transport_disconnecting(self, protocol, messages):
         """
