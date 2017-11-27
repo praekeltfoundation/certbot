@@ -1,10 +1,12 @@
 import pytest
+
 from testtools import ExpectedException
 from testtools.assertions import assert_that
 from testtools.matchers import (
     Equals, Is, IsInstance, MatchesAll, MatchesDict, MatchesListwise,
     MatchesPredicate, MatchesStructure)
 from testtools.twistedsupport import failed, succeeded
+
 from twisted.internet.defer import succeed
 
 from marathon_acme.tests.helpers import FailingAgent, PerLocationAgent
