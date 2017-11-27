@@ -25,10 +25,7 @@ def protocol(messages):
     return make_protocol(messages)
 
 
-def make_protocol(messages=None, **kwargs):
-    if messages is None:
-        messages = list()
-
+def make_protocol(messages, **kwargs):
     def handler(event, data):
         messages.append((event, data))
 
