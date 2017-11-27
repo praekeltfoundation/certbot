@@ -18,6 +18,11 @@ class SseProtocol(Protocol, TimeoutMixin):
         :param handler:
             A 2-args callable that will be called back with the event and data
             when a complete message is received.
+        :param timeout:
+            Amount of time in seconds to wait for some data to be received
+            before timing out. (Default: None - no timeout).
+        :param reactor:
+            Reactor to use to timeout the connection.
         """
         self._handler = handler
         self._timeout = timeout
@@ -35,7 +40,7 @@ class SseProtocol(Protocol, TimeoutMixin):
         self.setTimeout(self._timeout)
 
     def callLater(self, period, func):
-        return self.reactor.callLater(period, func)
+        return self._reactor.callLater(period, func)
 
     def _reset_event_data(self):
         self._event = 'message'
