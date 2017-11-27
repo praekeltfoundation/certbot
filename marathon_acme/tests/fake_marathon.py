@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 from klein import Klein
+
 from treq.testing import StubTreq
 
 from marathon_acme.clients import get_single_header

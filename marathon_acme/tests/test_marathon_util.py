@@ -1,4 +1,5 @@
 import pytest
+
 from testtools import ExpectedException
 from testtools.assertions import assert_that
 from testtools.matchers import Equals

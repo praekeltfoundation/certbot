@@ -6,6 +6,7 @@ from testtools.matchers import AfterPreprocessing as After
 from testtools.matchers import (
     Equals, GreaterThan, IsInstance, LessThan, MatchesAll, MatchesAny,
     MatchesDict, MatchesStructure, Mismatch)
+
 from uritools import urisplit
 
 
