@@ -13,7 +13,7 @@ class SseProtocol(Protocol, TimeoutMixin):
     MAX_LENGTH = 1024 * 1024 * 1024  # 1MiB
     log = Logger()
 
-    def __init__(self, handler, timeout=None):
+    def __init__(self, handler, timeout=None, reactor=None):
         """
         :param handler:
             A 2-args callable that will be called back with the event and data
@@ -21,6 +21,10 @@ class SseProtocol(Protocol, TimeoutMixin):
         """
         self._handler = handler
         self._timeout = timeout
+        if reactor is None:
+            from twisted.internet import reactor as _reactor
+            reactor = _reactor
+        self._reactor = reactor
 
         self._waiting = []
         self._buffer = b''
@@ -29,6 +33,9 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def connectionMade(self):
         self.setTimeout(self._timeout)
+
+    def callLater(self, period, func):
+        return self.reactor.callLater(period, func)
 
     def _reset_event_data(self):
         self._event = 'message'
