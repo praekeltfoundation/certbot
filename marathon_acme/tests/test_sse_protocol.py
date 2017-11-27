@@ -304,3 +304,39 @@ class TestSseProtocol(object):
         # Timeout should be triggered
         assert_that(clock.getDelayedCalls(), Equals([]))
         assert_that(protocol.transport.disconnecting, Is(True))
+
+    def test_timeout_reset(self):
+        """
+        When a timeout value is set, the timeout should be reset once new data
+        has been received.
+        """
+        timeout = 5
+        clock = Clock()
+        deadline = clock.seconds() + timeout
+        protocol = make_protocol(timeout=timeout, reactor=clock)
+        protocol.connectionMade()
+
+        # Advance a bit, but not up to the timeout
+        clock.advance(timeout / 2.0)
+        [delayed_call] = clock.getDelayedCalls()
+        assert_that(delayed_call.getTime(), Equals(deadline))
+        assert_that(protocol.transport.disconnecting, Is(False))
+
+        # Send some data "down the pipe"
+        protocol.dataReceived(b'event:status\r\n')
+        # The DelayedCall is still there...
+        assert_that(clock.getDelayedCalls(), Equals([delayed_call]))
+        # ...but now has a new timeout because it was reset
+        new_deadline = clock.seconds() + timeout
+        assert_that(delayed_call.getTime(), Equals(new_deadline))
+
+        # Advance to the original deadline
+        clock.advance(deadline - clock.seconds())
+        # Timeout should not be triggered
+        assert_that(protocol.transport.disconnecting, Is(False))
+
+        # Advance to the new deadline
+        clock.advance(new_deadline - clock.seconds())
+        # Timeout should be triggered
+        assert_that(clock.getDelayedCalls(), Equals([]))
+        assert_that(protocol.transport.disconnecting, Is(True))
