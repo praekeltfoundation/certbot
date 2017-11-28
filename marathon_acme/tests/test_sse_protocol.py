@@ -295,11 +295,11 @@ class TestSseProtocol(object):
         protocol = make_protocol(timeout=timeout, reactor=clock)
         protocol.connectionMade()
 
-        assert_that(protocol.transport.disconnecting, Is(False))
+        assert not protocol.transport.disconnecting
 
         clock.advance(timeout)
         # Timeout should be triggered
-        assert_that(protocol.transport.disconnecting, Is(True))
+        assert protocol.transport.disconnecting
 
     def test_timeout_reset(self):
         """
@@ -313,7 +313,7 @@ class TestSseProtocol(object):
 
         # Advance a bit, but not up to the timeout
         clock.advance(timeout / 2.0)
-        assert_that(protocol.transport.disconnecting, Is(False))
+        assert not protocol.transport.disconnecting
 
         # Send some data "down the pipe"
         protocol.dataReceived(b'event:status\r\n')
@@ -321,9 +321,9 @@ class TestSseProtocol(object):
         # Advance beyond the original deadline, but not beyond the new one
         clock.advance(timeout / 2.0 + timeout / 4.0)
         # Timeout should not be triggered
-        assert_that(protocol.transport.disconnecting, Is(False))
+        assert not protocol.transport.disconnecting
 
         # Advance beyond the new deadline
         clock.advance(timeout / 2.0)
         # Timeout should be triggered
-        assert_that(protocol.transport.disconnecting, Is(True))
+        assert protocol.transport.disconnecting
