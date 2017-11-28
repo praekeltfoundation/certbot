@@ -4,6 +4,8 @@ from acme import challenges
 from acme.jose import JWKRSA
 from acme.messages import Error as acme_Error
 
+import pytest
+
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing, Equals, HasLength, Is, IsInstance, MatchesAll,
@@ -107,16 +109,18 @@ class TestMarathonAcme(object):
         self.fake_marathon_lb = FakeMarathonLb()
 
         key = JWKRSA(key=generate_private_key(u'rsa'))
-        self._clock = Clock()
-        self._clock.rightNow = (
+        self.clock = Clock()
+        self.clock.rightNow = (
             datetime.now() - datetime(1970, 1, 1)).total_seconds()
-        self.txacme_client = FailableTxacmeClient(key, self._clock)
+        self.txacme_client = FailableTxacmeClient(key, self.clock)
 
-    def mk_marathon_acme(self, **kwargs):
+    def mk_marathon_acme(self, sse_timeout=None, **kwargs):
         marathon_client = MarathonClient(
-            ['http://localhost:8080'], client=self.fake_marathon_api.client)
+            ['http://localhost:8080'], client=self.fake_marathon_api.client,
+            reactor=self.clock)
         mlb_client = MarathonLbClient(
-            ['http://localhost:9090'], client=self.fake_marathon_lb.client)
+            ['http://localhost:9090'], client=self.fake_marathon_lb.client,
+            reactor=self.clock)
 
         return MarathonAcme(
             marathon_client,
@@ -124,7 +128,7 @@ class TestMarathonAcme(object):
             self.cert_store,
             mlb_client,
             lambda: succeed(self.txacme_client),
-            self._clock,
+            self.clock,
             **kwargs)
 
     def test_listen_events_attach_initial_sync(self):
@@ -290,6 +294,26 @@ class TestMarathonAcme(object):
         # We reconnect and another sync should occur as we re-attach
         assert_that(
             self.fake_marathon_api.check_called_get_apps(), Equals(True))
+
+    @pytest.mark.xfail(reason='treq internals do not support loseConnection()')
+    def test_listen_events_sse_timeout_reconnects(self):
+        """
+        When we listen for events, and we connect successfully but the
+        persistent connection times out, we should reconnect to the event
+        stream.
+        """
+        timeout = 5.0
+        marathon_acme = self.mk_marathon_acme(sse_timeout=timeout)
+        marathon_acme.listen_events()
+
+        [request] = self.fake_marathon_api.event_requests
+
+        # Advance beyond the timeout
+        self.clock.advance(timeout)
+
+        # Check a new request has been made
+        [new_request] = self.fake_marathon_api.event_requests
+        assert_that(new_request, Not(Is(request)))
 
     def test_sync_app(self):
         """

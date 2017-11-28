@@ -5,6 +5,8 @@ from testtools.assertions import assert_that
 from testtools.matchers import Is
 from testtools.twistedsupport import succeeded
 
+from twisted.internet.task import Clock
+
 from marathon_acme.sse_protocol import SseProtocol
 
 
@@ -25,7 +27,10 @@ def protocol(messages):
     return make_protocol(messages)
 
 
-def make_protocol(messages, **kwargs):
+def make_protocol(messages=None, **kwargs):
+    if messages is None:
+        messages = list()
+
     def handler(event, data):
         messages.append((event, data))
 
@@ -279,3 +284,46 @@ class TestSseProtocol(object):
             ('status', 'hello'),
             ('message', 'world'),
         ]
+
+    def test_timeout(self):
+        """
+        When a timeout value is set, the timeout should be triggered once the
+        timeout has elapsed and should disconnect the transport.
+        """
+        timeout = 5
+        clock = Clock()
+        protocol = make_protocol(timeout=timeout, reactor=clock)
+        protocol.connectionMade()
+
+        assert not protocol.transport.disconnecting
+
+        clock.advance(timeout)
+        # Timeout should be triggered
+        assert protocol.transport.disconnecting
+
+    def test_timeout_reset(self):
+        """
+        When a timeout value is set, the timeout should be reset once new data
+        has been received.
+        """
+        timeout = 5
+        clock = Clock()
+        protocol = make_protocol(timeout=timeout, reactor=clock)
+        protocol.connectionMade()
+
+        # Advance a bit, but not up to the timeout
+        clock.advance(timeout / 2.0)
+        assert not protocol.transport.disconnecting
+
+        # Send some data "down the pipe"
+        protocol.dataReceived(b'event:status\r\n')
+
+        # Advance beyond the original deadline, but not beyond the new one
+        clock.advance(timeout / 2.0 + timeout / 4.0)
+        # Timeout should not be triggered
+        assert not protocol.transport.disconnecting
+
+        # Advance beyond the new deadline
+        clock.advance(timeout / 2.0)
+        # Timeout should be triggered
+        assert protocol.transport.disconnecting

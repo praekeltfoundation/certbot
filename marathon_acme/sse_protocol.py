@@ -1,9 +1,10 @@
 from twisted.internet.defer import Deferred
 from twisted.internet.protocol import Protocol, connectionDone
 from twisted.logger import LogLevel, Logger
+from twisted.protocols.policies import TimeoutMixin
 
 
-class SseProtocol(Protocol):
+class SseProtocol(Protocol, TimeoutMixin):
     """
     A protocol for Server-Sent Events (SSE).
     https://html.spec.whatwg.org/multipage/comms.html#server-sent-events
@@ -12,17 +13,34 @@ class SseProtocol(Protocol):
     MAX_LENGTH = 1024 * 1024 * 1024  # 1MiB
     log = Logger()
 
-    def __init__(self, handler):
+    def __init__(self, handler, timeout=None, reactor=None):
         """
         :param handler:
             A 2-args callable that will be called back with the event and data
             when a complete message is received.
+        :param timeout:
+            Amount of time in seconds to wait for some data to be received
+            before timing out. (Default: None - no timeout).
+        :param reactor:
+            Reactor to use to timeout the connection.
         """
         self._handler = handler
+        self._timeout = timeout
+        if reactor is None:
+            from twisted.internet import reactor as _reactor
+            reactor = _reactor
+        self._reactor = reactor
+
         self._waiting = []
         self._buffer = b''
 
         self._reset_event_data()
+
+    def connectionMade(self):
+        self.setTimeout(self._timeout)
+
+    def callLater(self, period, func):
+        return self._reactor.callLater(period, func)
 
     def _reset_event_data(self):
         self._event = 'message'
@@ -43,6 +61,7 @@ class SseProtocol(Protocol):
         Copied from ``twisted.protocols.basic.LineOnlyReceiver`` but using
         str.splitlines() to split on ``\r\n``, ``\n``, and ``\r``.
         """
+        self.resetTimeout()
         lines = (self._buffer + data).splitlines()
 
         # str.splitlines() doesn't split the string after a trailing newline
@@ -125,6 +144,10 @@ class SseProtocol(Protocol):
         for d in list(self._waiting):
             d.callback(None)
         self._waiting = []
+
+    def timeoutConnection(self):
+        self.log.warn('SSE connection timed out.')
+        self.transport.loseConnection()
 
 
 def _parse_field_value(line):
