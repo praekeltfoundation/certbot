@@ -170,10 +170,9 @@ class TestSseProtocol(object):
         line should be treated as the field and the value should be an empty
         string.
         """
-        protocol.dataReceived(b'data\r\n')
-        protocol.dataReceived(b'data:hello\r\n\r\n')
+        protocol.dataReceived(b'data\r\n\r\n')
 
-        assert messages == [('message', '\nhello')]
+        assert messages == [('message', '')]
 
     def test_trim_only_last_newline(self, protocol, messages):
         """
