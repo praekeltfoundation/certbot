@@ -47,7 +47,7 @@ class TestSseProtocol(object):
         """
         protocol.dataReceived(b'data:hello\r\n\r\n')
 
-        assert_that(messages, Equals([('message', 'hello')]))
+        assert messages == [('message', 'hello')]
 
     def test_multiline_data(self, protocol, messages):
         """
@@ -57,7 +57,7 @@ class TestSseProtocol(object):
         """
         protocol.dataReceived(b'data:hello\r\ndata:world\r\n\r\n')
 
-        assert_that(messages, Equals([('message', 'hello\nworld')]))
+        assert messages == [('message', 'hello\nworld')]
 
     def test_different_newlines(self, protocol, messages):
         """
@@ -66,7 +66,7 @@ class TestSseProtocol(object):
         """
         protocol.dataReceived(b'data:hello\ndata:world\r\r\n')
 
-        assert_that(messages, Equals([('message', 'hello\nworld')]))
+        assert messages == [('message', 'hello\nworld')]
 
     def test_empty_data(self, protocol, messages):
         """
@@ -75,7 +75,7 @@ class TestSseProtocol(object):
         """
         protocol.dataReceived(b'data:\r\n\r\n')
 
-        assert_that(messages, Equals([('message', '')]))
+        assert messages == [('message', '')]
 
     def test_no_data(self, protocol, messages):
         """
@@ -84,7 +84,7 @@ class TestSseProtocol(object):
         """
         protocol.dataReceived(b'\r\n')
 
-        assert_that(messages, Equals([]))
+        assert messages == []
 
     def test_space_before_value(self, protocol, messages):
         """
@@ -93,7 +93,7 @@ class TestSseProtocol(object):
         """
         protocol.dataReceived(b'data: hello\r\n\r\n')
 
-        assert_that(messages, Equals([('message', 'hello')]))
+        assert messages == [('message', 'hello')]
 
     def test_space_before_value_strip_only_first_space(
             self, protocol, messages):
@@ -105,7 +105,7 @@ class TestSseProtocol(object):
         protocol.dataReceived(
             'data:{}\r\n\r\n'.format(' ' * 4).encode('utf-8'))
 
-        assert_that(messages, Equals([('message', ' ' * 3)]))
+        assert messages == [('message', ' ' * 3)]
 
     def test_custom_event(self, protocol, messages):
         """
@@ -115,7 +115,7 @@ class TestSseProtocol(object):
         protocol.dataReceived(b'event:my_event\r\n')
         protocol.dataReceived(b'data:hello\r\n\r\n')
 
-        assert_that(messages, Equals([('my_event', 'hello')]))
+        assert messages == [('my_event', 'hello')]
 
     def test_multiple_events(self, protocol, messages):
         """
@@ -127,10 +127,10 @@ class TestSseProtocol(object):
         protocol.dataReceived(b'event:test2\r\n')
         protocol.dataReceived(b'data:world\r\n\r\n')
 
-        assert_that(messages, Equals([
+        assert messages == [
             ('test1', 'hello'),
-            ('test2', 'world')
-        ]))
+            ('test2', 'world'),
+        ]
 
     def test_id_ignored(self, protocol, messages):
         """
@@ -139,7 +139,7 @@ class TestSseProtocol(object):
         protocol.dataReceived(b'data:hello\r\n')
         protocol.dataReceived(b'id:123\r\n\r\n')
 
-        assert_that(messages, Equals([('message', 'hello')]))
+        assert messages == [('message', 'hello')]
 
     def test_retry_ignored(self, protocol, messages):
         """
@@ -148,7 +148,7 @@ class TestSseProtocol(object):
         protocol.dataReceived(b'data:hello\r\n')
         protocol.dataReceived(b'retry:123\r\n\r\n')
 
-        assert_that(messages, Equals([('message', 'hello')]))
+        assert messages == [('message', 'hello')]
 
     def test_unknown_field_ignored(self, protocol, messages):
         """
@@ -157,7 +157,7 @@ class TestSseProtocol(object):
         protocol.dataReceived(b'data:hello\r\n')
         protocol.dataReceived(b'somefield:123\r\n\r\n')
 
-        assert_that(messages, Equals([('message', 'hello')]))
+        assert messages == [('message', 'hello')]
 
     def test_leading_colon_ignored(self, protocol, messages):
         """
@@ -167,7 +167,7 @@ class TestSseProtocol(object):
         protocol.dataReceived(b'data:hello\r\n')
         protocol.dataReceived(b':123abc\r\n\r\n')
 
-        assert_that(messages, Equals([('message', 'hello')]))
+        assert messages == [('message', 'hello')]
 
     def test_missing_colon(self, protocol, messages):
         """
@@ -175,10 +175,9 @@ class TestSseProtocol(object):
         line should be treated as the field and the value should be an empty
         string.
         """
-        protocol.dataReceived(b'data\r\n')
-        protocol.dataReceived(b'data:hello\r\n\r\n')
+        protocol.dataReceived(b'data\r\n\r\n')
 
-        assert_that(messages, Equals([('message', '\nhello')]))
+        assert messages == [('message', '')]
 
     def test_trim_only_last_newline(self, protocol, messages):
         """
@@ -189,7 +188,7 @@ class TestSseProtocol(object):
         protocol.dataReceived(b'data:\n')
         protocol.dataReceived(b'data:\r\n\r\n')
 
-        assert_that(messages, Equals([('message', '\n\n')]))
+        assert messages == [('message', '\n\n')]
 
     def test_multiple_data_parts(self, protocol, messages):
         """
@@ -200,7 +199,7 @@ class TestSseProtocol(object):
         protocol.dataReceived(b' hello\r\n')
         protocol.dataReceived(b'\r\n')
 
-        assert_that(messages, Equals([('message', 'hello')]))
+        assert messages == [('message', 'hello')]
 
     def test_unicode_data(self, protocol, messages):
         """
@@ -209,7 +208,7 @@ class TestSseProtocol(object):
         """
         protocol.dataReceived(u'data:hëlló\r\n\r\n'.encode('utf-8'))
 
-        assert_that(messages, Equals([('message', u'hëlló')]))
+        assert messages == [('message', u'hëlló')]
 
     def test_line_too_long(self, protocol):
         """
@@ -217,13 +216,13 @@ class TestSseProtocol(object):
         the transport should be in 'disconnecting' state due to a request to
         lose the connection.
         """
-        assert_that(protocol.transport.disconnecting, Is(False))
+        assert not protocol.transport.disconnecting
 
         protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
         protocol.dataReceived('data:{}\r\n\r\n'.format(
             'x' * (protocol.MAX_LENGTH + 1)).encode('utf-8'))
 
-        assert_that(protocol.transport.disconnecting, Is(True))
+        assert protocol.transport.disconnecting
 
     def test_incomplete_line_too_long(self, protocol):
         """
@@ -231,13 +230,13 @@ class TestSseProtocol(object):
         length, the transport should be in 'disconnecting' state due to a
         request to lose the connection.
         """
-        assert_that(protocol.transport.disconnecting, Is(False))
+        assert not protocol.transport.disconnecting
 
         protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
         protocol.dataReceived('data:{}'.format(
             'x' * (protocol.MAX_LENGTH + 1)).encode('utf-8'))
 
-        assert_that(protocol.transport.disconnecting, Is(True))
+        assert protocol.transport.disconnecting
 
     def test_transport_disconnecting(self, protocol, messages):
         """
@@ -247,7 +246,7 @@ class TestSseProtocol(object):
         protocol.transport.disconnecting = True
         protocol.dataReceived(b'data:hello\r\n\r\n')
 
-        assert_that(messages, Equals([]))
+        assert messages == []
 
     def test_transport_connection_lost(self, protocol):
         """
@@ -281,10 +280,10 @@ class TestSseProtocol(object):
         protocol.dataReceived(b'data:world\r\n')
         protocol.dataReceived(b'\r\n')
 
-        assert_that(messages, Equals([
+        assert messages == [
             ('status', 'hello'),
-            ('message', 'world')
-        ]))
+            ('message', 'world'),
+        ]
 
     def test_timeout(self):
         """
