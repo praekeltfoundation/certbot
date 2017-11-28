@@ -2,7 +2,7 @@
 import pytest
 
 from testtools.assertions import assert_that
-from testtools.matchers import Equals, Is
+from testtools.matchers import Is
 from testtools.twistedsupport import succeeded
 
 from twisted.internet.task import Clock
@@ -295,13 +295,10 @@ class TestSseProtocol(object):
         protocol = make_protocol(timeout=timeout, reactor=clock)
         protocol.connectionMade()
 
-        [delayed_call] = clock.getDelayedCalls()
-        assert_that(delayed_call.getTime(), Equals(clock.seconds() + timeout))
         assert_that(protocol.transport.disconnecting, Is(False))
 
         clock.advance(timeout)
         # Timeout should be triggered
-        assert_that(clock.getDelayedCalls(), Equals([]))
         assert_that(protocol.transport.disconnecting, Is(True))
 
     def test_timeout_reset(self):
@@ -311,31 +308,22 @@ class TestSseProtocol(object):
         """
         timeout = 5
         clock = Clock()
-        deadline = clock.seconds() + timeout
         protocol = make_protocol(timeout=timeout, reactor=clock)
         protocol.connectionMade()
 
         # Advance a bit, but not up to the timeout
         clock.advance(timeout / 2.0)
-        [delayed_call] = clock.getDelayedCalls()
-        assert_that(delayed_call.getTime(), Equals(deadline))
         assert_that(protocol.transport.disconnecting, Is(False))
 
         # Send some data "down the pipe"
         protocol.dataReceived(b'event:status\r\n')
-        # The DelayedCall is still there...
-        assert_that(clock.getDelayedCalls(), Equals([delayed_call]))
-        # ...but now has a new timeout because it was reset
-        new_deadline = clock.seconds() + timeout
-        assert_that(delayed_call.getTime(), Equals(new_deadline))
 
-        # Advance to the original deadline
-        clock.advance(deadline - clock.seconds())
+        # Advance beyond the original deadline, but not beyond the new one
+        clock.advance(timeout / 2.0 + timeout / 4.0)
         # Timeout should not be triggered
         assert_that(protocol.transport.disconnecting, Is(False))
 
-        # Advance to the new deadline
-        clock.advance(new_deadline - clock.seconds())
+        # Advance beyond the new deadline
+        clock.advance(timeout / 2.0)
         # Timeout should be triggered
-        assert_that(clock.getDelayedCalls(), Equals([]))
         assert_that(protocol.transport.disconnecting, Is(True))
