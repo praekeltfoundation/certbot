@@ -63,6 +63,7 @@ optional arguments:
   --log-level {debug,info,warn,error,critical}
                         The minimum severity level to log messages at
                         (default: info)
+  --version             show program's version number and exit
 ```
 
 ### `marathon-acme` app definition

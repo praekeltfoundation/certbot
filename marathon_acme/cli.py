@@ -13,6 +13,7 @@ from twisted.python.url import URL
 
 from txacme.store import DirectoryStore
 
+from marathon_acme import __version__
 from marathon_acme.acme_util import (
     create_txacme_client_creator, generate_wildcard_pem_bytes, maybe_key)
 from marathon_acme.clients import MarathonClient, MarathonLbClient
@@ -65,6 +66,7 @@ parser.add_argument('--log-level',
                     default='info'),
 parser.add_argument('storage_dir', metavar='storage-dir',
                     help='Path to directory for storing certificates')
+parser.add_argument('--version', action='version', version=__version__)
 
 
 def main(reactor, raw_args=sys.argv[1:]):
@@ -103,7 +105,8 @@ def main(reactor, raw_args=sys.argv[1:]):
         ('endpoint-description', endpoint_description),
     ]
     log_args = ['{}={!r}'.format(k, v) for k, v in log_args]
-    log.info('Running marathon-acme with: ' + ', '.join(log_args))
+    log.info('Running marathon-acme {} with: {}'.format(
+        __version__, ', '.join(log_args)))
 
     return marathon_acme.run(endpoint_description)
 
