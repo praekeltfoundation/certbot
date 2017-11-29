@@ -91,13 +91,19 @@ def main(reactor, raw_args=sys.argv[1:]):
     # Run the thing
     endpoint_description = parse_listen_addr(args.listen)
 
-    log.info('Running marathon-acme with: storage-dir="{storage_dir}", '
-             'acme="{acme}", email="{email}", marathon={marathon_addrs}, '
-             'lb={mlb_addrs}, group="{group}", '
-             'endpoint_description="{endpoint_desc}", ',
-             storage_dir=args.storage_dir, acme=args.acme, email=args.email,
-             marathon_addrs=marathon_addrs, mlb_addrs=mlb_addrs,
-             group=args.group, endpoint_desc=endpoint_description)
+    log_args = [
+        ('storage-dir', args.storage_dir),
+        ('acme', args.acme),
+        ('email', args.email),
+        ('allow-multiple-certs', args.allow_multiple_certs),
+        ('marathon', marathon_addrs),
+        ('sse-timeout', sse_timeout),
+        ('lb', mlb_addrs),
+        ('group', args.group),
+        ('endpoint-description', endpoint_description),
+    ]
+    log_args = ['{}={!r}'.format(k, v) for k, v in log_args]
+    log.info('Running marathon-acme with: ' + ', '.join(log_args))
 
     return marathon_acme.run(endpoint_description)
 
