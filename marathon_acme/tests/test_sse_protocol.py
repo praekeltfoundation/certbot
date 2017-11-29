@@ -210,31 +210,30 @@ class TestSseProtocol(object):
 
         assert messages == [('message', u'hëlló')]
 
-    def test_line_too_long(self, protocol):
+    def test_line_too_long(self):
         """
         When a line is received that is beyond the maximum allowed length,
         the transport should be in 'disconnecting' state due to a request to
         lose the connection.
         """
+        protocol = make_protocol(max_length=8)
         assert not protocol.transport.disconnecting
 
-        protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
-        protocol.dataReceived('data:{}\r\n\r\n'.format(
-            'x' * (protocol.MAX_LENGTH + 1)).encode('utf-8'))
+        protocol.dataReceived(
+            'data:{}\r\n\r\n'.format('x' * 9).encode('utf-8'))
 
         assert protocol.transport.disconnecting
 
-    def test_incomplete_line_too_long(self, protocol):
+    def test_incomplete_line_too_long(self):
         """
         When a part of a line is received that is beyond the maximum allowed
         length, the transport should be in 'disconnecting' state due to a
         request to lose the connection.
         """
+        protocol = make_protocol(max_length=8)
         assert not protocol.transport.disconnecting
 
-        protocol.MAX_LENGTH = 8  # Very long bytearrays slow down tests
-        protocol.dataReceived('data:{}'.format(
-            'x' * (protocol.MAX_LENGTH + 1)).encode('utf-8'))
+        protocol.dataReceived('data:{}'.format('x' * 9).encode('utf-8'))
 
         assert protocol.transport.disconnecting
 

@@ -4,8 +4,6 @@ from acme import challenges
 from acme.jose import JWKRSA
 from acme.messages import Error as acme_Error
 
-import pytest
-
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing, Equals, HasLength, Is, IsInstance, MatchesAll,
@@ -114,10 +112,10 @@ class TestMarathonAcme(object):
             datetime.now() - datetime(1970, 1, 1)).total_seconds()
         self.txacme_client = FailableTxacmeClient(key, self.clock)
 
-    def mk_marathon_acme(self, sse_timeout=None, **kwargs):
+    def mk_marathon_acme(self, sse_kwargs=None, **kwargs):
         marathon_client = MarathonClient(
             ['http://localhost:8080'], client=self.fake_marathon_api.client,
-            reactor=self.clock)
+            sse_kwargs=sse_kwargs, reactor=self.clock)
         mlb_client = MarathonLbClient(
             ['http://localhost:9090'], client=self.fake_marathon_lb.client,
             reactor=self.clock)
@@ -295,7 +293,6 @@ class TestMarathonAcme(object):
         assert_that(
             self.fake_marathon_api.check_called_get_apps(), Equals(True))
 
-    @pytest.mark.xfail(reason='treq internals do not support loseConnection()')
     def test_listen_events_sse_timeout_reconnects(self):
         """
         When we listen for events, and we connect successfully but the
@@ -303,13 +300,31 @@ class TestMarathonAcme(object):
         stream.
         """
         timeout = 5.0
-        marathon_acme = self.mk_marathon_acme(sse_timeout=timeout)
+        marathon_acme = self.mk_marathon_acme(sse_kwargs={'timeout': timeout})
         marathon_acme.listen_events()
 
         [request] = self.fake_marathon_api.event_requests
 
         # Advance beyond the timeout
         self.clock.advance(timeout)
+        self.fake_marathon_api.client.flush()
+
+        # Check a new request has been made
+        [new_request] = self.fake_marathon_api.event_requests
+        assert_that(new_request, Not(Is(request)))
+
+    def test_listen_events_sse_line_too_long_reconnects(self):
+        """
+        When we listen for events, and we connect successfully but we receive a
+        line that is too long, we should reconnect to the event stream.
+        """
+        marathon_acme = self.mk_marathon_acme(sse_kwargs={'max_length': 8})
+        marathon_acme.listen_events()
+
+        [request] = self.fake_marathon_api.event_requests
+
+        request.write(b'x' * 9)
+        self.fake_marathon_api.client.flush()
 
         # Check a new request has been made
         [new_request] = self.fake_marathon_api.event_requests

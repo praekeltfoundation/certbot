@@ -2,6 +2,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.protocol import Protocol, connectionDone
 from twisted.logger import LogLevel, Logger
 from twisted.protocols.policies import TimeoutMixin
+from twisted.web._newclient import TransportProxyProducer
 
 
 class SseProtocol(Protocol, TimeoutMixin):
@@ -13,18 +14,23 @@ class SseProtocol(Protocol, TimeoutMixin):
     MAX_LENGTH = 1024 * 1024 * 1024  # 1MiB
     log = Logger()
 
-    def __init__(self, handler, timeout=None, reactor=None):
+    def __init__(
+            self, handler, max_length=MAX_LENGTH, timeout=None, reactor=None):
         """
         :param handler:
             A 2-args callable that will be called back with the event and data
             when a complete message is received.
-        :param timeout:
+        :param int max_length:
+            The maximum length in bytes of a single line in an SSE event that
+            will be accepted.
+        :param float timeout:
             Amount of time in seconds to wait for some data to be received
             before timing out. (Default: None - no timeout).
         :param reactor:
             Reactor to use to timeout the connection.
         """
         self._handler = handler
+        self._max_length = max_length
         self._timeout = timeout
         if reactor is None:
             from twisted.internet import reactor as _reactor
@@ -41,6 +47,27 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def callLater(self, period, func):
         return self._reactor.callLater(period, func)
+
+    def _loseConnection(self):
+        """
+        ``SseProtocol`` will most often be used with HTTP requests initiated
+        with :class:`twisted.web.client.Agent`, which in turn uses
+        :class:`twisted.web._newclient.HTTP11ClientProtocol` by default. This
+        protocol wraps the underlying transport in a
+        :class:`twisted.web._newclient.TransportProxyProducer` which doesn't
+        expose :meth:`twisted.internet.interfaces.ITransport.loseConnection`.
+
+        We need a way to close the connection when a event line is too long
+        or if we time out waiting for an event. This method attempts to grab
+        the underlying transport if our transport is a
+        ``TransportProxyProducer``, otherwise it just calls ``loseConnection``
+        on whatever transport we have.
+        """
+        transport = self.transport
+        if isinstance(transport, TransportProxyProducer):
+            transport = transport._producer
+
+        transport.loseConnection()
 
     def _reset_event_data(self):
         self._event = 'message'
@@ -80,12 +107,12 @@ class SseProtocol(Protocol, TimeoutMixin):
                 # important to disregard all the lines in that packet following
                 # the one that told it to close.
                 return
-            if len(line) > self.MAX_LENGTH:
+            if len(line) > self._max_length:
                 self.lineLengthExceeded(line)
                 return
             else:
                 self.lineReceived(line)
-        if len(self._buffer) > self.MAX_LENGTH:
+        if len(self._buffer) > self._max_length:
             self.lineLengthExceeded(self._buffer)
             return
 
@@ -101,8 +128,8 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def lineLengthExceeded(self, line):
         self.log.error('SSE maximum line length exceeded: {length} > {max}',
-                       length=len(line), max=self.MAX_LENGTH)
-        self.transport.loseConnection()
+                       length=len(line), max=self._max_length)
+        self._loseConnection()
 
     def _handle_field_value(self, field, value):
         """ Handle the field, value pair. """
@@ -147,7 +174,7 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def timeoutConnection(self):
         self.log.warn('SSE connection timed out.')
-        self.transport.loseConnection()
+        self._loseConnection()
 
 
 def _parse_field_value(line):

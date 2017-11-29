@@ -222,12 +222,12 @@ def raise_for_not_ok_status(response):
     return response
 
 
-def _sse_content_with_protocol(response, handler, timeout=None, reactor=None):
+def _sse_content_with_protocol(response, handler, **sse_kwargs):
     """
     Sometimes we need the protocol object so that we can manipulate the
     underlying transport in tests.
     """
-    protocol = SseProtocol(handler, timeout=timeout, reactor=reactor)
+    protocol = SseProtocol(handler, **sse_kwargs)
     finished = protocol.when_finished()
 
     response.deliverBody(protocol)
@@ -235,7 +235,7 @@ def _sse_content_with_protocol(response, handler, timeout=None, reactor=None):
     return finished, protocol
 
 
-def sse_content(response, handler, timeout=None, reactor=None):
+def sse_content(response, handler, **sse_kwargs):
     """
     Callback to collect the Server-Sent Events content of a response. Callbacks
     passed will receive event data.
@@ -249,14 +249,12 @@ def sse_content(response, handler, timeout=None, reactor=None):
     raise_for_not_ok_status(response)
     raise_for_header(response, 'Content-Type', 'text/event-stream')
 
-    finished, _ = _sse_content_with_protocol(
-        response, handler, timeout, reactor)
+    finished, _ = _sse_content_with_protocol(response, handler, **sse_kwargs)
     return finished
 
 
 class MarathonClient(JsonClient):
-
-    def __init__(self, endpoints, sse_timeout=None, url=None, client=None,
+    def __init__(self, endpoints, sse_kwargs=None, url=None, client=None,
                  reactor=None):
         """
         :param endpoints:
@@ -266,7 +264,7 @@ class MarathonClient(JsonClient):
         """
         super(MarathonClient, self).__init__(url, client, reactor)
         self.endpoints = endpoints
-        self._sse_timeout = sse_timeout
+        self._sse_kwargs = {} if sse_kwargs is None else sse_kwargs
 
     def request(self, *args, **kwargs):
         d = self._request(None, list(self.endpoints), *args, **kwargs)
@@ -357,8 +355,8 @@ class MarathonClient(JsonClient):
             if callback is not None:
                 callback(json.loads(data))
 
-        return d.addCallback(sse_content, handler, timeout=self._sse_timeout,
-                             reactor=self._reactor)
+        return d.addCallback(
+            sse_content, handler, reactor=self._reactor, **self._sse_kwargs)
 
 
 class MarathonLbClient(HTTPClient):
