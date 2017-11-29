@@ -19,6 +19,7 @@ from txacme.util import generate_private_key
 
 from marathon_acme.clients import MarathonClient, MarathonLbClient
 from marathon_acme.service import MarathonAcme, parse_domain_label
+from marathon_acme.sse_protocol import SseProtocol
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
 from marathon_acme.tests.helpers import failing_client
@@ -307,6 +308,24 @@ class TestMarathonAcme(object):
 
         # Advance beyond the timeout
         self.clock.advance(timeout)
+        self.fake_marathon_api.client.flush()
+
+        # Check a new request has been made
+        [new_request] = self.fake_marathon_api.event_requests
+        assert_that(new_request, Not(Is(request)))
+
+    def test_listen_events_sse_line_too_long_reconnects(self):
+        """
+        When we listen for events, and we connect successfully but we receive a
+        line that is too long, we should reconnect to the event stream.
+        """
+        SseProtocol.MAX_LENGTH = 8
+        marathon_acme = self.mk_marathon_acme()
+        marathon_acme.listen_events()
+
+        [request] = self.fake_marathon_api.event_requests
+
+        request.write(b'x' * 9)
         self.fake_marathon_api.client.flush()
 
         # Check a new request has been made
