@@ -102,7 +102,7 @@ def main(reactor, raw_args=sys.argv[1:]):
         ('group', args.group),
         ('endpoint-description', endpoint_description),
     ]
-    log_args = ["{}='{}'".format(k, v) for k, v in log_args]
+    log_args = ['{}={!r}'.format(k, v) for k, v in log_args]
     log.info('Running marathon-acme with: ' + ', '.join(log_args))
 
     return marathon_acme.run(endpoint_description)
