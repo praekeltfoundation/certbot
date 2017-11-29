@@ -57,7 +57,7 @@ parser.add_argument('--sse-timeout',
                           'data to be received from Marathon. Set to 0 to '
                           'disable. (default: %(default)s)'),
                     type=float,
-                    default=0)
+                    default=60)
 parser.add_argument('--log-level',
                     help='The minimum severity level to log messages at '
                          '(default: %(default)s)',
