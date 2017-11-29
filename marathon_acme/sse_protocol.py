@@ -2,6 +2,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.protocol import Protocol, connectionDone
 from twisted.logger import LogLevel, Logger
 from twisted.protocols.policies import TimeoutMixin
+from twisted.web._newclient import TransportProxyProducer
 
 
 class SseProtocol(Protocol, TimeoutMixin):
@@ -41,6 +42,27 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def callLater(self, period, func):
         return self._reactor.callLater(period, func)
+
+    def _loseConnection(self):
+        """
+        ``SseProtocol`` will most often be used with HTTP requests initiated
+        with :class:`twisted.web.client.Agent`, which in turn uses
+        :class:`twisted.web._newclient.HTTP11ClientProtocol` by default. This
+        protocol wraps the underlying transport in a
+        :class:`twisted.web._newclient.TransportProxyProducer` which doesn't
+        expose :meth:`twisted.internet.interfaces.ITransport.loseConnection`.
+
+        We need a way to close the connection when a event line is too long
+        or if we time out waiting for an event. This method attempts to grab
+        the underlying transport if our transport is a
+        ``TransportProxyProducer``, otherwise it just calls ``loseConnection``
+        on whatever transport we have.
+        """
+        transport = self.transport
+        if isinstance(transport, TransportProxyProducer):
+            transport = transport._producer
+
+        transport.loseConnection()
 
     def _reset_event_data(self):
         self._event = 'message'
@@ -102,7 +124,7 @@ class SseProtocol(Protocol, TimeoutMixin):
     def lineLengthExceeded(self, line):
         self.log.error('SSE maximum line length exceeded: {length} > {max}',
                        length=len(line), max=self.MAX_LENGTH)
-        self.transport.loseConnection()
+        self._loseConnection()
 
     def _handle_field_value(self, field, value):
         """ Handle the field, value pair. """
@@ -147,7 +169,7 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def timeoutConnection(self):
         self.log.warn('SSE connection timed out.')
-        self.transport.loseConnection()
+        self._loseConnection()
 
 
 def _parse_field_value(line):

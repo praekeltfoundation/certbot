@@ -4,8 +4,6 @@ from acme import challenges
 from acme.jose import JWKRSA
 from acme.messages import Error as acme_Error
 
-import pytest
-
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing, Equals, HasLength, Is, IsInstance, MatchesAll,
@@ -117,7 +115,7 @@ class TestMarathonAcme(object):
     def mk_marathon_acme(self, sse_timeout=None, **kwargs):
         marathon_client = MarathonClient(
             ['http://localhost:8080'], client=self.fake_marathon_api.client,
-            reactor=self.clock)
+            sse_timeout=sse_timeout, reactor=self.clock)
         mlb_client = MarathonLbClient(
             ['http://localhost:9090'], client=self.fake_marathon_lb.client,
             reactor=self.clock)
@@ -295,7 +293,6 @@ class TestMarathonAcme(object):
         assert_that(
             self.fake_marathon_api.check_called_get_apps(), Equals(True))
 
-    @pytest.mark.xfail(reason='treq internals do not support loseConnection()')
     def test_listen_events_sse_timeout_reconnects(self):
         """
         When we listen for events, and we connect successfully but the
@@ -310,6 +307,7 @@ class TestMarathonAcme(object):
 
         # Advance beyond the timeout
         self.clock.advance(timeout)
+        self.fake_marathon_api.client.flush()
 
         # Check a new request has been made
         [new_request] = self.fake_marathon_api.event_requests
