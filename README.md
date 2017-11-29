@@ -59,10 +59,11 @@ optional arguments:
   --sse-timeout SSE_TIMEOUT
                         Amount of time in seconds to wait for some event data
                         to be received from Marathon. Set to 0 to disable.
-                        (default: 0)
+                        (default: 60)
   --log-level {debug,info,warn,error,critical}
                         The minimum severity level to log messages at
                         (default: info)
+  --version             show program's version number and exit
 ```
 
 ### `marathon-acme` app definition
