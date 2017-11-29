@@ -10,8 +10,10 @@ from twisted.logger import (
 from twisted.python.compat import unicode
 from twisted.python.filepath import FilePath
 from twisted.python.url import URL
+
 from txacme.store import DirectoryStore
 
+from marathon_acme import __version__
 from marathon_acme.acme_util import (
     create_txacme_client_creator, generate_wildcard_pem_bytes, maybe_key)
 from marathon_acme.clients import MarathonClient, MarathonLbClient
@@ -51,6 +53,12 @@ parser.add_argument('--listen',
                     help='The address for the port to listen on (default: '
                          '%(default)s)',
                     default=':8000')
+parser.add_argument('--sse-timeout',
+                    help=('Amount of time in seconds to wait for some event '
+                          'data to be received from Marathon. Set to 0 to '
+                          'disable. (default: %(default)s)'),
+                    type=float,
+                    default=60)
 parser.add_argument('--log-level',
                     help='The minimum severity level to log messages at '
                          '(default: %(default)s)',
@@ -58,6 +66,7 @@ parser.add_argument('--log-level',
                     default='info'),
 parser.add_argument('storage_dir', metavar='storage-dir',
                     help='Path to directory for storing certificates')
+parser.add_argument('--version', action='version', version=__version__)
 
 
 def main(reactor, raw_args=sys.argv[1:]):
@@ -74,21 +83,30 @@ def main(reactor, raw_args=sys.argv[1:]):
     marathon_addrs = args.marathon.split(',')
     mlb_addrs = args.lb.split(',')
 
+    sse_timeout = args.sse_timeout if args.sse_timeout > 0 else None
+
     marathon_acme = create_marathon_acme(
         args.storage_dir, args.acme, args.email, args.allow_multiple_certs,
-        marathon_addrs, mlb_addrs, args.group,
+        marathon_addrs, sse_timeout, mlb_addrs, args.group,
         reactor)
 
     # Run the thing
     endpoint_description = parse_listen_addr(args.listen)
 
-    log.info('Running marathon-acme with: storage-dir="{storage_dir}", '
-             'acme="{acme}", email="{email}", marathon={marathon_addrs}, '
-             'lb={mlb_addrs}, group="{group}", '
-             'endpoint_description="{endpoint_desc}", ',
-             storage_dir=args.storage_dir, acme=args.acme, email=args.email,
-             marathon_addrs=marathon_addrs, mlb_addrs=mlb_addrs,
-             group=args.group, endpoint_desc=endpoint_description)
+    log_args = [
+        ('storage-dir', args.storage_dir),
+        ('acme', args.acme),
+        ('email', args.email),
+        ('allow-multiple-certs', args.allow_multiple_certs),
+        ('marathon', marathon_addrs),
+        ('sse-timeout', sse_timeout),
+        ('lb', mlb_addrs),
+        ('group', args.group),
+        ('endpoint-description', endpoint_description),
+    ]
+    log_args = ['{}={!r}'.format(k, v) for k, v in log_args]
+    log.info('Running marathon-acme {} with: {}'.format(
+        __version__, ', '.join(log_args)))
 
     return marathon_acme.run(endpoint_description)
 
@@ -142,7 +160,7 @@ def _create_tx_endpoints_string(args, kwargs):
 
 def create_marathon_acme(
     storage_dir, acme_directory, acme_email, allow_multiple_certs,
-    marathon_addrs, mlb_addrs, group,
+    marathon_addrs, sse_timeout, mlb_addrs, group,
         reactor):
     """
     Create a marathon-acme instance.
@@ -157,6 +175,9 @@ def create_marathon_acme(
     :param marathon_addr:
         Address for the Marathon instance to find app domains that require
         certificates.
+    :param sse_timeout:
+        Amount of time in seconds to wait for some event data to be received
+        from Marathon.
     :param mlb_addrs:
         List of addresses for marathon-lb instances to reload when a new
         certificate is issued.
@@ -170,7 +191,8 @@ def create_marathon_acme(
     key = maybe_key(storage_path)
 
     return MarathonAcme(
-        MarathonClient(marathon_addrs, reactor=reactor),
+        MarathonClient(marathon_addrs, sse_kwargs={'timeout': sse_timeout},
+                       reactor=reactor),
         group,
         DirectoryStore(certs_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),

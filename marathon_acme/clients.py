@@ -2,11 +2,14 @@ import cgi
 import json
 
 from requests.exceptions import HTTPError
+
 from treq.client import HTTPClient as treq_HTTPClient
 from treq.content import json_content
+
 from twisted.internet.defer import DeferredList
 from twisted.logger import LogLevel, Logger
 from twisted.web.http import OK
+
 from uritools import uricompose, uridecode, urisplit
 
 from marathon_acme.sse_protocol import SseProtocol
@@ -219,12 +222,12 @@ def raise_for_not_ok_status(response):
     return response
 
 
-def _sse_content_with_protocol(response, handler):
+def _sse_content_with_protocol(response, handler, **sse_kwargs):
     """
     Sometimes we need the protocol object so that we can manipulate the
     underlying transport in tests.
     """
-    protocol = SseProtocol(handler)
+    protocol = SseProtocol(handler, **sse_kwargs)
     finished = protocol.when_finished()
 
     response.deliverBody(protocol)
@@ -232,7 +235,7 @@ def _sse_content_with_protocol(response, handler):
     return finished, protocol
 
 
-def sse_content(response, handler):
+def sse_content(response, handler, **sse_kwargs):
     """
     Callback to collect the Server-Sent Events content of a response. Callbacks
     passed will receive event data.
@@ -246,21 +249,22 @@ def sse_content(response, handler):
     raise_for_not_ok_status(response)
     raise_for_header(response, 'Content-Type', 'text/event-stream')
 
-    finished, _ = _sse_content_with_protocol(response, handler)
+    finished, _ = _sse_content_with_protocol(response, handler, **sse_kwargs)
     return finished
 
 
 class MarathonClient(JsonClient):
-
-    def __init__(self, endpoints, *args, **kwargs):
+    def __init__(self, endpoints, sse_kwargs=None, url=None, client=None,
+                 reactor=None):
         """
         :param endpoints:
             A priority-ordered list of Marathon endpoints. Each endpoint will
             be tried one-by-one until the request succeeds or all endpoints
             fail.
         """
-        super(MarathonClient, self).__init__(*args, **kwargs)
+        super(MarathonClient, self).__init__(url, client, reactor)
         self.endpoints = endpoints
+        self._sse_kwargs = {} if sse_kwargs is None else sse_kwargs
 
     def request(self, *args, **kwargs):
         d = self._request(None, list(self.endpoints), *args, **kwargs)
@@ -351,7 +355,8 @@ class MarathonClient(JsonClient):
             if callback is not None:
                 callback(json.loads(data))
 
-        return d.addCallback(sse_content, handler)
+        return d.addCallback(
+            sse_content, handler, reactor=self._reactor, **self._sse_kwargs)
 
 
 class MarathonLbClient(HTTPClient):

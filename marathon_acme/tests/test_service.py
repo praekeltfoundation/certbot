@@ -3,13 +3,16 @@ from datetime import datetime
 from acme import challenges
 from acme.jose import JWKRSA
 from acme.messages import Error as acme_Error
+
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing, Equals, HasLength, Is, IsInstance, MatchesAll,
     MatchesDict, MatchesListwise, MatchesPredicate, MatchesStructure, Not)
 from testtools.twistedsupport import failed, succeeded
+
 from twisted.internet.defer import succeed
 from twisted.internet.task import Clock
+
 from txacme.client import ServerError as txacme_ServerError
 from txacme.testing import FakeClient, MemoryStore
 from txacme.util import generate_private_key
@@ -104,16 +107,18 @@ class TestMarathonAcme(object):
         self.fake_marathon_lb = FakeMarathonLb()
 
         key = JWKRSA(key=generate_private_key(u'rsa'))
-        self._clock = Clock()
-        self._clock.rightNow = (
+        self.clock = Clock()
+        self.clock.rightNow = (
             datetime.now() - datetime(1970, 1, 1)).total_seconds()
-        self.txacme_client = FailableTxacmeClient(key, self._clock)
+        self.txacme_client = FailableTxacmeClient(key, self.clock)
 
-    def mk_marathon_acme(self, **kwargs):
+    def mk_marathon_acme(self, sse_kwargs=None, **kwargs):
         marathon_client = MarathonClient(
-            ['http://localhost:8080'], client=self.fake_marathon_api.client)
+            ['http://localhost:8080'], client=self.fake_marathon_api.client,
+            sse_kwargs=sse_kwargs, reactor=self.clock)
         mlb_client = MarathonLbClient(
-            ['http://localhost:9090'], client=self.fake_marathon_lb.client)
+            ['http://localhost:9090'], client=self.fake_marathon_lb.client,
+            reactor=self.clock)
 
         return MarathonAcme(
             marathon_client,
@@ -121,7 +126,7 @@ class TestMarathonAcme(object):
             self.cert_store,
             mlb_client,
             lambda: succeed(self.txacme_client),
-            self._clock,
+            self.clock,
             **kwargs)
 
     def test_listen_events_attach_initial_sync(self):
@@ -287,6 +292,43 @@ class TestMarathonAcme(object):
         # We reconnect and another sync should occur as we re-attach
         assert_that(
             self.fake_marathon_api.check_called_get_apps(), Equals(True))
+
+    def test_listen_events_sse_timeout_reconnects(self):
+        """
+        When we listen for events, and we connect successfully but the
+        persistent connection times out, we should reconnect to the event
+        stream.
+        """
+        timeout = 5.0
+        marathon_acme = self.mk_marathon_acme(sse_kwargs={'timeout': timeout})
+        marathon_acme.listen_events()
+
+        [request] = self.fake_marathon_api.event_requests
+
+        # Advance beyond the timeout
+        self.clock.advance(timeout)
+        self.fake_marathon_api.client.flush()
+
+        # Check a new request has been made
+        [new_request] = self.fake_marathon_api.event_requests
+        assert_that(new_request, Not(Is(request)))
+
+    def test_listen_events_sse_line_too_long_reconnects(self):
+        """
+        When we listen for events, and we connect successfully but we receive a
+        line that is too long, we should reconnect to the event stream.
+        """
+        marathon_acme = self.mk_marathon_acme(sse_kwargs={'max_length': 8})
+        marathon_acme.listen_events()
+
+        [request] = self.fake_marathon_api.event_requests
+
+        request.write(b'x' * 9)
+        self.fake_marathon_api.client.flush()
+
+        # Check a new request has been made
+        [new_request] = self.fake_marathon_api.event_requests
+        assert_that(new_request, Not(Is(request)))
 
     def test_sync_app(self):
         """

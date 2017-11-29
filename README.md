@@ -26,7 +26,7 @@ The ACME provider that most people are likely to use is [Let's Encrypt](https://
 > $ docker run --rm praekeltfoundation/marathon-acme --help
 usage: marathon-acme [-h] [-a ACME] [-e EMAIL] [-m MARATHON[,MARATHON,...]]
                      [-l LB[,LB,...]] [-g GROUP] [--allow-multiple-certs]
-                     [--listen LISTEN]
+                     [--listen LISTEN] [--sse-timeout SSE_TIMEOUT]
                      [--log-level {debug,info,warn,error,critical}]
                      storage-dir
 
@@ -56,9 +56,14 @@ optional arguments:
                         This allows multiple domains for an app, but is not
                         recommended.
   --listen LISTEN       The address for the port to listen on (default: :8000)
+  --sse-timeout SSE_TIMEOUT
+                        Amount of time in seconds to wait for some event data
+                        to be received from Marathon. Set to 0 to disable.
+                        (default: 60)
   --log-level {debug,info,warn,error,critical}
                         The minimum severity level to log messages at
                         (default: info)
+  --version             show program's version number and exit
 ```
 
 ### `marathon-acme` app definition

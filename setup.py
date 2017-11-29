@@ -1,5 +1,6 @@
 import codecs
 import os
+import re
 import sys
 
 from setuptools import find_packages, setup
@@ -10,6 +11,15 @@ HERE = os.path.abspath(os.path.dirname(__file__))
 def read(*parts):  # Stolen from txacme
     with codecs.open(os.path.join(HERE, *parts), 'rb', 'utf-8') as f:
         return f.read()
+
+
+def find_version(*file_paths):
+    version_file = read(*file_paths)
+    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
+                              version_file, re.M)
+    if version_match:
+        return version_match.group(1)
+    raise RuntimeError('Unable to find version string')
 
 
 def readme():
@@ -39,7 +49,7 @@ if sys.version_info < (3, 3):
 
 setup(
     name='marathon-acme',
-    version='0.4.0',
+    version=find_version('marathon_acme', '__init__.py'),
     license='MIT',
     url='https://github.com/praekeltfoundation/marathon-acme',
     description=("Automated management of Let's Encrypt certificates for apps "
