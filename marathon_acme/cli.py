@@ -182,8 +182,8 @@ def create_marathon_acme(
     key = maybe_key(storage_path)
 
     return MarathonAcme(
-        MarathonClient(
-            marathon_addrs, sse_timeout=sse_timeout, reactor=reactor),
+        MarathonClient(marathon_addrs, sse_kwargs={'timeout': sse_timeout},
+                       reactor=reactor),
         group,
         DirectoryStore(certs_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),

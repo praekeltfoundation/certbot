@@ -19,7 +19,6 @@ from txacme.util import generate_private_key
 
 from marathon_acme.clients import MarathonClient, MarathonLbClient
 from marathon_acme.service import MarathonAcme, parse_domain_label
-from marathon_acme.sse_protocol import SseProtocol
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
 from marathon_acme.tests.helpers import failing_client
@@ -113,10 +112,10 @@ class TestMarathonAcme(object):
             datetime.now() - datetime(1970, 1, 1)).total_seconds()
         self.txacme_client = FailableTxacmeClient(key, self.clock)
 
-    def mk_marathon_acme(self, sse_timeout=None, **kwargs):
+    def mk_marathon_acme(self, sse_kwargs=None, **kwargs):
         marathon_client = MarathonClient(
             ['http://localhost:8080'], client=self.fake_marathon_api.client,
-            sse_timeout=sse_timeout, reactor=self.clock)
+            sse_kwargs=sse_kwargs, reactor=self.clock)
         mlb_client = MarathonLbClient(
             ['http://localhost:9090'], client=self.fake_marathon_lb.client,
             reactor=self.clock)
@@ -301,7 +300,7 @@ class TestMarathonAcme(object):
         stream.
         """
         timeout = 5.0
-        marathon_acme = self.mk_marathon_acme(sse_timeout=timeout)
+        marathon_acme = self.mk_marathon_acme(sse_kwargs={'timeout': timeout})
         marathon_acme.listen_events()
 
         [request] = self.fake_marathon_api.event_requests
@@ -319,8 +318,7 @@ class TestMarathonAcme(object):
         When we listen for events, and we connect successfully but we receive a
         line that is too long, we should reconnect to the event stream.
         """
-        SseProtocol.MAX_LENGTH = 8
-        marathon_acme = self.mk_marathon_acme()
+        marathon_acme = self.mk_marathon_acme(sse_kwargs={'max_length': 8})
         marathon_acme.listen_events()
 
         [request] = self.fake_marathon_api.event_requests

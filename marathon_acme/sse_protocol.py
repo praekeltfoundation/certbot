@@ -14,18 +14,23 @@ class SseProtocol(Protocol, TimeoutMixin):
     MAX_LENGTH = 1024 * 1024 * 1024  # 1MiB
     log = Logger()
 
-    def __init__(self, handler, timeout=None, reactor=None):
+    def __init__(
+            self, handler, max_length=MAX_LENGTH, timeout=None, reactor=None):
         """
         :param handler:
             A 2-args callable that will be called back with the event and data
             when a complete message is received.
-        :param timeout:
+        :param int max_length:
+            The maximum length in bytes of a single line in an SSE event that
+            will be accepted.
+        :param float timeout:
             Amount of time in seconds to wait for some data to be received
             before timing out. (Default: None - no timeout).
         :param reactor:
             Reactor to use to timeout the connection.
         """
         self._handler = handler
+        self._max_length = max_length
         self._timeout = timeout
         if reactor is None:
             from twisted.internet import reactor as _reactor
@@ -102,12 +107,12 @@ class SseProtocol(Protocol, TimeoutMixin):
                 # important to disregard all the lines in that packet following
                 # the one that told it to close.
                 return
-            if len(line) > self.MAX_LENGTH:
+            if len(line) > self._max_length:
                 self.lineLengthExceeded(line)
                 return
             else:
                 self.lineReceived(line)
-        if len(self._buffer) > self.MAX_LENGTH:
+        if len(self._buffer) > self._max_length:
             self.lineLengthExceeded(self._buffer)
             return
 
@@ -123,7 +128,7 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def lineLengthExceeded(self, line):
         self.log.error('SSE maximum line length exceeded: {length} > {max}',
-                       length=len(line), max=self.MAX_LENGTH)
+                       length=len(line), max=self._max_length)
         self._loseConnection()
 
     def _handle_field_value(self, field, value):
