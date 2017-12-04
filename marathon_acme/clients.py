@@ -344,7 +344,7 @@ class MarathonClient(JsonClient):
         :param callbacks:
             A dict mapping event types to functions that handle the event data
         """
-        d = self.request('GET', path='/v2/events', headers={
+        d = self.request('GET', path='/v2/events', unbuffered=True, headers={
             'Accept': 'text/event-stream',
             'Cache-Control': 'no-store'
         })
