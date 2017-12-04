@@ -30,10 +30,6 @@ from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
 
 
-def read_request_json(request):
-    return json.loads(request.content.read().decode('utf-8'))
-
-
 def json_response(request, json_data, response_code=200):
     """ Set the response code, write encoded JSON, and finish() a request. """
     request.setResponseCode(response_code)
