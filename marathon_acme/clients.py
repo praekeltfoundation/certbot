@@ -179,37 +179,6 @@ class HTTPClient(object):
         return d
 
 
-class JsonClient(HTTPClient):
-    def request(self, method, url=None, json_data=None, **kwargs):
-        """
-        Make a request to an API that speaks JSON. A number of basic defaults
-        are set on the request that make using a JSON API easier. These
-        defaults can be overridden by setting the parameters in the keyword
-        args.
-
-        :param: json_data:
-            A python data structure that will be converted to a JSON string
-            using `json.dumps` and used as the request body.
-        """
-        data = kwargs.get('data')
-        headers = kwargs.get('headers', {}).copy()
-        headers.setdefault('Accept', 'application/json')
-
-        # Add JSON body if there is JSON data
-        if json_data is not None:
-            if data is not None:
-                raise ValueError("Cannot specify both 'data' and 'json_data' "
-                                 'keyword arguments')
-
-            data = json.dumps(json_data).encode('utf-8')
-            headers.setdefault('Content-Type', 'application/json')
-
-        kwargs['headers'] = headers
-        kwargs['data'] = data
-
-        return super(JsonClient, self).request(method, url, **kwargs)
-
-
 def raise_for_not_ok_status(response):
     """
     Raises a `requests.exceptions.HTTPError` if the response has a non-200
@@ -253,7 +222,7 @@ def sse_content(response, handler, **sse_kwargs):
     return finished
 
 
-class MarathonClient(JsonClient):
+class MarathonClient(HTTPClient):
     def __init__(self, endpoints, sse_kwargs=None, url=None, client=None,
                  reactor=None):
         """
@@ -307,7 +276,8 @@ class MarathonClient(JsonClient):
         * There is an error response code
         * The field with the given name cannot be found
         """
-        d = self.request('GET', **kwargs)
+        d = self.request(
+            'GET', headers={'Accept': 'application/json'}, **kwargs)
         d.addCallback(raise_for_status)
         d.addCallback(raise_for_header, 'Content-Type', 'application/json')
         d.addCallback(json_content)
