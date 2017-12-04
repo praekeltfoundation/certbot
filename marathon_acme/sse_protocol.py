@@ -2,7 +2,6 @@ from twisted.internet.defer import Deferred
 from twisted.internet.protocol import Protocol, connectionDone
 from twisted.logger import LogLevel, Logger
 from twisted.protocols.policies import TimeoutMixin
-from twisted.web._newclient import TransportProxyProducer
 
 
 class SseProtocol(Protocol, TimeoutMixin):
@@ -50,18 +49,25 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def _loseConnection(self):
         """
+        Despite what the documentation says for
+        :class:`twisted.internet.protocol.Protocol`, the ``transport``
+        attribute is not a :class:`twisted.internet.interfaces.ITransport` with
+        a :meth:`~twisted.internet.interfaces.ITransport.loseConnection``
+        method. Looking at the documentation for
+        :class:`twisted.internet.interfaces.IProtocol`, the ``transport``
+        attribute is actually not defined and neither is the type of the
+        ``transport`` parameter to
+        :meth:`twisted.internet.interfaces.IProtocol.makeConnection`.
+
         ``SseProtocol`` will most often be used with HTTP requests initiated
-        with :class:`twisted.web.client.Agent`, which in turn uses
-        :class:`twisted.web._newclient.HTTP11ClientProtocol` by default. This
-        protocol wraps the underlying transport in a
-        :class:`twisted.web._newclient.TransportProxyProducer` which doesn't
-        expose :meth:`twisted.internet.interfaces.ITransport.loseConnection`.
+        with :class:`twisted.web.client.Agent`, which ends up giving us a
+        :class:`twisted.internet.interfaces.IPushProducer` for our
+        ``transport``.
 
         We need a way to close the connection when a event line is too long
-        or if we time out waiting for an event. This method attempts to grab
-        the underlying transport if our transport is a
-        ``TransportProxyProducer``, otherwise it just calls ``loseConnection``
-        on whatever transport we have.
+        or if we time out waiting for an event. This method simply calls
+        :meth:`twisted.internet.interfaces.IPushProducer.stopProducing` in an
+        attempt to lose the connection.
         """
         self.transport.stopProducing()
 
