@@ -63,11 +63,7 @@ class SseProtocol(Protocol, TimeoutMixin):
         ``TransportProxyProducer``, otherwise it just calls ``loseConnection``
         on whatever transport we have.
         """
-        transport = self.transport
-        if isinstance(transport, TransportProxyProducer):
-            transport = transport._producer
-
-        transport.loseConnection()
+        self.transport.stopProducing()
 
     def _reset_event_data(self):
         self._event = 'message'
