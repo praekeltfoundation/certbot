@@ -13,7 +13,7 @@ from marathon_acme.sse_protocol import SseProtocol
 class DummyTransport(object):
     disconnecting = False
 
-    def loseConnection(self):
+    def stopProducing(self):
         self.disconnecting = True
 
 
