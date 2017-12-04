@@ -87,14 +87,16 @@ def default_client(client, reactor):
 
 
 class HTTPClient(object):
-    timeout = 5
+    DEFAULT_TIMEOUT = 5
     log = Logger()
 
-    def __init__(self, url=None, client=None, reactor=None):
+    def __init__(self, url=None, client=None, timeout=DEFAULT_TIMEOUT,
+                 reactor=None):
         """
         Create a client with the specified default URL.
         """
         self.url = url
+        self._timeout = timeout
         # Keep track of the reactor because treq uses it for timeouts in a
         # clumsy way
         self._reactor = default_reactor(reactor)
@@ -169,7 +171,7 @@ class HTTPClient(object):
         """
         url = self._compose_url(url, kwargs)
 
-        kwargs.setdefault('timeout', self.timeout)
+        kwargs.setdefault('timeout', self._timeout)
 
         d = self._client.request(method, url, reactor=self._reactor, **kwargs)
 
@@ -177,37 +179,6 @@ class HTTPClient(object):
         d.addErrback(self._log_request_error, url)
 
         return d
-
-
-class JsonClient(HTTPClient):
-    def request(self, method, url=None, json_data=None, **kwargs):
-        """
-        Make a request to an API that speaks JSON. A number of basic defaults
-        are set on the request that make using a JSON API easier. These
-        defaults can be overridden by setting the parameters in the keyword
-        args.
-
-        :param: json_data:
-            A python data structure that will be converted to a JSON string
-            using `json.dumps` and used as the request body.
-        """
-        data = kwargs.get('data')
-        headers = kwargs.get('headers', {}).copy()
-        headers.setdefault('Accept', 'application/json')
-
-        # Add JSON body if there is JSON data
-        if json_data is not None:
-            if data is not None:
-                raise ValueError("Cannot specify both 'data' and 'json_data' "
-                                 'keyword arguments')
-
-            data = json.dumps(json_data).encode('utf-8')
-            headers.setdefault('Content-Type', 'application/json')
-
-        kwargs['headers'] = headers
-        kwargs['data'] = data
-
-        return super(JsonClient, self).request(method, url, **kwargs)
 
 
 def raise_for_not_ok_status(response):
@@ -253,16 +224,15 @@ def sse_content(response, handler, **sse_kwargs):
     return finished
 
 
-class MarathonClient(JsonClient):
-    def __init__(self, endpoints, sse_kwargs=None, url=None, client=None,
-                 reactor=None):
+class MarathonClient(HTTPClient):
+    def __init__(self, endpoints, sse_kwargs=None, **kwargs):
         """
         :param endpoints:
             A priority-ordered list of Marathon endpoints. Each endpoint will
             be tried one-by-one until the request succeeds or all endpoints
             fail.
         """
-        super(MarathonClient, self).__init__(url, client, reactor)
+        super(MarathonClient, self).__init__(**kwargs)
         self.endpoints = endpoints
         self._sse_kwargs = {} if sse_kwargs is None else sse_kwargs
 
@@ -307,7 +277,8 @@ class MarathonClient(JsonClient):
         * There is an error response code
         * The field with the given name cannot be found
         """
-        d = self.request('GET', **kwargs)
+        d = self.request(
+            'GET', headers={'Accept': 'application/json'}, **kwargs)
         d.addCallback(raise_for_status)
         d.addCallback(raise_for_header, 'Content-Type', 'application/json')
         d.addCallback(json_content)
@@ -344,7 +315,7 @@ class MarathonClient(JsonClient):
         :param callbacks:
             A dict mapping event types to functions that handle the event data
         """
-        d = self.request('GET', path='/v2/events', headers={
+        d = self.request('GET', path='/v2/events', unbuffered=True, headers={
             'Accept': 'text/event-stream',
             'Cache-Control': 'no-store'
         })

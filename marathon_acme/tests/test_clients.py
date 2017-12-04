@@ -21,17 +21,13 @@ from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients import (
-    HTTPClient, HTTPError, JsonClient, MarathonClient, MarathonLbClient,
-    default_client, default_reactor, get_single_header, raise_for_status)
+    HTTPClient, HTTPError, MarathonClient, MarathonLbClient, default_client,
+    default_reactor, get_single_header, raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import (
     FailingAgent, PerLocationAgent, failing_client)
 from marathon_acme.tests.matchers import (
     HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
-
-
-def read_request_json(request):
-    return json.loads(request.content.read().decode('utf-8'))
 
 
 def json_response(request, json_data, response_code=200):
@@ -417,44 +413,6 @@ class TestHTTPClient(TestHTTPClientBase):
             value=IsInstance(RuntimeError))))
 
         flush_logged_errors(RuntimeError)
-
-
-class TestJsonClient(TestHTTPClientBase):
-
-    def get_client(self, client):
-        return JsonClient('http://localhost:8000', client=client)
-
-    @inlineCallbacks
-    def test_request_json_data(self):
-        """
-        When a request is made with the json_data parameter set, that data
-        should be sent as JSON and the content-type header should be set to
-        indicate this.
-        """
-        self.cleanup_d(self.client.request(
-            'GET', path='/hello', json_data={'test': 'hello'}))
-
-        request = yield self.requests.get()
-        self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/hello')))
-        self.assertThat(request.requestHeaders, HasHeader(
-            'content-type', ['application/json']))
-        self.assertThat(request.requestHeaders,
-                        HasHeader('accept', ['application/json']))
-        self.assertThat(read_request_json(request), Equals({'test': 'hello'}))
-
-        request.setResponseCode(200)
-        request.finish()
-
-    def test_json_data_and_data_not_allowed(self):
-        """
-        When both ``data`` and ``json_data`` keyword arguments are provided
-        when making a request, an exception should be raised.
-        """
-        with ExpectedException(ValueError, "Cannot specify both 'data' and "
-                                           "'json_data' keyword arguments"):
-            self.client.request(
-                'GET', path='/hello', json_data={'hi': 'bye'}, data='somedata')
 
 
 class TestMarathonClient(TestHTTPClientBase):
