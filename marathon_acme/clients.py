@@ -87,14 +87,16 @@ def default_client(client, reactor):
 
 
 class HTTPClient(object):
-    timeout = 5
+    DEFAULT_TIMEOUT = 5
     log = Logger()
 
-    def __init__(self, url=None, client=None, reactor=None):
+    def __init__(self, url=None, client=None, timeout=DEFAULT_TIMEOUT,
+                 reactor=None):
         """
         Create a client with the specified default URL.
         """
         self.url = url
+        self._timeout = timeout
         # Keep track of the reactor because treq uses it for timeouts in a
         # clumsy way
         self._reactor = default_reactor(reactor)
@@ -169,7 +171,7 @@ class HTTPClient(object):
         """
         url = self._compose_url(url, kwargs)
 
-        kwargs.setdefault('timeout', self.timeout)
+        kwargs.setdefault('timeout', self._timeout)
 
         d = self._client.request(method, url, reactor=self._reactor, **kwargs)
 
@@ -223,15 +225,14 @@ def sse_content(response, handler, **sse_kwargs):
 
 
 class MarathonClient(HTTPClient):
-    def __init__(self, endpoints, sse_kwargs=None, url=None, client=None,
-                 reactor=None):
+    def __init__(self, endpoints, sse_kwargs=None, **kwargs):
         """
         :param endpoints:
             A priority-ordered list of Marathon endpoints. Each endpoint will
             be tried one-by-one until the request succeeds or all endpoints
             fail.
         """
-        super(MarathonClient, self).__init__(url, client, reactor)
+        super(MarathonClient, self).__init__(**kwargs)
         self.endpoints = endpoints
         self._sse_kwargs = {} if sse_kwargs is None else sse_kwargs
 
