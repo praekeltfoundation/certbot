@@ -89,6 +89,9 @@ class SseProtocol(Protocol, TimeoutMixin):
     def _abortConnection(self):
         if self._abort_connection_cb is not None:
             self._abort_connection_cb()
+        else:
+            self.log.error('Unable to abort connection: transport has no '
+                           'abortConnection method')
 
     def _reset_event_data(self):
         self._event = 'message'
