@@ -2,6 +2,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.protocol import Protocol, connectionDone
 from twisted.logger import LogLevel, Logger
 from twisted.protocols.policies import TimeoutMixin
+from twisted.web._newclient import TransportProxyProducer
 
 
 class SseProtocol(Protocol, TimeoutMixin):
@@ -41,35 +42,53 @@ class SseProtocol(Protocol, TimeoutMixin):
 
         self._reset_event_data()
 
+        self._abort_connection_cb = None
+
     def connectionMade(self):
         self.setTimeout(self._timeout)
+
+        # We need a way to close the connection when an event line is too long
+        # or if we time out waiting for an event. This is normally done by
+        # calling
+        # :meth:`~twisted.internet.interfaces.ITransport.loseConnection`` or
+        # :meth:`~twisted.internet.interfaces.ITCPTransport.abortConnection`,
+        # but newer versions of Twisted make this complicated.
+
+        # Despite what the documentation says for
+        # :class:`twisted.internet.protocol.Protocol`, the ``transport``
+        # attribute is not necessarily a
+        # :class:`twisted.internet.interfaces.ITransport`. Looking at the
+        # documentation for :class:`twisted.internet.interfaces.IProtocol`, the
+        # ``transport`` attribute is actually not defined and neither is the
+        # type of the ``transport`` parameter to
+        # :meth:`~twisted.internet.interfaces.IProtocol.makeConnection`.
+
+        # ``SseProtocol`` will most often be used with HTTP requests initiated
+        # with :class:`twisted.web.client.Agent` which, in newer versions of
+        # Twisted, ends up giving us a
+        # :class:`twisted.web._newclient.TransportProxyProducer` for our
+        # ``transport``. This is just a
+        # :class:`twisted.internet.interfaces.IPushProducer` that wraps the
+        # actual transport. On top of all that, the transport it wraps is
+        # somehow sometimes removed unexpectedly from this proxy. So, we grab a
+        # reference to the wrapped ``abortConnection()`` method here, right
+        # after connecting, in the hope that we can use it later if we need.
+
+        transport = self.transport
+        if isinstance(transport, TransportProxyProducer):
+            transport = transport._producer
+
+        self._abort_connection_cb = getattr(transport, 'abortConnection', None)
+        if self._abort_connection_cb is None:
+            self.log.warn(
+                'Transport {} has no abortConnection method'.format(transport))
 
     def callLater(self, period, func):
         return self._reactor.callLater(period, func)
 
-    def _loseConnection(self):
-        """
-        Despite what the documentation says for
-        :class:`twisted.internet.protocol.Protocol`, the ``transport``
-        attribute is not a :class:`twisted.internet.interfaces.ITransport` with
-        a :meth:`~twisted.internet.interfaces.ITransport.loseConnection``
-        method. Looking at the documentation for
-        :class:`twisted.internet.interfaces.IProtocol`, the ``transport``
-        attribute is actually not defined and neither is the type of the
-        ``transport`` parameter to
-        :meth:`twisted.internet.interfaces.IProtocol.makeConnection`.
-
-        ``SseProtocol`` will most often be used with HTTP requests initiated
-        with :class:`twisted.web.client.Agent`, which ends up giving us a
-        :class:`twisted.internet.interfaces.IPushProducer` for our
-        ``transport``.
-
-        We need a way to close the connection when a event line is too long
-        or if we time out waiting for an event. This method simply calls
-        :meth:`twisted.internet.interfaces.IPushProducer.stopProducing` in an
-        attempt to lose the connection.
-        """
-        self.transport.stopProducing()
+    def _abortConnection(self):
+        if self._abort_connection_cb is not None:
+            self._abort_connection_cb()
 
     def _reset_event_data(self):
         self._event = 'message'
@@ -131,7 +150,7 @@ class SseProtocol(Protocol, TimeoutMixin):
     def lineLengthExceeded(self, line):
         self.log.error('SSE maximum line length exceeded: {length} > {max}',
                        length=len(line), max=self._max_length)
-        self._loseConnection()
+        self._abortConnection()
 
     def _handle_field_value(self, field, value):
         """ Handle the field, value pair. """
@@ -176,7 +195,7 @@ class SseProtocol(Protocol, TimeoutMixin):
 
     def timeoutConnection(self):
         self.log.warn('SSE connection timed out.')
-        self._loseConnection()
+        self._abortConnection()
 
 
 def _parse_field_value(line):

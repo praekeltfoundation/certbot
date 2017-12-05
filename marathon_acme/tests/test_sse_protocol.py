@@ -13,7 +13,7 @@ from marathon_acme.sse_protocol import SseProtocol
 class DummyTransport(object):
     disconnecting = False
 
-    def stopProducing(self):
+    def abortConnection(self):
         self.disconnecting = True
 
 
@@ -35,7 +35,7 @@ def make_protocol(messages=None, **kwargs):
         messages.append((event, data))
 
     protocol = SseProtocol(handler, **kwargs)
-    protocol.transport = DummyTransport()
+    protocol.makeConnection(DummyTransport())
     return protocol
 
 
