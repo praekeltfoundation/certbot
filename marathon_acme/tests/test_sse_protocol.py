@@ -27,7 +27,7 @@ def protocol(messages):
     return make_protocol(messages)
 
 
-def make_protocol(messages=None, **kwargs):
+def make_protocol(messages=None, transport=None, **kwargs):
     if messages is None:
         messages = list()
 
@@ -35,7 +35,10 @@ def make_protocol(messages=None, **kwargs):
         messages.append((event, data))
 
     protocol = SseProtocol(handler, **kwargs)
-    protocol.makeConnection(DummyTransport())
+
+    if transport is None:
+        transport = DummyTransport()
+    protocol.makeConnection(transport)
     return protocol
 
 
@@ -264,14 +267,6 @@ class TestSseProtocol(object):
         """
         protocol.connectionLost()
 
-    def test_transport_without_abort_connection(self):
-        """
-        When the protocol is connected to a transport without an
-        ``abortConnection()`` method, it doesn't blow up.
-        """
-        protocol = SseProtocol(lambda e, d: None)
-        protocol.makeConnection(object())
-
     def test_multiple_events_resets_the_event_type(self, protocol, messages):
         """
         After an event is consumed with a custom event type, the event type
@@ -334,3 +329,18 @@ class TestSseProtocol(object):
         clock.advance(timeout / 2.0)
         # Timeout should be triggered
         assert protocol.transport.disconnecting
+
+    def test_timeout_without_abort_connection(self):
+        """
+        When the protocol is connected to a transport without an
+        ``abortConnection()`` method, it doesn't blow up, and nothing happens
+        when we time out.
+        """
+        timeout = 5
+        clock = Clock()
+        transport = object()
+        protocol = make_protocol(
+            timeout=timeout, reactor=clock, transport=transport)
+
+        protocol.connectionMade()
+        clock.advance(timeout)
