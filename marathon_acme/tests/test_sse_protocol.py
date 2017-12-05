@@ -264,6 +264,14 @@ class TestSseProtocol(object):
         """
         protocol.connectionLost()
 
+    def test_transport_without_abort_connection(self):
+        """
+        When the protocol is connected to a transport without an
+        ``abortConnection()`` method, it doesn't blow up.
+        """
+        protocol = SseProtocol(lambda e, d: None)
+        protocol.makeConnection(object())
+
     def test_multiple_events_resets_the_event_type(self, protocol, messages):
         """
         After an event is consumed with a custom event type, the event type
