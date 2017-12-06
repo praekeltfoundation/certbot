@@ -1,7 +1,7 @@
 from twisted.internet.defer import gatherResults
 from twisted.logger import LogLevel, Logger
 from twisted.python.failure import Failure
-from twisted.web._newclient import ResponseFailed
+from twisted.web.client import ResponseFailed
 
 from txacme.challenges import HTTP01Responder
 from txacme.client import ServerError as txacme_ServerError

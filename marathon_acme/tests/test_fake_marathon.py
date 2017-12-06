@@ -10,7 +10,7 @@ from testtools.twistedsupport import failed, succeeded
 
 from treq.content import json_content
 
-from twisted.web._newclient import ResponseFailed
+from twisted.web.client import ResponseFailed
 
 from marathon_acme.clients import _sse_content_with_protocol, sse_content
 from marathon_acme.tests.fake_marathon import (
