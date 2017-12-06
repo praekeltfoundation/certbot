@@ -344,3 +344,23 @@ class TestSseProtocol(object):
 
         protocol.connectionMade()
         clock.advance(timeout)
+
+    def test_lost_connection_cancels_timeout(self):
+        """
+        When the connection is lost, the timeout should be cancelled and have
+        no effect.
+        """
+        timeout = 5
+        clock = Clock()
+        protocol = make_protocol(timeout=timeout, reactor=clock)
+        protocol.connectionMade()
+
+        assert not protocol.transport.disconnecting
+
+        # Lose the connection
+        protocol.connectionLost()
+
+        # Advance to the timeout
+        clock.advance(timeout)
+        # Timeout should *not* be triggered
+        assert not protocol.transport.disconnecting
