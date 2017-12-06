@@ -1,8 +1,10 @@
 from twisted.internet.defer import Deferred
-from twisted.internet.protocol import Protocol, connectionDone
+from twisted.internet.protocol import Protocol
 from twisted.logger import LogLevel, Logger
 from twisted.protocols.policies import TimeoutMixin
 from twisted.web._newclient import TransportProxyProducer
+from twisted.web.client import ResponseDone
+from twisted.web.http import PotentialDataLoss
 
 
 class SseProtocol(Protocol, TimeoutMixin):
@@ -181,11 +183,32 @@ class SseProtocol(Protocol, TimeoutMixin):
         # Add a newline character between lines
         return '\n'.join(self._data_lines)
 
-    def connectionLost(self, reason=connectionDone):
-        self.log.failure('SSE connection lost', reason, LogLevel.warn)
+    def connectionLost(self, reason):
         self.setTimeout(None)  # Cancel the timeout
-        for d in list(self._waiting):
-            d.callback(None)
+
+        # Inspired by treq:
+        # https://github.com/twisted/treq/blob/release-17.8.0/src/treq/content.py#L34-L41
+        if reason.check(ResponseDone):
+            self.log.info('SSE connection ended')
+            self._callback_waiting(None)
+        elif reason.check(PotentialDataLoss):
+            # PotentialDataLoss errors are not very interesting, apparently,
+            # and they clog up the logs. Ignoring them seems common in Twisted.
+            # http://twistedmatrix.com/trac/ticket/4840
+            self.log.warn('SSE connection closed (PotentialDataLoss)')
+            self._callback_waiting(None)
+        else:
+            self.log.failure('SSE connection lost', reason, LogLevel.error)
+            self._errback_waiting(reason)
+
+    def _callback_waiting(self, value):
+        for d in self._waiting:
+            d.callback(value)
+        self._waiting = []
+
+    def _errback_waiting(self, failure):
+        for d in self._waiting:
+            d.errback(failure)
         self._waiting = []
 
     def timeoutConnection(self):

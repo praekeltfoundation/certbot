@@ -5,10 +5,12 @@ from operator import methodcaller
 from testtools.assertions import assert_that
 from testtools.matchers import AfterPreprocessing as After
 from testtools.matchers import (
-    Equals, Is, MatchesAll, MatchesListwise, MatchesStructure)
-from testtools.twistedsupport import succeeded
+    Equals, Is, IsInstance, MatchesAll, MatchesListwise, MatchesStructure)
+from testtools.twistedsupport import failed, succeeded
 
 from treq.content import json_content
+
+from twisted.web._newclient import ResponseFailed
 
 from marathon_acme.clients import _sse_content_with_protocol, sse_content
 from marathon_acme.tests.fake_marathon import (
@@ -167,7 +169,8 @@ class TestFakeMarathonAPI(object):
         protocol.transport._producer.loseConnection()
         # Flush the client so that the disconnection propagates
         self.client.flush()
-        assert_that(finished, succeeded(Is(None)))
+        assert_that(finished, failed(
+            MatchesStructure(value=IsInstance(ResponseFailed))))
 
         # Assert request 1's response data
         assert_that(attach_data1, MatchesListwise([
