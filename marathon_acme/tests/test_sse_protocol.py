@@ -13,7 +13,7 @@ from marathon_acme.sse_protocol import SseProtocol
 class DummyTransport(object):
     disconnecting = False
 
-    def loseConnection(self):
+    def abortConnection(self):
         self.disconnecting = True
 
 
@@ -27,7 +27,7 @@ def protocol(messages):
     return make_protocol(messages)
 
 
-def make_protocol(messages=None, **kwargs):
+def make_protocol(messages=None, transport=None, **kwargs):
     if messages is None:
         messages = list()
 
@@ -35,7 +35,10 @@ def make_protocol(messages=None, **kwargs):
         messages.append((event, data))
 
     protocol = SseProtocol(handler, **kwargs)
-    protocol.transport = DummyTransport()
+
+    if transport is None:
+        transport = DummyTransport()
+    protocol.makeConnection(transport)
     return protocol
 
 
@@ -326,3 +329,38 @@ class TestSseProtocol(object):
         clock.advance(timeout / 2.0)
         # Timeout should be triggered
         assert protocol.transport.disconnecting
+
+    def test_timeout_without_abort_connection(self):
+        """
+        When the protocol is connected to a transport without an
+        ``abortConnection()`` method, it doesn't blow up, and nothing happens
+        when we time out.
+        """
+        timeout = 5
+        clock = Clock()
+        transport = object()
+        protocol = make_protocol(
+            timeout=timeout, reactor=clock, transport=transport)
+
+        protocol.connectionMade()
+        clock.advance(timeout)
+
+    def test_lost_connection_cancels_timeout(self):
+        """
+        When the connection is lost, the timeout should be cancelled and have
+        no effect.
+        """
+        timeout = 5
+        clock = Clock()
+        protocol = make_protocol(timeout=timeout, reactor=clock)
+        protocol.connectionMade()
+
+        assert not protocol.transport.disconnecting
+
+        # Lose the connection
+        protocol.connectionLost()
+
+        # Advance to the timeout
+        clock.advance(timeout)
+        # Timeout should *not* be triggered
+        assert not protocol.transport.disconnecting
