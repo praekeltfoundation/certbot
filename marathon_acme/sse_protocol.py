@@ -188,14 +188,12 @@ class SseProtocol(Protocol, TimeoutMixin):
 
         # Inspired by treq:
         # https://github.com/twisted/treq/blob/release-17.8.0/src/treq/content.py#L34-L41
-        if reason.check(ResponseDone):
-            self.log.info('SSE connection ended')
-            self._callback_waiting(None)
-        elif reason.check(PotentialDataLoss):
-            # PotentialDataLoss errors are not very interesting, apparently,
-            # and they clog up the logs. Ignoring them seems common in Twisted.
-            # http://twistedmatrix.com/trac/ticket/4840
-            self.log.warn('SSE connection closed (PotentialDataLoss)')
+        # PotentialDataLoss errors are not very interesting, apparently,
+        # and they clog up the logs. Ignoring them seems common in Twisted.
+        # http://twistedmatrix.com/trac/ticket/4840
+        if reason.check(ResponseDone, PotentialDataLoss):
+            self.log.warn(
+                'SSE connection ended: {}'.format(reason.type.__name__))
             self._callback_waiting(None)
         else:
             self.log.failure('SSE connection lost', reason, LogLevel.error)
