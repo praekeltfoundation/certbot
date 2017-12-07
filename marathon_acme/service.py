@@ -1,4 +1,5 @@
 from twisted.internet.defer import gatherResults
+from twisted.internet.error import ConnectionDone
 from twisted.logger import LogLevel, Logger
 from twisted.python.failure import Failure
 from twisted.web.client import ResponseFailed
@@ -95,7 +96,13 @@ class MarathonAcme(object):
             failure = None
             if isinstance(result, Failure):
                 failure = result
-                if not failure.check(ResponseFailed):
+                # Ignore (but log) ResponseFailed errors that contain a
+                # ConnectionDone error. This occurs when the SseParser
+                # deliberately disconnects.
+                if not (
+                    failure.check(ResponseFailed) and
+                    any(r.check(ConnectionDone)
+                        for r in failure.value.reasons)):
                     # Log and fail
                     self.log.failure('Failed to listen for events', failure)
                     return failure
