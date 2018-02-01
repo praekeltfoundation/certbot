@@ -2,13 +2,13 @@ import uuid
 from datetime import datetime, timedelta
 from functools import partial
 
-from josepy.jwa import RS256
-from josepy.jwk import JWKRSA
-
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509.oid import NameOID
+
+from josepy.jwa import RS256
+from josepy.jwk import JWKRSA
 
 from treq.client import HTTPClient
 
