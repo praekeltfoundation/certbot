@@ -1,8 +1,9 @@
 from datetime import datetime
 
 from acme import challenges
-from acme.jose import JWKRSA
 from acme.messages import Error as acme_Error
+
+from josepy.jwk import JWKRSA
 
 from testtools.assertions import assert_that
 from testtools.matchers import (

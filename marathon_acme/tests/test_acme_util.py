@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from acme.jose import JWKRSA
+from josepy.jwk import JWKRSA
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
