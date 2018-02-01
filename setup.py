@@ -32,8 +32,9 @@ def readme():
 
 
 install_requires = [
-    'acme >= 0.10.0',
+    'acme >= 0.21.0',
     'cryptography',
+    'josepy',
     'klein',
     'requests',
     # treq.testing broken on older versions of treq with Twisted 17.1.0
@@ -41,7 +42,7 @@ install_requires = [
     # Despite treq & txacme depending on Twisted[tls], we don't get all the tls
     # extras unless we depend on the option too, I guess, because pip.
     'Twisted[tls]',
-    'txacme >= 0.9.1',
+    'txacme >= 0.9.2',
     'uritools >= 1.0.0'
 ]
 if sys.version_info < (3, 3):
