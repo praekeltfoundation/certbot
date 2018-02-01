@@ -185,6 +185,7 @@ class TestInitStorageDir(object):
         """
         tmpdir.join('default.pem').write('blah')
         tmpdir.join('certs').mkdir()
+        tmpdir.join('unmanaged-certs').mkdir()
 
         init_storage_dir(str(tmpdir))
 
