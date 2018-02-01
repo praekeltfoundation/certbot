@@ -2,12 +2,13 @@ import uuid
 from datetime import datetime, timedelta
 from functools import partial
 
-from acme import jose
-
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509.oid import NameOID
+
+from josepy.jwa import RS256
+from josepy.jwk import JWKRSA
 
 from treq.client import HTTPClient
 
@@ -46,10 +47,10 @@ def maybe_key(pem_path):
                 encryption_algorithm=serialization.NoEncryption()
             )
         )
-    return jose.JWKRSA(key=key)
+    return JWKRSA(key=key)
 
 
-def create_txacme_client_creator(reactor, url, key, alg=jose.RS256):
+def create_txacme_client_creator(reactor, url, key, alg=RS256):
     """
     Create a creator for txacme clients to provide to the txacme service. See
     ``txacme.client.Client.from_url()``. We create the underlying JWSClient
