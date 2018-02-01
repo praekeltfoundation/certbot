@@ -51,6 +51,10 @@ class TestCli(TestCase):
         # Expect a 'certs' directory to be created
         self.assertThat(os.path.isdir(temp_dir.join('certs')), Equals(True))
 
+        # Expect an 'unmanaged-certs' directory to be created
+        self.assertThat(
+            os.path.isdir(temp_dir.join('unmanaged-certs')), Equals(True))
+
         # Expect a default certificate to be created
         self.assertThat(os.path.isfile(temp_dir.join('default.pem')),
                         Equals(True))
