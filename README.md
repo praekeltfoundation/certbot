@@ -206,6 +206,9 @@ You can override these values by providing arguments to the Docker container.
   * `default.pem`: A self-signed wildcard cert for HAProxy to fallback to
   * `certs/`
     * _`www.example.com.pem`_: An issued ACME certificate for a domain
+  * `unmanaged-certs/`: A directory for certs that `marathon-acme` doesn't manage
+
+`marathon-acme` does nothing with the `unmanaged-certs/` directory after creating it. HAProxy fails if any path in its certificate config doesn't exist, so it reduces setup friction to have a standard place to put unmanaged certificates.
 
 ### `marathon-lb` configuration
 `marathon-acme` requires `marathon-lb` 1.4.0 or later in order to be able to trigger HAProxy reloads.

@@ -9,12 +9,12 @@ from marathon_acme.clients import get_single_header
 from marathon_acme.server import write_request_json
 
 
-def marathon_timestamp(time=datetime.utcnow()):
+def marathon_timestamp():
     """
     Make a Marathon/JodaTime-like timestamp string in ISO8601 format with
     milliseconds for the current time in UTC.
     """
-    return time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+    return datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
 
 class FakeMarathon(object):
