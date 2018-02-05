@@ -317,7 +317,7 @@ class MarathonClient(HTTPClient):
         """
         d = self.request(
             'GET', path='/v2/events', unbuffered=True,
-            params={'event_type': callbacks.keys()},
+            params={'event_type': sorted(callbacks.keys())},
             headers={
                 'Accept': 'text/event-stream',
                 'Cache-Control': 'no-store'
