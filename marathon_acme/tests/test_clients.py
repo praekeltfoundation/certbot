@@ -698,6 +698,40 @@ class TestMarathonClient(TestHTTPClientBase):
         flush_logged_errors(ResponseDone)
 
     @inlineCallbacks
+    def test_get_events_no_callback(self):
+        """
+        When a request is made to Marathon's event stream, a callback should
+        not receive event data if there is no callback for the event type.
+        """
+        data = []
+        d = self.cleanup_d(self.client.get_events({'test': data.append}))
+
+        request = yield self.requests.get()
+        self.assertThat(request, HasRequestProperties(
+            method='GET', url=self.uri('/v2/events'),
+            query={'event_type': ['test']}))
+        self.assertThat(request.requestHeaders,
+                        HasHeader('accept', ['text/event-stream']))
+
+        request.setResponseCode(200)
+        request.setHeader('Content-Type', 'text/event-stream')
+
+        json_data = {'hello': 'world'}
+        request.write(b'event: not_test\n')
+        request.write(
+            'data: {}\n'.format(json.dumps(json_data)).encode('utf-8'))
+        request.write(b'\n')
+
+        yield wait0()
+        self.assertThat(data, Equals([]))
+
+        request.finish()
+        yield d
+
+        # Expect request.finish() to result in a logged failure
+        flush_logged_errors(ResponseDone)
+
+    @inlineCallbacks
     def test_get_events_multiple_events(self):
         """
         When a request is made to Marathon's event stream, and there are
