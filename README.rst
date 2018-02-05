@@ -278,11 +278,11 @@ Docker images are available from `Docker
 Hub <https://hub.docker.com/r/praekeltfoundation/marathon-acme/>`__.
 There are two different streams of Docker images available:
 
-   * ``:latest``/``:<version>``: Tracks the latest released version of
+* ``:latest``/``:<version>``: Tracks the latest released version of
    ``marathon-acme`` on `PyPI <https://pypi.python.org/pypi/marathon-acme>`__.
    The Dockerfile for these is in the `praekeltfoundation/docker-marathon-acme
    <https://github.com/praekeltfoundation/docker-marathon-acme>`__ repo.
-   * ``:develop``: Tracks the ``develop`` branch of this repo and is built
+* ``:develop``: Tracks the ``develop`` branch of this repo and is built
    using the `Dockerfile <Dockerfile>`__ in this repo.
 
 For more details on the Docker images, see the
@@ -307,13 +307,13 @@ Certificate files
 
 ``marathon-acme`` creates the following directory/file structure:
 
-   * ``/var/lib/marathon-acme/``
-      * ``client.key``: The ACME client private key
-      * ``default.pem``: A self-signed wildcard cert for HAProxy to fallback to
-      * ``certs/``
-         * *``www.example.com.pem``*: An issued ACME certificate for a domain
-      * ``unmanaged-certs/``: A directory for certs that ``marathon-acme``
-      doesn't manage
+* ``/var/lib/marathon-acme/``
+   * ``client.key``: The ACME client private key
+   * ``default.pem``: A self-signed wildcard cert for HAProxy to fallback to
+   * ``certs/``
+      * *``www.example.com.pem``*: An issued ACME certificate for a domain
+   * ``unmanaged-certs/``: A directory for certs that ``marathon-acme``
+   doesn't manage
 
 ``marathon-acme`` does nothing with the ``unmanaged-certs/`` directory
 after creating it. HAProxy fails if any path in its certificate config
@@ -373,12 +373,12 @@ The library used for ACME certificate management, ``txacme``, is
 currently quite limited in its functionality. The two biggest
 limitations are:
 
-   * There is no `Subject Alternative Name
+* There is no `Subject Alternative Name
    <https://en.wikipedia.org/wiki/Subject_Alternative_Name>`__ (SAN) support
    yet (`#37 <https://github.com/mithrandi/txacme/issues/37>`__). Each
    certificate will correspond to exactly one domain name. This limitation
    makes it easier to hit Let's Encrypt's rate limits.
-   * There is no support for *removing* certificates from ``txacme``'s
+* There is no support for *removing* certificates from ``txacme``'s
    certificate store (`#77 <https://github.com/mithrandi/txacme/issues/77>`__).
    Once ``marathon-acme`` issues a certificate for an app it will try to renew
    that certificate *forever* unless it is manually deleted from the
