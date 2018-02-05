@@ -77,7 +77,7 @@ def WithErrorTypeAndMessage(error_type, message):
     )
 
 
-def HasRequestProperties(method=None, url=None, query=None):
+def HasRequestProperties(method, url, query=None):
     """
     Check if a HTTP request object has certain properties.
 
@@ -93,15 +93,13 @@ def HasRequestProperties(method=None, url=None, query=None):
     :param dict query:
         A dictionary of HTTP query parameters.
     """
-    fields = {}
-    if method is not None:
-        fields['method'] = Equals(method.encode('ascii'))
-    if url is not None:
-        fields['path'] = Equals(url.encode('ascii'))
-    if query is not None:
-        fields['uri'] = After(
-            lambda u: urisplit(u).getquerydict(), Equals(query))
-    return MatchesStructure(**fields)
+    if query is None:
+        query = {}
+    return MatchesStructure(
+        method=Equals(method.encode('ascii')),
+        path=Equals(url.encode('ascii')),
+        uri=After(lambda u: urisplit(u).getquerydict(), Equals(query))
+    )
 
 
 def matches_time_or_just_before(time, tolerance=timedelta(seconds=10)):
