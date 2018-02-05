@@ -308,10 +308,13 @@ Certificate files
 ``marathon-acme`` creates the following directory/file structure:
 
 - ``/var/lib/marathon-acme/``
+
   - ``client.key``: The ACME client private key
   - ``default.pem``: A self-signed wildcard cert for HAProxy to fallback to
   - ``certs/``
+
     - *``www.example.com.pem``*: An issued ACME certificate for a domain
+
   - ``unmanaged-certs/``: A directory for certs that ``marathon-acme``
     doesn't manage
 
