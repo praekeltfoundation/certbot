@@ -674,7 +674,8 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/v2/events')))
+            method='GET', url=self.uri('/v2/events'),
+            query={'event_type': ['test']}))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
@@ -708,7 +709,8 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/v2/events')))
+            method='GET', url=self.uri('/v2/events'),
+            query={'event_type': ['test']}))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
@@ -752,7 +754,8 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/v2/events')))
+            method='GET', url=self.uri('/v2/events'),
+            query={'event_type': ['test1', 'test2']}))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
@@ -786,7 +789,8 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/v2/events')))
+            method='GET', url=self.uri('/v2/events'),
+            query={'event_type': ['test']}))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
@@ -799,7 +803,7 @@ class TestMarathonClient(TestHTTPClientBase):
         yield wait0()
         self.assertThat(d, failed(WithErrorTypeAndMessage(
             HTTPError, 'Non-200 response code (202) for url: '
-                       'http://localhost:8080/v2/events')))
+                       'http://localhost:8080/v2/events?event_type=test')))
 
         self.assertThat(data, Equals([]))
 
@@ -818,7 +822,8 @@ class TestMarathonClient(TestHTTPClientBase):
 
         request = yield self.requests.get()
         self.assertThat(request, HasRequestProperties(
-            method='GET', url=self.uri('/v2/events')))
+            method='GET', url=self.uri('/v2/events'),
+            query={'event_type': ['test']}))
         self.assertThat(request.requestHeaders,
                         HasHeader('accept', ['text/event-stream']))
 
