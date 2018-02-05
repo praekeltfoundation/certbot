@@ -36,6 +36,10 @@ Encrypt <https://letsencrypt.org/>`__. Before using ``marathon-acme``
 with Let's Encrypt, make sure you are aware of their `rate
 limits <https://letsencrypt.org/docs/rate-limits/>`__.
 
+The entire certificate-issuing workflow is shown below:
+
+.. image:: issue-certificate.svg
+
 Usage
 -----
 
