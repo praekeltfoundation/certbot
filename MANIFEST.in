@@ -1,1 +1,1 @@
-include README.md LICENSE .coveragerc setup.cfg
+include LICENSE .coveragerc setup.cfg
