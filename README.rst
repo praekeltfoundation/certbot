@@ -266,7 +266,7 @@ domains (including ``marathon-acme``'s) for requests to the ACME
 challenge path. The ``use_backend`` directive can now be removed since
 the backend is never used over HTTP as all requests are redirected.
 
-**Note that this label can only be set after ``marathon-acme`` has
+**Note that this label can only be set after marathon-acme has
 fetched the first certificate for its own domain.** In other words, set
 the ``MARATHON_ACME_0_DOMAIN`` *first* and make sure it has taken effect
 before setting this one.
@@ -313,7 +313,7 @@ Certificate files
   - ``default.pem``: A self-signed wildcard cert for HAProxy to fallback to
   - ``certs/``
 
-    - *``www.example.com.pem``*: An issued ACME certificate for a domain
+    - *www.example.com.pem*: An issued ACME certificate for a domain
 
   - ``unmanaged-certs/``: A directory for certs that ``marathon-acme``
     doesn't manage
