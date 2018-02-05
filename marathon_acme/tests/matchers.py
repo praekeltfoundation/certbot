@@ -77,7 +77,7 @@ def WithErrorTypeAndMessage(error_type, message):
     )
 
 
-def HasRequestProperties(method=None, url=None, query={}):
+def HasRequestProperties(method, url, query=None):
     """
     Check if a HTTP request object has certain properties.
 
@@ -93,6 +93,8 @@ def HasRequestProperties(method=None, url=None, query={}):
     :param dict query:
         A dictionary of HTTP query parameters.
     """
+    if query is None:
+        query = {}
     return MatchesStructure(
         method=Equals(method.encode('ascii')),
         path=Equals(url.encode('ascii')),

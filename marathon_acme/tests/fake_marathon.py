@@ -17,10 +17,18 @@ def marathon_timestamp():
     return datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
 
+def _get_event_types(request_args):
+    types = request_args.get(b'event_type')
+    if types is None:
+        return None
+
+    return [t.decode('utf-8') for t in types]
+
+
 class FakeMarathon(object):
     def __init__(self):
         self._apps = {}
-        self.event_callbacks = []
+        self.event_callbacks = {}
 
     def add_app(self, app, client_ip=None):
         # Store the app
@@ -36,17 +44,18 @@ class FakeMarathon(object):
     def get_apps(self):
         return list(self._apps.values())
 
-    def attach_event_stream(self, callback, remote_address=None):
+    def attach_event_stream(
+            self, callback, event_types=None, remote_address=None):
         assert callback not in self.event_callbacks
 
-        self.event_callbacks.append(callback)
+        self.event_callbacks[callback] = event_types
         self.trigger_event('event_stream_attached',
                            remoteAddress=remote_address)
 
     def detach_event_stream(self, callback, remote_address=None):
         assert callback in self.event_callbacks
 
-        self.event_callbacks.remove(callback)
+        self.event_callbacks.pop(callback)
         self.trigger_event('event_stream_detached',
                            remoteAddress=remote_address)
 
@@ -57,8 +66,9 @@ class FakeMarathon(object):
         }
         event.update(kwargs)
 
-        for callback in self.event_callbacks:
-            callback(event)
+        for callback, event_types in self.event_callbacks.items():
+            if not event_types or event_type in event_types:
+                callback(event)
 
 
 class FakeMarathonAPI(object):
@@ -91,11 +101,15 @@ class FakeMarathonAPI(object):
 
         request.setResponseCode(200)
         request.setHeader('Content-Type', 'text/event-stream')
+        # Push the response headers before any events are written
+        request.write(b'')
+        self.client.flush()
 
         def callback(event):
             _write_request_event(request, event)
             self.client.flush()
-        self._marathon.attach_event_stream(callback, request.getClientIP())
+        self._marathon.attach_event_stream(
+            callback, _get_event_types(request.args), request.getClientIP())
         self.event_requests.append(request)
 
         def finished_errback(failure):
