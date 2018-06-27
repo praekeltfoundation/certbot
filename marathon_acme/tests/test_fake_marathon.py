@@ -228,6 +228,49 @@ class TestFakeMarathonAPI(object):
                         appDefinition=Equals(app)))
                 ]))))
 
+    def test_get_events_event_types(self):
+        """
+        When a request is made to the event stream endpoint, and a set of
+        event_types are specified, an SSE stream should be received in response
+        and only the event types that were specified should be fired.
+        """
+        response = self.client.get(
+            'http://localhost/v2/events',
+            params={'event_type': ['api_post_event']}, headers={
+                'Accept': 'text/event-stream'
+            })
+
+        app = {
+            'id': '/my-app_1',
+            'labels': {
+                'HAPROXY_GROUP': 'external',
+                'MARATHON_ACME_0_DOMAIN': 'example.com'
+            },
+            'portDefinitions': [
+                {'port': 9000, 'protocol': 'tcp', 'labels': {}}
+            ]
+        }
+        self.marathon.add_app(app)
+
+        attach_data = []
+        post_data = []
+        handler = dict_handler({
+           'event_stream_attached': attach_data.append,
+           'api_post_event': post_data.append,
+        })
+
+        assert_that(response, succeeded(IsSseResponse()))
+        sse_content(response.result, handler)
+
+        assert_that(attach_data, Equals([]))
+        assert_that(post_data, MatchesListwise([
+            After(json.loads, IsMarathonEvent(
+                'api_post_event',
+                clientIp=Is(None),
+                uri=Equals('/v2/apps/my-app_1'),
+                appDefinition=Equals(app)))
+        ]))
+
 
 class TestFakeMarathonLb(object):
 

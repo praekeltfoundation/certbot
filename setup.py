@@ -22,15 +22,6 @@ def find_version(*file_paths):
     raise RuntimeError('Unable to find version string')
 
 
-def readme():
-    # Prefer the ReStructuredText README, but fallback to Markdown if it hasn't
-    # been generated
-    if os.path.exists('README.rst'):
-        return read('README.rst')
-    else:
-        return read('README.md')
-
-
 install_requires = [
     'acme >= 0.21.0',
     'cryptography',
@@ -57,7 +48,7 @@ setup(
                  "running on Mesosphere Marathon"),
     author='Jamie Hewland',
     author_email='jamie@praekelt.org',
-    long_description=readme(),
+    long_description=read('README.rst'),
     packages=find_packages(),
     install_requires=install_requires,
     extras_require={
