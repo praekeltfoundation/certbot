@@ -53,6 +53,13 @@ parser.add_argument('--listen',
                     help='The address for the port to listen on (default: '
                          '%(default)s)',
                     default=':8000')
+parser.add_argument('--marathon-timeout',
+                    help=('Amount of time in seconds to wait for HTTP '
+                          'response headers to be received for all requests '
+                          'to Marathon. Set to 0 to disable. (default: '
+                          '%(default)s)'),
+                    type=float,
+                    default=10)
 parser.add_argument('--sse-timeout',
                     help=('Amount of time in seconds to wait for some event '
                           'data to be received from Marathon. Set to 0 to '
@@ -87,8 +94,8 @@ def main(reactor, raw_args=sys.argv[1:]):
 
     marathon_acme = create_marathon_acme(
         args.storage_dir, args.acme, args.email, args.allow_multiple_certs,
-        marathon_addrs, sse_timeout, mlb_addrs, args.group,
-        reactor)
+        marathon_addrs, args.marathon_timeout, sse_timeout, mlb_addrs,
+        args.group, reactor)
 
     # Run the thing
     endpoint_description = parse_listen_addr(args.listen)
@@ -160,7 +167,7 @@ def _create_tx_endpoints_string(args, kwargs):
 
 def create_marathon_acme(
     storage_dir, acme_directory, acme_email, allow_multiple_certs,
-    marathon_addrs, sse_timeout, mlb_addrs, group,
+    marathon_addrs, marathon_timeout, sse_timeout, mlb_addrs, group,
         reactor):
     """
     Create a marathon-acme instance.
@@ -175,6 +182,9 @@ def create_marathon_acme(
     :param marathon_addr:
         Address for the Marathon instance to find app domains that require
         certificates.
+    :param marathon_timeout:
+        Amount of time in seconds to wait for response headers to be received
+        from Marathon.
     :param sse_timeout:
         Amount of time in seconds to wait for some event data to be received
         from Marathon.
@@ -191,8 +201,8 @@ def create_marathon_acme(
     key = maybe_key(storage_path)
 
     return MarathonAcme(
-        MarathonClient(marathon_addrs, sse_kwargs={'timeout': sse_timeout},
-                       reactor=reactor),
+        MarathonClient(marathon_addrs, timeout=marathon_timeout,
+                       sse_kwargs={'timeout': sse_timeout}, reactor=reactor),
         group,
         DirectoryStore(certs_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),
