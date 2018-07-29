@@ -3,9 +3,12 @@ import pytest
 
 from testtools.assertions import assert_that
 from testtools.matchers import Is
-from testtools.twistedsupport import succeeded
+from testtools.twistedsupport import failed, succeeded
 
 from twisted.internet.task import Clock
+from twisted.python.failure import Failure
+from twisted.web.client import ResponseDone
+from twisted.web.http import PotentialDataLoss
 
 from marathon_acme.sse_protocol import SseProtocol
 
@@ -250,22 +253,46 @@ class TestSseProtocol(object):
 
         assert messages == []
 
-    def test_transport_connection_lost(self, protocol):
+    def test_transport_connection_lost_response_done(self, protocol):
         """
-        When the connection is lost, the finished deferred should be called.
+        When the connection is lost, because the response is done, the finished
+        deferred should be called.
         """
         finished = protocol.when_finished()
 
-        protocol.connectionLost()
+        protocol.connectionLost(Failure(ResponseDone()))
 
         assert_that(finished, succeeded(Is(None)))
+
+    def test_transport_connection_lost_potential_data_loss(self, protocol):
+        """
+        When the connection is lost, because of a "PotentialDataLoss" error,
+        the finished deferred should be called.
+        """
+        finished = protocol.when_finished()
+
+        protocol.connectionLost(Failure(PotentialDataLoss()))
+
+        assert_that(finished, succeeded(Is(None)))
+
+    def test_transport_connection_lost_error(self, protocol):
+        """
+        When the connection is lost, because of some other error, the finished
+        deferred should be errbacked.
+        """
+        finished = protocol.when_finished()
+
+        reason = Failure(RuntimeError())
+        protocol.connectionLost(reason)
+
+        assert_that(finished, failed(Is(reason)))
 
     def test_transport_connection_lost_no_callback(self, protocol):
         """
         When the connection is lost and the finished deferred hasn't been set,
         nothing should happen.
         """
-        protocol.connectionLost()
+        protocol.connectionLost(Failure(ResponseDone()))
 
     def test_multiple_events_resets_the_event_type(self, protocol, messages):
         """
@@ -358,7 +385,7 @@ class TestSseProtocol(object):
         assert not protocol.transport.disconnecting
 
         # Lose the connection
-        protocol.connectionLost()
+        protocol.connectionLost(Failure(ResponseDone()))
 
         # Advance to the timeout
         clock.advance(timeout)
