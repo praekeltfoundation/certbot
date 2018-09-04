@@ -86,7 +86,7 @@ class FakeVaultAPI(object):
         if not self._check_token(request):
             return
 
-        request_json = json.loads(request.content.read())
+        request_json = json.loads(request.content.read().decode('utf-8'))
         metadata = self._vault.set_kv_data(path, request_json['data'])
 
         self._reply(request, metadata)
