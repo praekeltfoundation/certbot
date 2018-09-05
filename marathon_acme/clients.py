@@ -8,7 +8,7 @@ from treq.content import json_content
 
 from twisted.internet.defer import DeferredList
 from twisted.logger import LogLevel, Logger
-from twisted.web.http import OK, NOT_FOUND
+from twisted.web.http import NOT_FOUND, OK
 
 from uritools import uricompose, uridecode, urisplit
 
@@ -447,7 +447,6 @@ class VaultClient(HTTPClient):
         headers['X-Vault-Token'] = self._token
         return super(VaultClient, self).request(
             method, *args, path=path, headers=headers, **kwargs)
-
 
     def _handle_response(self, response):
         d = json_content(response)
