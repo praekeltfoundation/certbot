@@ -1,14 +1,14 @@
 import cgi
 import json
 
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RequestException
 
 from treq.client import HTTPClient as treq_HTTPClient
 from treq.content import json_content
 
 from twisted.internet.defer import DeferredList
 from twisted.logger import LogLevel, Logger
-from twisted.web.http import OK
+from twisted.web.http import OK, NOT_FOUND
 
 from uritools import uricompose, uridecode, urisplit
 
@@ -417,3 +417,69 @@ class MarathonLbClient(HTTPClient):
         config to be reloaded, whether it has changed or not.
         """
         return self.request('POST', path='/_mlb_signal/usr1')
+
+
+class VaultError(RequestException):
+    """
+    Exception type for Vault response errors. The ``errors`` parameter contains
+    a list of error messages.
+    """
+    def __init__(self, *args, **kwargs):
+        self.errors = kwargs.pop('errors', [])
+        super(VaultError, self).__init__(*args, **kwargs)
+
+
+class VaultClient(HTTPClient):
+    """
+    A very simple Vault client that can read and write to paths.
+    """
+
+    def __init__(self, url, token, *args, **kwargs):
+        """
+        :param url: the URL for Vault
+        :param token: the Vault auth token
+        """
+        super(VaultClient, self).__init__(*args, url=url, **kwargs)
+        self._token = token
+
+    def request(self, method, path, *args, **kwargs):
+        headers = kwargs.pop('headers', {})
+        headers['X-Vault-Token'] = self._token
+        return super(VaultClient, self).request(
+            method, *args, path=path, headers=headers, **kwargs)
+
+
+    def _handle_response(self, response):
+        d = json_content(response)
+
+        def raise_for_error(json_data):
+            if 400 <= response.code < 600:
+                errors = json_data.get('errors')
+                if response.code == NOT_FOUND and not errors:
+                    return None
+
+                raise VaultError(response=response, errors=errors)
+            return json_data
+
+        def get_data(json_data):
+            if json_data is not None:
+                return json_data.get('data')
+
+        d.addCallback(raise_for_error)
+        d.addCallback(get_data)
+
+        return d
+
+    def read(self, path):
+        """
+        Read data from Vault. Returns the JSON-decoded response.
+        """
+        d = self.request('GET', '/v1/' + path)
+        return d.addCallback(self._handle_response)
+
+    def write(self, path, data):
+        """
+        Write data tp Vault. Returns the JSON-decoded response.
+        """
+        d = self.request('PUT', '/v1/' + path, json=data)
+        return d.addCallback(self._handle_response)
