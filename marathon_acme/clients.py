@@ -464,6 +464,7 @@ class VaultClient(HTTPClient):
         # correct for random text over HTTP, but not for JSON. Cross fingers
         # that we don't receive anything non-utf-8.
         d = response.text(encoding='utf-8')
+
         def to_error(text):
             # This logic is inspired by hvac as well:
             # https://github.com/hvac/hvac/blob/v0.6.4/hvac/adapters.py#L227-L233
