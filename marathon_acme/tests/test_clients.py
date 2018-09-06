@@ -1279,8 +1279,6 @@ class TestVaultClient(object):
                 requestHeaders=HasHeader('X-Vault-Token', [self.token]))
         )))
 
-        # Just checking the version parameter is sent
-
     def test_create_or_update_kv2(self):
         """
         When data is read from the key/value version 2 API, the response is
@@ -1344,5 +1342,3 @@ class TestVaultClient(object):
                 'options': {'cas': 1}
             }))
         )))
-
-        # Just checking the cas parameter is sent
