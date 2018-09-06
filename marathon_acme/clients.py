@@ -460,14 +460,7 @@ class VaultClient(HTTPClient):
                 raise VaultError(response=response, errors=errors)
             return json_data
 
-        def get_data(json_data):
-            if json_data is not None:
-                return json_data.get('data')
-
-        d.addCallback(raise_for_error)
-        d.addCallback(get_data)
-
-        return d
+        return d.addCallback(raise_for_error)
 
     def read(self, path):
         """

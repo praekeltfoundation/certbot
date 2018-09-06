@@ -1110,7 +1110,7 @@ class TestVaultClient(object):
         self.stub_client.flush()
 
         # Response should be returned
-        assert_that(d, succeeded(Equals(dummy_response['data'])))
+        assert_that(d, succeeded(Equals(dummy_response)))
 
     def test_write(self):
         """
@@ -1152,4 +1152,4 @@ class TestVaultClient(object):
         self.stub_client.flush()
 
         # Response should be returned
-        assert_that(d, succeeded(Equals(dummy_response['data'])))
+        assert_that(d, succeeded(Equals(dummy_response)))
