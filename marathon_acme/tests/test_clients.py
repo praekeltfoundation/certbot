@@ -28,7 +28,8 @@ from zope.interface import implementer
 
 from marathon_acme.clients import (
     HTTPClient, HTTPError, MarathonClient, MarathonLbClient, VaultClient,
-    default_client, default_reactor, get_single_header, raise_for_status)
+    VaultError, default_client, default_reactor, get_single_header,
+    raise_for_status)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import (
     FailingAgent, PerLocationAgent, failing_client, read_request_json)
@@ -1153,3 +1154,68 @@ class TestVaultClient(object):
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
+
+    def test_client_error(self):
+        """
+        When Vault returns an error status code with a JSON response, an
+        error is raised with the contents of the ``errors`` field of the JSON.
+        """
+        d = self.client.read('secret/data/hello')
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(
+            HasRequestProperties(method='GET', url='/v1/secret/data/hello')
+        ))
+
+        request = request_d.result
+        request.setResponseCode(403)
+        write_request_json(request, {'errors': ['permission denied']})
+        request.finish()
+        self.stub_client.flush()
+
+        assert_that(d, failed(MatchesStructure(value=MatchesAll(
+            IsInstance(VaultError),
+            After(str, Equals('permission denied')),
+            MatchesStructure(errors=Equals(['permission denied']))
+        ))))
+
+    def test_server_error(self):
+        """
+        When Vault returns an error status code without a JSON response, an
+        error is raised with the contents of the response body.
+        """
+        d = self.client.read('secret/data/hello')
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(
+            HasRequestProperties(method='GET', url='/v1/secret/data/hello')
+        ))
+
+        request = request_d.result
+        request.setResponseCode(503)
+        request.write(b'service unavailable')
+        request.finish()
+        self.stub_client.flush()
+
+        assert_that(d, failed(
+            WithErrorTypeAndMessage(VaultError, 'service unavailable')))
+
+    def test_not_found(self):
+        """
+        When Vault returns a 404 with no messages in the ``errors`` JSON field,
+        None is returned by the client.
+        """
+        d = self.client.read('secret/data/hello')
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(
+            HasRequestProperties(method='GET', url='/v1/secret/data/hello')
+        ))
+
+        request = request_d.result
+        request.setResponseCode(404)
+        write_request_json(request, {'errors': []})
+        request.finish()
+        self.stub_client.flush()
+
+        assert_that(d, succeeded(Is(None)))

@@ -422,11 +422,16 @@ class MarathonLbClient(HTTPClient):
 class VaultError(RequestException):
     """
     Exception type for Vault response errors. The ``errors`` parameter contains
-    a list of error messages.
+    a list of error messages. Roughly copies hvac's ``VaultError`` type:
+    https://github.com/hvac/hvac/blob/v0.6.4/hvac/exceptions.py#L1-L8
     """
-    def __init__(self, *args, **kwargs):
-        self.errors = kwargs.pop('errors', [])
-        super(VaultError, self).__init__(*args, **kwargs)
+    def __init__(self, message=None, errors=None, response=None):
+        if errors:
+            message = ', '.join(errors)
+
+        self.errors = errors
+
+        super(VaultError, self).__init__(message, response=response)
 
 
 class VaultClient(HTTPClient):
@@ -449,18 +454,34 @@ class VaultClient(HTTPClient):
             method, *args, path=path, headers=headers, **kwargs)
 
     def _handle_response(self, response):
-        d = json_content(response)
+        if 400 <= response.code < 600:
+            return self._handle_error(response)
 
-        def raise_for_error(json_data):
-            if 400 <= response.code < 600:
-                errors = json_data.get('errors')
-                if response.code == NOT_FOUND and not errors:
-                    return None
+        return response.json()
 
-                raise VaultError(response=response, errors=errors)
-            return json_data
+    def _handle_error(self, response):
+        # Decode as utf-8. treq's text() method uses ISO-8859-1 which is
+        # correct for random text over HTTP, but not for JSON. Cross fingers
+        # that we don't receive anything non-utf-8.
+        d = response.text(encoding='utf-8')
+        def to_error(text):
+            # This logic is inspired by hvac as well:
+            # https://github.com/hvac/hvac/blob/v0.6.4/hvac/adapters.py#L227-L233
+            errors = None
+            if get_single_header(
+                    response.headers, 'Content-Type') == 'application/json':
+                errors = json.loads(text).get('errors')
 
-        return d.addCallback(raise_for_error)
+            # Special case for 404s without extra errors: return None (hvac
+            # doesn't do this)
+            if response.code == NOT_FOUND and errors == []:
+                return None
+
+            # hvac returns more specific errors that are subclasses of its
+            # VaultError. For simplicity we just return one error type.
+            raise VaultError(text, errors=errors, response=response)
+
+        return d.addCallback(to_error)
 
     def read(self, path):
         """
