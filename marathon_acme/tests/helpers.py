@@ -1,3 +1,5 @@
+import json
+
 from treq.client import HTTPClient
 
 from twisted.internet.defer import fail
@@ -39,3 +41,11 @@ class PerLocationAgent(object):
         agent = self.agents[urisplit(uri).authority]
         return agent.request(
             method, uri, headers=headers, bodyProducer=bodyProducer)
+
+
+def read_request_json(request):
+    """
+    Read the body of a request and decode it as JSON. The counterpart to
+    ``marathon_acme.server.write_request_json`` but only used in tests.
+    """
+    return json.loads(request.content.read().decode('utf-8'))

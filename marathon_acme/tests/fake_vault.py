@@ -1,4 +1,3 @@
-import json
 import uuid
 
 from klein import Klein
@@ -7,6 +6,7 @@ from treq.testing import StubTreq
 
 from marathon_acme.clients import get_single_header
 from marathon_acme.server import write_request_json
+from marathon_acme.tests.helpers import read_request_json
 
 
 class FakeVault(object):
@@ -86,7 +86,7 @@ class FakeVaultAPI(object):
         if not self._check_token(request):
             return
 
-        request_json = json.loads(request.content.read().decode('utf-8'))
+        request_json = read_request_json(request)
         metadata = self._vault.set_kv_data(path, request_json['data'])
 
         self._reply(request, metadata)
