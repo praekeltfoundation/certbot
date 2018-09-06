@@ -1119,7 +1119,7 @@ class TestVaultClient(object):
         JSON. The data in the response is returned.
         """
         data = {'data': {'foo': 'world'}}
-        d = self.client.write('secret/data/hello', data)
+        d = self.client.write('secret/data/hello', **data)
 
         request_d = self.requests.get()
         assert_that(request_d, succeeded(MatchesAll(
@@ -1219,3 +1219,130 @@ class TestVaultClient(object):
         self.stub_client.flush()
 
         assert_that(d, succeeded(Is(None)))
+
+    def test_read_kv2(self):
+        """
+        When data is read from the key/value version 2 API, the response is
+        returned.
+        """
+        d = self.client.read_kv2('hello')
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(MatchesAll(
+            HasRequestProperties(method='GET', url='/v1/secret/data/hello',
+                                 query={}),
+            MatchesStructure(
+                requestHeaders=HasHeader('X-Vault-Token', [self.token]))
+        )))
+
+        # Write the response
+        dummy_response = {
+            "request_id": "08b0ba90-b6e4-afab-de6a-d2fbf8f480b3",
+            "lease_id": "",
+            "renewable": False,
+            "lease_duration": 0,
+            "data": {
+                "data": {"foo": "world"},
+                "metadata": {
+                    "created_time": "2018-09-05T12:49:52.722404Z",
+                    "deletion_time": "",
+                    "destroyed": False,
+                    "version": 1
+                }
+            },
+            "wrap_info": None,
+            "warnings": None,
+            "auth": None
+        }
+
+        request = request_d.result
+        request.setResponseCode(200)
+        write_request_json(request, dummy_response)
+        request.finish()
+        self.stub_client.flush()
+
+        # Response should be returned
+        assert_that(d, succeeded(Equals(dummy_response)))
+
+    def test_read_kv2_with_version(self):
+        """
+        When data is read from the key/value version 2 API and a version is
+        specified, the version parameter is sent.
+        """
+        self.client.read_kv2('hello', version=1)
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(MatchesAll(
+            HasRequestProperties(method='GET', url='/v1/secret/data/hello',
+                                 query={'version': ['1']}),
+            MatchesStructure(
+                requestHeaders=HasHeader('X-Vault-Token', [self.token]))
+        )))
+
+        # Just checking the version parameter is sent
+
+    def test_create_or_update_kv2(self):
+        """
+        When data is read from the key/value version 2 API, the response is
+        returned.
+        """
+        data = {'data': {'foo': 'world'}}
+        d = self.client.create_or_update_kv2('hello', data)
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(MatchesAll(
+            HasRequestProperties(method='PUT', url='/v1/secret/data/hello'),
+            MatchesStructure(
+                requestHeaders=HasHeader('X-Vault-Token', [self.token])),
+            After(read_request_json, Equals({
+                'data': data,
+                'options': {}
+            }))
+        )))
+
+        # Write the response
+        dummy_response = {
+            "request_id": "c5512c45-cace-ed90-1630-bbf2608aefea",
+            "lease_id": "",
+            "renewable": False,
+            "lease_duration": 0,
+            "data": {
+                "created_time": "2018-09-05T12:53:41.405819Z",
+                "deletion_time": "",
+                "destroyed": False,
+                "version": 2
+            },
+            "wrap_info": None,
+            "warnings": None,
+            "auth": None
+        }
+
+        request = request_d.result
+        request.setResponseCode(200)
+        write_request_json(request, dummy_response)
+        request.finish()
+        self.stub_client.flush()
+
+        # Response should be returned
+        assert_that(d, succeeded(Equals(dummy_response)))
+
+    def test_create_or_update_kv2_with_cas(self):
+        """
+        When data is read from the key/value version 2 API and a cas value is
+        specified, the cas parameter is sent.
+        """
+        data = {'data': {'foo': 'world'}}
+        self.client.create_or_update_kv2('hello', data, cas=1)
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(MatchesAll(
+            HasRequestProperties(method='PUT', url='/v1/secret/data/hello'),
+            MatchesStructure(
+                requestHeaders=HasHeader('X-Vault-Token', [self.token])),
+            After(read_request_json, Equals({
+                'data': data,
+                'options': {'cas': 1}
+            }))
+        )))
+
+        # Just checking the cas parameter is sent

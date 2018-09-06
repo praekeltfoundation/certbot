@@ -484,16 +484,41 @@ class VaultClient(HTTPClient):
 
         return d.addCallback(to_error)
 
-    def read(self, path):
+    def read(self, path, **params):
         """
         Read data from Vault. Returns the JSON-decoded response.
         """
-        d = self.request('GET', '/v1/' + path)
+        d = self.request('GET', '/v1/' + path, params=params)
         return d.addCallback(self._handle_response)
 
-    def write(self, path, data):
+    def write(self, path, **data):
         """
-        Write data tp Vault. Returns the JSON-decoded response.
+        Write data to Vault. Returns the JSON-decoded response.
         """
         d = self.request('PUT', '/v1/' + path, json=data)
         return d.addCallback(self._handle_response)
+
+    def read_kv2(self, path, version=None, mount_path='secret'):
+        """
+        Read some data from a key/value version 2 secret engine.
+        """
+        params = {}
+        if version is not None:
+            params['version'] = version
+
+        read_path = '{}/data/{}'.format(mount_path, path)
+        return self.read(read_path, **params)
+
+    def create_or_update_kv2(self, path, data, cas=None, mount_path='secret'):
+        """
+        Create or update some data in a key/value version 2 secret engine.
+        """
+        params = {
+            'options': {},
+            'data': data
+        }
+        if cas is not None:
+            params['options']['cas'] = cas
+
+        write_path = '{}/data/{}'.format(mount_path, path)
+        return self.write(write_path, **params)
