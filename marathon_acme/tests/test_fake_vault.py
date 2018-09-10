@@ -99,6 +99,25 @@ class TestFakeVaultAPI(object):
             )))
         )))
 
+    def test_read_kv_nested(self):
+        """
+        When a request is made to read KV data for a nested path with data,
+        that data and its metadata is returned.
+        """
+        self.vault.set_kv_data('certificates/www.p16n.org', {'foo': 'bar'})
+
+        response = self.client.get(
+            'http://localhost/v1/secret/data/certificates/www.p16n.org',
+            headers={'X-Vault-Token': self.vault.token}
+        )
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(MatchesAll(
+                After(lambda d: d['data']['data'], Equals({'foo': 'bar'})),
+                After(lambda d: d['data']['metadata']['version'], Equals(1))
+            )))
+        )))
+
     def test_create_kv(self):
         """
         When a request is made to update KV data for a path without data, the
@@ -118,6 +137,27 @@ class TestFakeVaultAPI(object):
 
         data = self.vault.get_kv_data('my-secret')
         assert_that(data['data'], Equals({'foo': 'bar'}))
+        assert_that(data['metadata']['version'], Equals(1))
+
+    def test_create_kv_nested(self):
+        """
+        When a request is made to update KV data for a nested path without
+        data, the data is stored and the metadata is returned.
+        """
+        response = self.client.put(
+            'http://localhost/v1/secret/data/certificates/www.p16n.org',
+            headers={'X-Vault-Token': self.vault.token},
+            json={'data': {'foo': 'baz'}}
+        )
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(
+                After(lambda d: d['data']['version'], Equals(1))
+            ))
+        )))
+
+        data = self.vault.get_kv_data('certificates/www.p16n.org')
+        assert_that(data['data'], Equals({'foo': 'baz'}))
         assert_that(data['metadata']['version'], Equals(1))
 
     def test_update_kv(self):
