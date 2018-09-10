@@ -184,6 +184,9 @@ class TestVaultKvCertificateStore(object):
         self.vault.set_kv_data('live', {'p16n.org': 'FINGERPRINT'})
 
         d = self.store.store('www.p16n.org', TEST_PEM_OBJECTS)
+        # We return the final kv write response from Vault, but txacme doesn't
+        # care what the result of the deferred is
+        assert_that(d, succeeded(IsInstance(dict)))
 
         live_data = self.vault.get_kv_data('live')
         assert live_data['data'] == {
