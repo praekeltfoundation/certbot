@@ -108,12 +108,14 @@ class FakeMarathonAPI(object):
         def callback(event):
             _write_request_event(request, event)
             self.client.flush()
+        remote_address = request.getClientAddress().host
         self._marathon.attach_event_stream(
-            callback, _get_event_types(request.args), request.getClientIP())
+            callback, _get_event_types(request.args), remote_address)
         self.event_requests.append(request)
 
         def finished_errback(failure):
-            self._marathon.detach_event_stream(callback, request.getClientIP())
+            remote_address = request.getClientAddress().host
+            self._marathon.detach_event_stream(callback, remote_address)
             self.event_requests.remove(request)
 
         finished = request.notifyFinish()

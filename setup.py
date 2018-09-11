@@ -33,7 +33,7 @@ install_requires = [
     'treq >= 17.3.1',
     # Despite treq & txacme depending on Twisted[tls], we don't get all the tls
     # extras unless we depend on the option too, I guess, because pip.
-    'Twisted[tls]',
+    'Twisted[tls] >= 18.4.0',
     'txacme >= 0.9.2',
     'uritools >= 1.0.0'
 ]
