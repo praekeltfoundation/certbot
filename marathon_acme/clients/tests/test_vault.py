@@ -249,7 +249,7 @@ class TestVaultClient(object):
         When data is read from the key/value version 2 API and a version is
         specified, the version parameter is sent.
         """
-        self.client.read_kv2('hello', version=1)
+        d = self.client.read_kv2('hello', version=1)
 
         request_d = self.requests.get()
         assert_that(request_d, succeeded(MatchesAll(
@@ -258,6 +258,18 @@ class TestVaultClient(object):
             MatchesStructure(
                 requestHeaders=HasHeader('X-Vault-Token', [self.token]))
         )))
+
+        # We don't care much about the response but we have to see the request
+        # to completion or else the DelayedCall from the request timeout will
+        # interfere with other tests.
+        request = request_d.result
+        request.setResponseCode(404)
+        write_request_json(request, {'errors': []})
+        request.finish()
+        self.stub_client.flush()
+
+        assert_that(d, succeeded(Is(None)))
+
 
     def test_create_or_update_kv2(self):
         """
@@ -310,7 +322,7 @@ class TestVaultClient(object):
         specified, the cas parameter is sent.
         """
         data = {'data': {'foo': 'world'}}
-        self.client.create_or_update_kv2('hello', data, cas=1)
+        d = self.client.create_or_update_kv2('hello', data, cas=1)
 
         request_d = self.requests.get()
         assert_that(request_d, succeeded(MatchesAll(
@@ -322,3 +334,14 @@ class TestVaultClient(object):
                 'options': {'cas': 1}
             }))
         )))
+
+        # We don't care much about the response but we have to see the request
+        # to completion or else the DelayedCall from the request timeout will
+        # interfere with other tests.
+        request = request_d.result
+        request.setResponseCode(404)
+        write_request_json(request, {'errors': []})
+        request.finish()
+        self.stub_client.flush()
+
+        assert_that(d, succeeded(Is(None)))
