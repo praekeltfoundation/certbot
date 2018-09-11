@@ -21,9 +21,9 @@ from txfake.fake_connection import wait0
 from marathon_acme.clients._base import (
     HTTPClient, HTTPError, default_client, default_reactor, get_single_header,
     raise_for_status)
+from marathon_acme.clients.tests.matchers import HasRequestProperties
 from marathon_acme.tests.helpers import failing_client
-from marathon_acme.tests.matchers import (
-    HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
+from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
 
 
 class TestGetSingleHeader(object):

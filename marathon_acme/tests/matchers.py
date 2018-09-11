@@ -7,8 +7,6 @@ from testtools.matchers import (
     Equals, GreaterThan, IsInstance, LessThan, MatchesAll, MatchesAny,
     MatchesDict, MatchesStructure, Mismatch)
 
-from uritools import urisplit
-
 
 class HasHeader(Equals):
     def __init__(self, key, values):
@@ -74,31 +72,6 @@ def WithErrorTypeAndMessage(error_type, message):
     return MatchesAll(
         MatchesStructure(value=IsInstance(error_type)),
         After(methodcaller('getErrorMessage'), Equals(message))
-    )
-
-
-def HasRequestProperties(method, url, query=None):
-    """
-    Check if a HTTP request object has certain properties.
-
-    Parses the query dict from the request URI rather than using the request
-    "args" property as the args do not include query parameters that have no
-    value.
-
-    :param str method:
-        The HTTP method.
-    :param str url:
-        The HTTP URL, without any query parameters. Should already be percent
-        encoded.
-    :param dict query:
-        A dictionary of HTTP query parameters.
-    """
-    if query is None:
-        query = {}
-    return MatchesStructure(
-        method=Equals(method.encode('ascii')),
-        path=Equals(url.encode('ascii')),
-        uri=After(lambda u: urisplit(u).getquerydict(), Equals(query))
     )
 
 

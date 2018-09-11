@@ -14,11 +14,11 @@ from twisted.web.server import NOT_DONE_YET
 
 from zope.interface import implementer
 
+from marathon_acme.clients.tests.matchers import HasRequestProperties
 from marathon_acme.clients.vault import VaultClient, VaultError
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import read_request_json
-from marathon_acme.tests.matchers import (
-    HasHeader, HasRequestProperties, WithErrorTypeAndMessage)
+from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
 
 
 @implementer(IResource)
