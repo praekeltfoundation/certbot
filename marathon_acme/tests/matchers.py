@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from operator import methodcaller
 
 from testtools.content import text_content
 from testtools.matchers import AfterPreprocessing as After
 from testtools.matchers import (
     Equals, GreaterThan, IsInstance, LessThan, MatchesAll, MatchesAny,
-    MatchesDict, MatchesStructure, Mismatch)
+    MatchesStructure, Mismatch)
 
 
 class HasHeader(Equals):
@@ -53,17 +53,6 @@ def IsJsonResponseWithCode(code):
     )
 
 
-def IsSseResponse():
-    """
-    Match a status code of 200 on a treq.response object and check that a
-    header is set to indicate that the content type is an event stream.
-    """
-    return MatchesStructure(
-        code=Equals(200),
-        headers=HasHeader('Content-Type', ['text/event-stream'])
-    )
-
-
 def WithErrorTypeAndMessage(error_type, message):
     """
     Check that a Twisted failure was caused by a certain error type with a
@@ -83,25 +72,3 @@ def matches_time_or_just_before(time, tolerance=timedelta(seconds=10)):
     return MatchesAll(
         GreaterThan(time - tolerance),
         MatchesAny(LessThan(time), Equals(time)))
-
-
-def _parse_marathon_event_timestamp(timestamp):
-    """ Parse Marathon's ISO8601-like timestamps into a datetime. """
-    return datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
-
-
-def IsMarathonEvent(event_type, **kwargs):
-    """
-    Match a dict (deserialized from JSON) as a Marathon event. Matches the
-    event type and checks for a recent timestamp.
-
-    :param event_type: The event type ('eventType' field value)
-    :param kwargs: Any other matchers to apply to the dict
-    """
-    matching_dict = {
-        'eventType': Equals(event_type),
-        'timestamp': After(_parse_marathon_event_timestamp,
-                           matches_time_or_just_before(datetime.utcnow()))
-    }
-    matching_dict.update(kwargs)
-    return MatchesDict(matching_dict)

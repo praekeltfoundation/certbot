@@ -1,11 +1,12 @@
 import json
+from datetime import datetime
 from functools import partial
 from operator import methodcaller
 
 from testtools.assertions import assert_that
-from testtools.matchers import AfterPreprocessing as After
 from testtools.matchers import (
-    Equals, Is, MatchesAll, MatchesListwise, MatchesStructure)
+    AfterPreprocessing as After, Equals, Is, MatchesAll, MatchesDict,
+    MatchesListwise, MatchesStructure)
 from testtools.twistedsupport import succeeded
 
 from treq.content import json_content
@@ -15,7 +16,7 @@ from marathon_acme.clients.marathon import (
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
 from marathon_acme.tests.matchers import (
-    HasHeader, IsJsonResponseWithCode, IsMarathonEvent, IsSseResponse)
+    HasHeader, IsJsonResponseWithCode, matches_time_or_just_before)
 
 
 def dict_handler(callback_dict):
@@ -30,6 +31,39 @@ def collect_events(event_type, response):
     messages = []
     sse_content(response, dict_handler({event_type: messages.append}))
     return messages
+
+
+def IsSseResponse():
+    """
+    Match a status code of 200 on a treq.response object and check that a
+    header is set to indicate that the content type is an event stream.
+    """
+    return MatchesStructure(
+        code=Equals(200),
+        headers=HasHeader('Content-Type', ['text/event-stream'])
+    )
+
+
+def IsMarathonEvent(event_type, **kwargs):
+    """
+    Match a dict (deserialized from JSON) as a Marathon event. Matches the
+    event type and checks for a recent timestamp.
+
+    :param event_type: The event type ('eventType' field value)
+    :param kwargs: Any other matchers to apply to the dict
+    """
+    matching_dict = {
+        'eventType': Equals(event_type),
+        'timestamp': After(_parse_marathon_event_timestamp,
+                           matches_time_or_just_before(datetime.utcnow()))
+    }
+    matching_dict.update(kwargs)
+    return MatchesDict(matching_dict)
+
+
+def _parse_marathon_event_timestamp(timestamp):
+    """ Parse Marathon's ISO8601-like timestamps into a datetime. """
+    return datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 class TestFakeMarathonAPI(object):
