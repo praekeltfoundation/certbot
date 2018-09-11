@@ -10,7 +10,8 @@ from testtools.twistedsupport import succeeded
 
 from treq.content import json_content
 
-from marathon_acme.clients import _sse_content_with_protocol, sse_content
+from marathon_acme.clients.marathon import (
+    _sse_content_with_protocol, sse_content)
 from marathon_acme.tests.fake_marathon import (
     FakeMarathon, FakeMarathonAPI, FakeMarathonLb)
 from marathon_acme.tests.matchers import (
