@@ -9,7 +9,8 @@ from testtools.twistedsupport import failed, succeeded
 
 from twisted.internet.defer import succeed
 
-from marathon_acme.tests.helpers import FailingAgent, PerLocationAgent
+from marathon_acme.clients.tests.helpers import PerLocationAgent
+from marathon_acme.tests.helpers import FailingAgent
 
 
 class DummyAgent(object):
