@@ -270,7 +270,6 @@ class TestVaultClient(object):
 
         assert_that(d, succeeded(Is(None)))
 
-
     def test_create_or_update_kv2(self):
         """
         When data is read from the key/value version 2 API, the response is
