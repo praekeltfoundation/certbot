@@ -12,9 +12,9 @@ from txfake.fake_connection import wait0
 
 from marathon_acme.clients._base import HTTPError
 from marathon_acme.clients.marathon import MarathonClient
-from marathon_acme.clients.tests.helpers import PerLocationAgent
+from marathon_acme.clients.tests.helpers import (
+    PerLocationAgent, TestHTTPClientBase)
 from marathon_acme.clients.tests.matchers import HasRequestProperties
-from marathon_acme.clients.tests.test__base import TestHTTPClientBase
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import FailingAgent
 from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
