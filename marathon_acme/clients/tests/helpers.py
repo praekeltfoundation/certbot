@@ -35,7 +35,7 @@ class TestHTTPClientBase(TestCase):
 
     def get_client(self, client):
         """To be implemented by subclass"""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def uri(self, path):
         return '%s%s' % (self.client.url, path,)

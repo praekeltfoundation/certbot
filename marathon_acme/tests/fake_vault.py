@@ -59,10 +59,7 @@ class FakeVault(object):
 class FakeVaultAPI(object):
     """
     A very simple fake Vault API. Only supports the key/value v2 read and
-    create/update APIs. Only supports a fixed mount path (``secret``) and a
-    single level of paths within the secret engine (i.e. doesn't support
-    secret paths with ``/`` in them). This is because it is difficult to
-    support more complex paths with Klein's basic routing.
+    create/update APIs. Only supports a fixed mount path (``secret``).
     """
     app = Klein()
 
@@ -70,10 +67,12 @@ class FakeVaultAPI(object):
         self._vault = vault
         self.client = StubTreq(self.app.resource())
 
-    @app.route('/v1/secret/data/<path>', methods=['GET'])
-    def read_secret(self, request, path):
+    @app.route('/v1/secret/data/', methods=['GET'], branch=True)
+    def read_secret(self, request):
         if not self._check_token(request):
             return
+
+        path = self._get_path(request)
 
         data = self._vault.get_kv_data(path)
         if data is not None:
@@ -81,15 +80,30 @@ class FakeVaultAPI(object):
         else:
             self._reply_error(request, 404, [])
 
-    @app.route('/v1/secret/data/<path>', methods=['POST', 'PUT'])
-    def create_update_secret(self, request, path):
+    @app.route('/v1/secret/data/', methods=['POST', 'PUT'], branch=True)
+    def create_update_secret(self, request):
         if not self._check_token(request):
             return
 
+        path = self._get_path(request)
         request_json = read_request_json(request)
+
+        if not self._check_cas(path, request_json):
+            self._reply_error(request, 400, [
+                'check-and-set parameter did not match the current version'])
+            return
+
         metadata = self._vault.set_kv_data(path, request_json['data'])
 
         self._reply(request, metadata)
+
+    def _get_path(self, request, prefix='/v1/secret/data/'):
+        # This is a workaround to get the full request path. Klein gives us
+        # only the next path segment as the extra parameter to routes when
+        # using variable paths, even if branch=True. Read the remaining path
+        # directly from the request
+        path = request.path.decode('ascii')
+        return path[len(prefix):]
 
     def _reply(self, request, data):
         request.setResponseCode(200)
@@ -111,3 +125,15 @@ class FakeVaultAPI(object):
             return False
 
         return True
+
+    def _check_cas(self, path, request_json):
+        cas = request_json.get('options', {}).get('cas')
+        if cas is None:
+            return True
+
+        existing_data = self._vault.get_kv_data(path)
+        if existing_data is None:
+            # cas = 0 means the data must not exist
+            return cas == 0
+
+        return existing_data['metadata']['version'] == cas

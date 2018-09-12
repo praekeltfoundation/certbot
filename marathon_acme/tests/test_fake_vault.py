@@ -1,6 +1,6 @@
 from testtools.assertions import assert_that
-from testtools.matchers import AfterPreprocessing as After
-from testtools.matchers import Equals, MatchesAll
+from testtools.matchers import (
+    AfterPreprocessing as After, Equals, Is, MatchesAll)
 from testtools.twistedsupport import succeeded
 
 from treq.content import json_content
@@ -99,6 +99,25 @@ class TestFakeVaultAPI(object):
             )))
         )))
 
+    def test_read_kv_nested(self):
+        """
+        When a request is made to read KV data for a nested path with data,
+        that data and its metadata is returned.
+        """
+        self.vault.set_kv_data('certificates/www.p16n.org', {'foo': 'bar'})
+
+        response = self.client.get(
+            'http://localhost/v1/secret/data/certificates/www.p16n.org',
+            headers={'X-Vault-Token': self.vault.token}
+        )
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(MatchesAll(
+                After(lambda d: d['data']['data'], Equals({'foo': 'bar'})),
+                After(lambda d: d['data']['metadata']['version'], Equals(1))
+            )))
+        )))
+
     def test_create_kv(self):
         """
         When a request is made to update KV data for a path without data, the
@@ -119,6 +138,73 @@ class TestFakeVaultAPI(object):
         data = self.vault.get_kv_data('my-secret')
         assert_that(data['data'], Equals({'foo': 'bar'}))
         assert_that(data['metadata']['version'], Equals(1))
+
+    def test_create_kv_nested(self):
+        """
+        When a request is made to update KV data for a nested path without
+        data, the data is stored and the metadata is returned.
+        """
+        response = self.client.put(
+            'http://localhost/v1/secret/data/certificates/www.p16n.org',
+            headers={'X-Vault-Token': self.vault.token},
+            json={'data': {'foo': 'baz'}}
+        )
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(
+                After(lambda d: d['data']['version'], Equals(1))
+            ))
+        )))
+
+        data = self.vault.get_kv_data('certificates/www.p16n.org')
+        assert_that(data['data'], Equals({'foo': 'baz'}))
+        assert_that(data['metadata']['version'], Equals(1))
+
+    def test_create_kv_with_cas(self):
+        """
+        When a request is made to update KV data for a path without data, and
+        the CAS option is sent and matches, the data is stored and the metadata
+        is returned.
+        """
+        response = self.client.put(
+            'http://localhost/v1/secret/data/my-secret',
+            headers={'X-Vault-Token': self.vault.token},
+            json={'data': {'foo': 'bar'}, 'options': {'cas': 0}}
+        )
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(
+                After(lambda d: d['data']['version'], Equals(1))
+            ))
+        )))
+
+        data = self.vault.get_kv_data('my-secret')
+        assert_that(data['data'], Equals({'foo': 'bar'}))
+        assert_that(data['metadata']['version'], Equals(1))
+
+    def test_create_kv_with_cas_mismatch(self):
+        """
+        When a request is made to update KV data for a path without data, and
+        the CAS option is sent but it does not match, the data is not stored
+        and an error is returned.
+        """
+        response = self.client.put(
+            'http://localhost/v1/secret/data/my-secret',
+            headers={'X-Vault-Token': self.vault.token},
+            json={'data': {'foo': 'bar'}, 'options': {'cas': 1}}
+        )
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(400),
+            After(json_content, succeeded(Equals(
+                {'errors': [
+                    'check-and-set parameter did not match the current version'
+                ]}
+            )))
+        )))
+
+        data = self.vault.get_kv_data('my-secret')
+        # No data set since CAS didn't match
+        assert_that(data, Is(None))
 
     def test_update_kv(self):
         """
@@ -142,3 +228,54 @@ class TestFakeVaultAPI(object):
         data = self.vault.get_kv_data('my-secret')
         assert_that(data['data'], Equals({'foo': 'baz'}))
         assert_that(data['metadata']['version'], Equals(2))
+
+    def test_update_kv_with_cas(self):
+        """
+        When a request is made to update KV data for a path with data, and the
+        CAS option is sent and matches, the data is stored and the new
+        metadata is returned with a new version.
+        """
+        self.vault.set_kv_data('my-secret', {'foo': 'bar'})
+
+        response = self.client.put(
+            'http://localhost/v1/secret/data/my-secret',
+            headers={'X-Vault-Token': self.vault.token},
+            json={'data': {'foo': 'baz'}, 'options': {'cas': 1}}
+        )
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(200),
+            After(json_content, succeeded(
+                After(lambda d: d['data']['version'], Equals(2))
+            ))
+        )))
+
+        data = self.vault.get_kv_data('my-secret')
+        assert_that(data['data'], Equals({'foo': 'baz'}))
+        assert_that(data['metadata']['version'], Equals(2))
+
+    def test_update_kv_with_cas_mismatch(self):
+        """
+        When a request is made to update KV data for a path with data, and the
+        CAS option is sent but it does not match, the data is not updated and
+        an error is returned.
+        """
+        self.vault.set_kv_data('my-secret', {'foo': 'bar'})
+
+        response = self.client.put(
+            'http://localhost/v1/secret/data/my-secret',
+            headers={'X-Vault-Token': self.vault.token},
+            json={'data': {'foo': 'baz'}, 'options': {'cas': 0}}
+        )
+        assert_that(response, succeeded(MatchesAll(
+            IsJsonResponseWithCode(400),
+            After(json_content, succeeded(Equals(
+                {'errors': [
+                    'check-and-set parameter did not match the current version'
+                ]}
+            )))
+        )))
+
+        data = self.vault.get_kv_data('my-secret')
+        # Data unchanged since CAS didn't match
+        assert_that(data['data'], Equals({'foo': 'bar'}))
+        assert_that(data['metadata']['version'], Equals(1))

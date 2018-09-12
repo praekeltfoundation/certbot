@@ -15,7 +15,7 @@ from twisted.web.server import NOT_DONE_YET
 from zope.interface import implementer
 
 from marathon_acme.clients.tests.matchers import HasRequestProperties
-from marathon_acme.clients.vault import VaultClient, VaultError
+from marathon_acme.clients.vault import CasError, VaultClient, VaultError
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import read_request_json
 from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
@@ -49,6 +49,12 @@ class TestVaultClient(object):
 
         self.client = VaultClient(
             'http://localhost:8200', self.token, client=self.stub_client)
+
+    def json_response(self, request, json_response, code=200):
+        request.setResponseCode(code)
+        write_request_json(request, json_response)
+        request.finish()
+        self.stub_client.flush()
 
     def test_read(self):
         """
@@ -85,10 +91,7 @@ class TestVaultClient(object):
         }
 
         request = request_d.result
-        request.setResponseCode(200)
-        write_request_json(request, dummy_response)
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, dummy_response)
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
@@ -127,10 +130,7 @@ class TestVaultClient(object):
         }
 
         request = request_d.result
-        request.setResponseCode(200)
-        write_request_json(request, dummy_response)
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, dummy_response)
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
@@ -148,10 +148,8 @@ class TestVaultClient(object):
         ))
 
         request = request_d.result
-        request.setResponseCode(403)
-        write_request_json(request, {'errors': ['permission denied']})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(
+            request, {'errors': ['permission denied']}, code=403)
 
         assert_that(d, failed(MatchesStructure(value=MatchesAll(
             IsInstance(VaultError),
@@ -193,10 +191,7 @@ class TestVaultClient(object):
         ))
 
         request = request_d.result
-        request.setResponseCode(404)
-        write_request_json(request, {'errors': []})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, {'errors': []}, code=404)
 
         assert_that(d, succeeded(Is(None)))
 
@@ -236,10 +231,7 @@ class TestVaultClient(object):
         }
 
         request = request_d.result
-        request.setResponseCode(200)
-        write_request_json(request, dummy_response)
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, dummy_response)
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
@@ -263,10 +255,7 @@ class TestVaultClient(object):
         # to completion or else the DelayedCall from the request timeout will
         # interfere with other tests.
         request = request_d.result
-        request.setResponseCode(404)
-        write_request_json(request, {'errors': []})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, {'errors': []}, code=404)
 
         assert_that(d, succeeded(Is(None)))
 
@@ -275,7 +264,7 @@ class TestVaultClient(object):
         When data is read from the key/value version 2 API, the response is
         returned.
         """
-        data = {'data': {'foo': 'world'}}
+        data = {'foo': 'world'}
         d = self.client.create_or_update_kv2('hello', data)
 
         request_d = self.requests.get()
@@ -307,10 +296,7 @@ class TestVaultClient(object):
         }
 
         request = request_d.result
-        request.setResponseCode(200)
-        write_request_json(request, dummy_response)
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, dummy_response)
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
@@ -320,7 +306,7 @@ class TestVaultClient(object):
         When data is read from the key/value version 2 API and a cas value is
         specified, the cas parameter is sent.
         """
-        data = {'data': {'foo': 'world'}}
+        data = {'foo': 'world'}
         d = self.client.create_or_update_kv2('hello', data, cas=1)
 
         request_d = self.requests.get()
@@ -338,9 +324,33 @@ class TestVaultClient(object):
         # to completion or else the DelayedCall from the request timeout will
         # interfere with other tests.
         request = request_d.result
-        request.setResponseCode(404)
-        write_request_json(request, {'errors': []})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, {'errors': []}, code=404)
 
         assert_that(d, succeeded(Is(None)))
+
+    def test_create_or_update_kv2_with_cas_mismatch(self):
+        """
+        When data is read from the key/value version 2 API and a cas value is
+        specified, but the server rejects the CAS value, the correct error
+        type should be raised.
+        """
+        data = {'foo': 'world'}
+        d = self.client.create_or_update_kv2('hello', data, cas=1)
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(MatchesAll(
+            After(read_request_json, Equals({
+                'data': data,
+                'options': {'cas': 1}
+            }))
+        )))
+
+        request = request_d.result
+        self.json_response(request, {'errors': [
+                'check-and-set parameter did not match the current version'
+            ]}, code=400)
+
+        assert_that(d, failed(WithErrorTypeAndMessage(
+            CasError,
+            'check-and-set parameter did not match the current version'
+        )))
