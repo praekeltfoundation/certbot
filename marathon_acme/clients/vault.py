@@ -2,7 +2,7 @@ import json
 
 from requests.exceptions import RequestException
 
-from twisted.web.http import NOT_FOUND
+from twisted.web.http import BAD_REQUEST, NOT_FOUND
 
 from marathon_acme.clients._base import HTTPClient, get_single_header
 
@@ -20,6 +20,10 @@ class VaultError(RequestException):
         self.errors = errors
 
         super(VaultError, self).__init__(message, response=response)
+
+
+class CasError(VaultError):
+    """Exception type to indicate a Check-And-Set mismatch error. """
 
 
 class VaultClient(HTTPClient):
@@ -41,13 +45,13 @@ class VaultClient(HTTPClient):
         return super(VaultClient, self).request(
             method, *args, path=path, headers=headers, **kwargs)
 
-    def _handle_response(self, response):
+    def _handle_response(self, response, check_cas=False):
         if 400 <= response.code < 600:
-            return self._handle_error(response)
+            return self._handle_error(response, check_cas)
 
         return response.json()
 
-    def _handle_error(self, response):
+    def _handle_error(self, response, check_cas):
         # Decode as utf-8. treq's text() method uses ISO-8859-1 which is
         # correct for random text over HTTP, but not for JSON. Cross fingers
         # that we don't receive anything non-utf-8.
@@ -56,6 +60,7 @@ class VaultClient(HTTPClient):
         def to_error(text):
             # This logic is inspired by hvac as well:
             # https://github.com/hvac/hvac/blob/v0.6.4/hvac/adapters.py#L227-L233
+            exc_type = VaultError
             errors = None
             if get_single_header(
                     response.headers, 'Content-Type') == 'application/json':
@@ -66,9 +71,17 @@ class VaultClient(HTTPClient):
             if response.code == NOT_FOUND and errors == []:
                 return None
 
+            # Special case for CAS mismatch errors: raise a CasError
+            # Unfortunately, Vault doesn't make it easy to differentiate
+            # between CAS errors and other errors so we have to check a few
+            # things.
+            if (check_cas and response.code == BAD_REQUEST and
+                    errors and 'check-and-set' in errors[0]):
+                exc_type = CasError
+
             # hvac returns more specific errors that are subclasses of its
-            # VaultError. For simplicity we just return one error type.
-            raise VaultError(text, errors=errors, response=response)
+            # VaultError. For simplicity we just return fewer error types.
+            raise exc_type(text, errors=errors, response=response)
 
         return d.addCallback(to_error)
 
@@ -84,7 +97,7 @@ class VaultClient(HTTPClient):
         Write data to Vault. Returns the JSON-decoded response.
         """
         d = self.request('PUT', '/v1/' + path, json=data)
-        return d.addCallback(self._handle_response)
+        return d.addCallback(self._handle_response, check_cas=True)
 
     def read_kv2(self, path, version=None, mount_path='secret'):
         """

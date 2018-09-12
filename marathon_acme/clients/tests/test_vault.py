@@ -15,7 +15,7 @@ from twisted.web.server import NOT_DONE_YET
 from zope.interface import implementer
 
 from marathon_acme.clients.tests.matchers import HasRequestProperties
-from marathon_acme.clients.vault import VaultClient, VaultError
+from marathon_acme.clients.vault import CasError, VaultClient, VaultError
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import read_request_json
 from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
@@ -344,3 +344,32 @@ class TestVaultClient(object):
         self.stub_client.flush()
 
         assert_that(d, succeeded(Is(None)))
+
+    def test_create_or_update_kv2_with_cas_mismatch(self):
+        """
+        When data is read from the key/value version 2 API and a cas value is
+        specified, but the server rejects the CAS value, the correct error
+        type should be raised.
+        """
+        data = {'foo': 'world'}
+        d = self.client.create_or_update_kv2('hello', data, cas=1)
+
+        request_d = self.requests.get()
+        assert_that(request_d, succeeded(MatchesAll(
+            After(read_request_json, Equals({
+                'data': data,
+                'options': {'cas': 1}
+            }))
+        )))
+
+        request = request_d.result
+        request.setResponseCode(400)
+        write_request_json(request, {'errors': [
+            'check-and-set parameter did not match the current version']})
+        request.finish()
+        self.stub_client.flush()
+
+        assert_that(d, failed(WithErrorTypeAndMessage(
+            CasError,
+            'check-and-set parameter did not match the current version'
+        )))
