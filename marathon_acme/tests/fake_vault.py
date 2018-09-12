@@ -86,8 +86,13 @@ class FakeVaultAPI(object):
             return
 
         path = self._get_path(request)
-
         request_json = read_request_json(request)
+
+        if not self._check_cas(path, request_json):
+            self._reply_error(request, 400, [
+                'check-and-set parameter did not match the current version'])
+            return
+
         metadata = self._vault.set_kv_data(path, request_json['data'])
 
         self._reply(request, metadata)
@@ -120,3 +125,15 @@ class FakeVaultAPI(object):
             return False
 
         return True
+
+    def _check_cas(self, path, request_json):
+        cas = request_json.get('options', {}).get('cas')
+        if cas is None:
+            return True
+
+        existing_data = self._vault.get_kv_data(path)
+        if existing_data is None:
+            # cas = 0 means the data must not exist
+            return cas == 0
+
+        return existing_data['metadata']['version'] == cas
