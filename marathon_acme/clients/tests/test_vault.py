@@ -275,7 +275,7 @@ class TestVaultClient(object):
         When data is read from the key/value version 2 API, the response is
         returned.
         """
-        data = {'data': {'foo': 'world'}}
+        data = {'foo': 'world'}
         d = self.client.create_or_update_kv2('hello', data)
 
         request_d = self.requests.get()
@@ -320,7 +320,7 @@ class TestVaultClient(object):
         When data is read from the key/value version 2 API and a cas value is
         specified, the cas parameter is sent.
         """
-        data = {'data': {'foo': 'world'}}
+        data = {'foo': 'world'}
         d = self.client.create_or_update_kv2('hello', data, cas=1)
 
         request_d = self.requests.get()
