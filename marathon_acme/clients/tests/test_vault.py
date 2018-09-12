@@ -50,6 +50,12 @@ class TestVaultClient(object):
         self.client = VaultClient(
             'http://localhost:8200', self.token, client=self.stub_client)
 
+    def json_response(self, request, json_response, code=200):
+        request.setResponseCode(code)
+        write_request_json(request, json_response)
+        request.finish()
+        self.stub_client.flush()
+
     def test_read(self):
         """
         When data is read, a GET request is made and the data in the response
@@ -85,10 +91,7 @@ class TestVaultClient(object):
         }
 
         request = request_d.result
-        request.setResponseCode(200)
-        write_request_json(request, dummy_response)
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, dummy_response)
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
@@ -127,10 +130,7 @@ class TestVaultClient(object):
         }
 
         request = request_d.result
-        request.setResponseCode(200)
-        write_request_json(request, dummy_response)
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, dummy_response)
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
@@ -148,10 +148,8 @@ class TestVaultClient(object):
         ))
 
         request = request_d.result
-        request.setResponseCode(403)
-        write_request_json(request, {'errors': ['permission denied']})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(
+            request, {'errors': ['permission denied']}, code=403)
 
         assert_that(d, failed(MatchesStructure(value=MatchesAll(
             IsInstance(VaultError),
@@ -193,10 +191,7 @@ class TestVaultClient(object):
         ))
 
         request = request_d.result
-        request.setResponseCode(404)
-        write_request_json(request, {'errors': []})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, {'errors': []}, code=404)
 
         assert_that(d, succeeded(Is(None)))
 
@@ -236,10 +231,7 @@ class TestVaultClient(object):
         }
 
         request = request_d.result
-        request.setResponseCode(200)
-        write_request_json(request, dummy_response)
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, dummy_response)
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
@@ -263,10 +255,7 @@ class TestVaultClient(object):
         # to completion or else the DelayedCall from the request timeout will
         # interfere with other tests.
         request = request_d.result
-        request.setResponseCode(404)
-        write_request_json(request, {'errors': []})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, {'errors': []}, code=404)
 
         assert_that(d, succeeded(Is(None)))
 
@@ -307,10 +296,7 @@ class TestVaultClient(object):
         }
 
         request = request_d.result
-        request.setResponseCode(200)
-        write_request_json(request, dummy_response)
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, dummy_response)
 
         # Response should be returned
         assert_that(d, succeeded(Equals(dummy_response)))
@@ -338,10 +324,7 @@ class TestVaultClient(object):
         # to completion or else the DelayedCall from the request timeout will
         # interfere with other tests.
         request = request_d.result
-        request.setResponseCode(404)
-        write_request_json(request, {'errors': []})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, {'errors': []}, code=404)
 
         assert_that(d, succeeded(Is(None)))
 
@@ -363,11 +346,9 @@ class TestVaultClient(object):
         )))
 
         request = request_d.result
-        request.setResponseCode(400)
-        write_request_json(request, {'errors': [
-            'check-and-set parameter did not match the current version']})
-        request.finish()
-        self.stub_client.flush()
+        self.json_response(request, {'errors': [
+                'check-and-set parameter did not match the current version'
+            ]}, code=400)
 
         assert_that(d, failed(WithErrorTypeAndMessage(
             CasError,
