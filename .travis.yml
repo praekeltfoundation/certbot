@@ -24,10 +24,8 @@ matrix:
       env: TOXENV=py37
       dist: xenial
       sudo: required
-    - python: '2.7'
-      env: TOXENV=pep8
     - python: '3.6'
-      env: TOXENV=py3pep8
+      env: TOXENV=lint
     # Docker dev image
     - sudo: required
       services: docker
@@ -68,7 +66,7 @@ script:
   - tox
 
 after_success:
-  - case $TOXENV in py27|py34|py35|py36|py37) codecov;; esac
+  - if [[ "$TOXENV" =~ py* ]]; then codecov; fi
 
 deploy:
   provider: pypi

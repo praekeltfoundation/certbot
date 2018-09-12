@@ -59,7 +59,7 @@ setup(
             'testtools',
             'txfake >= 0.1.1',
         ],
-        'pep8test': [
+        'lint': [
             'flake8',
             'flake8-import-order',
         ],
