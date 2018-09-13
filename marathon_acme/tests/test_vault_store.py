@@ -1,138 +1,74 @@
+import binascii
 import json
+import os
 
 import pem
 
+import pytest
+
 from testtools.assertions import assert_that
-from testtools.matchers import Equals, IsInstance
+from testtools.matchers import (
+    AfterPreprocessing as After, Equals, IsInstance, MatchesDict)
 from testtools.twistedsupport import failed, succeeded
 
 from marathon_acme.clients import VaultClient
 from marathon_acme.tests.fake_vault import FakeVault, FakeVaultAPI
 from marathon_acme.tests.matchers import WithErrorTypeAndMessage
-from marathon_acme.vault_store import (
-    VaultKvCertificateStore, from_pem_objects, to_pem_objects)
+from marathon_acme.vault_store import VaultKvCertificateStore
 
 
-# TODO: Put these certs in their own files
-TEST_KEY = """-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEA6+vi8A5o9OuYN7ScRnfxqsGRK182AqU7IVw+CRypy6BfhoII
-90pEuJtll7hgwcprsUuNWRhrJYQoXQWhmJbpTGZ6DaAlcOgWQZvwCtSH01vsvK/v
-lSDM2ug+M3J1UmLpn8UDjJTsCyXkvmyNE2ENAUxFrrBXxJas1iYrd36KuotYrwoJ
-L4reVohTWjhrlCGMTdaTYhaUOjgyAoWctTcWtWMofORJs/1mGoiQ1CavZhyyASAQ
-1+BzHPX43Y9HM9GjSQLhpiMkfFbLWhhpyFnrfoQbmGQyDbE2PKB9d/jnNcwpoUeh
-2SNxe+AkkkpKnvUhdZyXlpdiBNpCUl6LP2q96QIDAQABAoIBAFeMMarjrg81XkdN
-vrBn0kaLjlOKAYD5z/eRQ3QeLuRhnxFLMAiUhuv6vriOs1k2xMAGSW3GofxKDrB2
-ZoE5f1narXBg/YPonFm8hFeAhuboNfHPWBj/EwYpKOvujZsFGa0wbyC8ItwAM+J2
-ZePLIAhbRYCN8AQD5h+SCo9NZi3S0aqxnwM3OeqU/hofFq3LUKHIL7k11lPK8Wi2
-c1wWw3A3Fr9CmDfFvbQjo9yy6VBye/b8NVerQMfH7HCyQUKQyRZ6SBqzl7GufQMF
-fG0yM/IrGcJow8ItGl2HCgI1IJ2dmqZ8ScurRKLKEb8pEFEC1TI42Z5bG7JTvQaE
-0XbqgAECgYEA+a1kXM7YHsege0m9aEcOEeQjuaKmRN6HD0WEdYPZsMjoNUaYlCq2
-XrFJH9znblActdCy04VMnoS8qiOePd9eCbG1E7V04TQnvcc+6XpuJkDzgQO9acKt
-BlTF5tYER1ai1PjdVzKwlUGZXWUAlh7uAri1cLbkjaWUJk6GjDACK3ECgYEA8eVR
-XFOqBUP4QgKzFrPKvKIG4HhOdlSa2W/I8RpaXx0LC5D58jokG6+iOF9trNcOAHfr
-bPHlwzcfKGdt0NusERfxMBPB8V+ymoaybu3EWRFy1g88Rn5gLnJH+5aDFDjHuldU
-5i/+0KCFjSSVqyGCrQAfnd8kvqw/jD5vUqRVzfkCgYEAw3A6s3smKVHSCS+7l7in
-BtIyNMlgpWAbEJU2DlbbPErHmYxdOv4EKzNTLiHY9ry2/IsUsAYT57G3jOa8o2oJ
-TkVQnNDZYL9WrHMeh9xSBJerBD5NMlA06FPLZdn5F251n4f+mpcPKoZi6nx5bQlg
-/bhgLo67cTU/No0ZPPsHd8ECgYBvF1PgRQQmWure1gKNgJCxRPBHkrjmG0Dqby4n
-nGS4ncv+ydwgZJdEp8qmfR0PbcyeZnSWmhldKCmFEssaSmihiQ9Zdxlw0vRhh07X
-JxcvmJXWvTR/Y3aknhN09dDJLrJ7X7Q76vrpsW7kPVMHPuKWtSHQDTUA5HZi4CGc
-IKDPcQKBgQCO4ul0i5JPFVsvuAOAFGWm3uVTCRRKI5NSBK2LLS5hFycASQrRR1Z/
-KpDNUDLEsF7n8iMG0npvKunVL9TKixfjRqbXYIn1U3KnCJv0g+GoN067xWUqCwRX
-VIK/oO/fvHNH7P/HLuKrgdeYenvNhDKKRFy9OKgAF2ZN03nEXohSSw==
------END RSA PRIVATE KEY-----"""
-
-TEST_CERT = """-----BEGIN CERTIFICATE-----
-MIIEMzCCAxugAwIBAgIUUmeTbND119hQ/XSC5NZ7TEuk91wwDQYJKoZIhvcNAQEL
-BQAwfjELMAkGA1UEBhMCWkExCzAJBgNVBAgTAkdQMRUwEwYDVQQHEwxKb2hhbm5l
-c2J1cmcxGTAXBgNVBAoTEGs4cy10aGUtaGFyZC13YXkxHjAcBgNVBAsTFUNlcnRp
-ZmljYXRlIEF1dGhvcml0eTEQMA4GA1UEAxMHUm9vdCBDQTAeFw0xODA0MDExNzEz
-MDBaFw0xODA0MDgxNzEzMDBaMGAxCzAJBgNVBAYTAlpBMQswCQYDVQQIEwJHUDEV
-MBMGA1UEBxMMSm9oYW5uZXNidXJnMRkwFwYDVQQKExBrOHMtdGhlLWhhcmQtd2F5
-MRIwEAYDVQQDEwlldGNkLXBlZXIwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
-AoIBAQDr6+LwDmj065g3tJxGd/GqwZErXzYCpTshXD4JHKnLoF+Gggj3SkS4m2WX
-uGDBymuxS41ZGGslhChdBaGYlulMZnoNoCVw6BZBm/AK1IfTW+y8r++VIMza6D4z
-cnVSYumfxQOMlOwLJeS+bI0TYQ0BTEWusFfElqzWJit3foq6i1ivCgkvit5WiFNa
-OGuUIYxN1pNiFpQ6ODIChZy1Nxa1Yyh85Emz/WYaiJDUJq9mHLIBIBDX4HMc9fjd
-j0cz0aNJAuGmIyR8VstaGGnIWet+hBuYZDINsTY8oH13+Oc1zCmhR6HZI3F74CSS
-Skqe9SF1nJeWl2IE2kJSXos/ar3pAgMBAAGjgcYwgcMwDgYDVR0PAQH/BAQDAgWg
-MB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8EAjAAMB0G
-A1UdDgQWBBTpwxt6C6wnKK+pNiEKXSjfLzpd3zAfBgNVHSMEGDAWgBQDt8vdvkbW
-2A02trK2n2FIQDa9QDBEBgNVHREEPTA7ggxjb250cm9sbGVyLTCCH2NvbnRyb2xs
-ZXItMC5rOHMuamFtaWUuY29tcHV0ZXKHBKdjgXOHBAqHSRkwDQYJKoZIhvcNAQEL
-BQADggEBAHnCF6ITWYSvERkIaW9dU7kV9ebvRgZ6Zn2d0jKDhYrjMBb8ozmgvsVP
-w1JkI6Z/ve3N/NzJrKKTseb/JWR7SdLFgjez8L0bH8ylIXps97kYH05l8oKQNBjv
-u6A1Y78U3F6CVYNAzNABTipolWOVCxPIuUI4IMPxlKbnYk8edbkiXC+i9Ls05agV
-n7cpq4SZxNwvRZx+jFc4346dVBXjZrwhlMcgF917m1a+r75kIIWuggptrVyVY+/1
-axT0MX8gyGefQta0t/988otZtR19V3iC9oGHzWpBRisfBvdYBFgenPJFGi28lkU6
-ry2+Fp9RCYPTfNrLYt2zNLP/2bJN/zY=
------END CERTIFICATE-----"""
-
-TEST_CA_CERT = """-----BEGIN CERTIFICATE-----
-MIIDzDCCArSgAwIBAgIUQFogPHX+7gr9e6ERzmo8WO5Q8SAwDQYJKoZIhvcNAQEL
-BQAwfjELMAkGA1UEBhMCWkExCzAJBgNVBAgTAkdQMRUwEwYDVQQHEwxKb2hhbm5l
-c2J1cmcxGTAXBgNVBAoTEGs4cy10aGUtaGFyZC13YXkxHjAcBgNVBAsTFUNlcnRp
-ZmljYXRlIEF1dGhvcml0eTEQMA4GA1UEAxMHUm9vdCBDQTAeFw0xODAzMjExODQy
-MDBaFw0yMzAzMjAxODQyMDBaMH4xCzAJBgNVBAYTAlpBMQswCQYDVQQIEwJHUDEV
-MBMGA1UEBxMMSm9oYW5uZXNidXJnMRkwFwYDVQQKExBrOHMtdGhlLWhhcmQtd2F5
-MR4wHAYDVQQLExVDZXJ0aWZpY2F0ZSBBdXRob3JpdHkxEDAOBgNVBAMTB1Jvb3Qg
-Q0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDLv+2Las4F06042fCr
-JGcE2N8KPkKGCOk8DuOX06EI+O53VlmXWj+RnRhejt9ifGwjZA/XGKSF4RxL6Duh
-lonbDDBpR2ImmuNMw9RuF7gcXzhIUZEOPgBOyhaUzEC1H2JslKuWpdmSlfvU650H
-5ThOBQBLtr4abF8qA352oKlxWPxCKOMhx+Tqw/0HHZkdrD2zkIO1OeoHc+Mv3CvB
-B778OkeDUASCB8zRGiyl/ATxCMOM58QZRXjQFgcwFqkzdrISaRqRqC+aDcBQtWrv
-HuK/w6RsyO7lMuFybkQfJXnrfEAuBfGwlslURf+kpFuiuOKUewG2fBDaBwvJ85Eo
-P3l3AgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0G
-A1UdDgQWBBQDt8vdvkbW2A02trK2n2FIQDa9QDANBgkqhkiG9w0BAQsFAAOCAQEA
-sTbcKu2x1I4b6hkaLUj32C5Ze6IVpA5NKtm4zBj1dDcFw3jygZ4qFijtMNN96nA7
-cbK58az2a091wVoMM2RidH/OCpW7/ucNSCpmmqsQSejDsPcIxXMWWDvkEp4tsCnz
-w5Zln+v+dClTl0lRjtFKIxUe2HHKaAhd58FD5/AxQrZv9GihtbJtr+kE/KJMPh2b
-PWBSJSgCCxYGVg+JJOgCv92ncKpbH6ARMvvrH5HFTaCI5Oo/etLe2F3CAH+fCTnj
-L7aglSEDZuTHQG0XYjICwPhEdj0NMS0NSYyFWkUb/1AjDNr0zfeNDUl6QXqZH20W
-dKQSIS96RIVMceGYUsP1gg==
------END CERTIFICATE-----"""
-
-TEST_CERT_CHAIN = '\n'.join([TEST_CERT, TEST_CA_CERT])
-
-TEST_PEM_OBJECTS = (pem.parse(TEST_KEY.encode('utf-8'))
-                    + pem.parse(TEST_CERT_CHAIN.encode('utf-8')))
-
-# TODO: Use a less random certificate set for this
-TEST_FINGERPRINT = (
-    '7853a0cefc0aae2cec6f35db712507c911292352a694d3363ded90476d091d40')
-TEST_DNS_NAMES = ['controller-0', 'controller-0.k8s.jamie.computer']
+FIXTURES = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fixtures')
+BUNDLE1_FILENAME = 'marathon-acme.example.org.pem'
+BUNDLE1_FINGERPRINT = (
+    'BA09FBE7D87BF98800F3EA73F8A47271104C5036140E267ECF4BCA64DF6EE2A2')
+BUNDLE1_DNS_NAMES = ['marathon-acme.example.org']
+BUNDLE2_FILENAME = 'mc2.example.org.pem'
+BUNDLE2_FINGERPRINT = (
+    'C2220107708F22E74CAB2A168DFC6082D44B8DCD33EDB01659C605D4F5FE9519')
+BUNDLE2_DNS_NAMES = ['mc2.example.org']
 
 
-def dummy_live_value(version):
-    return json.dumps({
-        'version': version,
-        'fingerprint': TEST_FINGERPRINT,
-        'dns_names': TEST_DNS_NAMES
-    })
+def bundle_pem_objects(filename):
+    with open(os.path.join(FIXTURES, filename), 'rb') as bundle:
+        return pem.parse(bundle.read())
 
 
-def test_to_pem_object():
-    pem_objects = to_pem_objects({
-        'data': {
-            'data': {
-                'domains': "doesn't matter",
-                'key': TEST_KEY,
-                'cert_chain': TEST_CERT_CHAIN
-            }
-        }
-    })
-
-    assert pem_objects == TEST_PEM_OBJECTS
+def key_text(pem_objects):
+    keys = filter(lambda p: isinstance(p, pem.Key), pem_objects)
+    [key] = list(keys)
+    return key.as_text()
 
 
-def test_from_pem_objects():
-    data = from_pem_objects('www.p16n.org', TEST_PEM_OBJECTS)
+def cert_chain_text(pem_objects):
+    certs = filter(lambda p: isinstance(p, pem.Certificate), pem_objects)
+    return ''.join([p.as_text() for p in certs])
 
-    assert data == {
-        'domains': 'www.p16n.org',
-        'key': TEST_KEY,
-        'cert_chain': TEST_CERT_CHAIN
-    }
+
+@pytest.fixture(scope='module')
+def bundle1():
+    return bundle_pem_objects(BUNDLE1_FILENAME)
+
+
+@pytest.fixture(scope='module')
+def bundle2():
+    return bundle_pem_objects(BUNDLE2_FILENAME)
+
+
+def hex_str_to_bytes(hex_str):
+    return binascii.unhexlify(hex_str.encode('utf-8'))
+
+
+def EqualsFingerprint(fingerprint):
+    # Account for uppercase/lowercase and do a bytes-wise comparison
+    return After(hex_str_to_bytes, Equals(hex_str_to_bytes(fingerprint)))
+
+
+def EqualsLiveValue(version, fingerprint, dns_names):
+    return After(json.loads, MatchesDict({
+        'version': Equals(version),
+        'fingerprint': EqualsFingerprint(BUNDLE1_FINGERPRINT),
+        'dns_names': Equals(BUNDLE1_DNS_NAMES)
+    }))
 
 
 class TestVaultKvCertificateStore(object):
@@ -146,19 +82,19 @@ class TestVaultKvCertificateStore(object):
 
         self.store = VaultKvCertificateStore(vault_client, 'secret')
 
-    def test_get(self):
+    def test_get(self, bundle1):
         """
         When a certificate is fetched from the store and it exists, the
         certificate is returned as a list of PEM objects.
         """
-        self.vault.set_kv_data('certificates/www.p16n.org', {
-            'domains': 'www.p16n.org',
-            'key': TEST_KEY,
-            'cert_chain': TEST_CERT_CHAIN
+        self.vault.set_kv_data('certificates/marathon-acme.example.org', {
+            'domains': 'marathon-acme.example.org',
+            'key': key_text(bundle1),
+            'cert_chain': cert_chain_text(bundle1)
         })
 
-        d = self.store.get('www.p16n.org')
-        assert_that(d, succeeded(Equals(TEST_PEM_OBJECTS)))
+        d = self.store.get('marathon-acme.example.org')
+        assert_that(d, succeeded(Equals(bundle1)))
 
     def test_get_not_exists(self):
         """
@@ -170,63 +106,68 @@ class TestVaultKvCertificateStore(object):
             KeyError, repr('www.p16n.org')
         )))
 
-    def test_store_create_live(self):
+    def test_store_create_live(self, bundle1):
         """
         When a certificate is stored in the store, the certificate is saved and
         the live data is created when it does not exist.
         """
-        d = self.store.store('www.p16n.org', TEST_PEM_OBJECTS)
+        d = self.store.store('marathon-acme.example.org', bundle1)
         # We return the final kv write response from Vault, but txacme doesn't
         # care what the result of the deferred is
         assert_that(d, succeeded(IsInstance(dict)))
 
-        cert_data = self.vault.get_kv_data('certificates/www.p16n.org')
+        cert_data = self.vault.get_kv_data(
+            'certificates/marathon-acme.example.org')
         assert cert_data['data'] == {
-            'domains': 'www.p16n.org',
-            'key': TEST_KEY,
-            'cert_chain': TEST_CERT_CHAIN
+            'domains': 'marathon-acme.example.org',
+            'key': key_text(bundle1),
+            'cert_chain': cert_chain_text(bundle1)
         }
 
         live_data = self.vault.get_kv_data('live')
-        assert live_data['data'] == {
-            'www.p16n.org': dummy_live_value(cert_data['metadata']['version'])
-        }
+        assert_that(live_data['data'], MatchesDict({
+            'marathon-acme.example.org': EqualsLiveValue(
+                cert_data['metadata']['version'], BUNDLE1_FINGERPRINT,
+                BUNDLE1_DNS_NAMES)
+        }))
         assert live_data['metadata']['version'] == 1
 
-    def test_store_update_live(self):
+    def test_store_update_live(self, bundle1):
         """
         When a certificate is stored in the store, the certificate is saved and
         the live data is updated when it does exist.
         """
         self.vault.set_kv_data('live', {'p16n.org': 'dummy_data'})
 
-        d = self.store.store('www.p16n.org', TEST_PEM_OBJECTS)
+        d = self.store.store('www.p16n.org', bundle1)
         # We return the final kv write response from Vault, but txacme doesn't
         # care what the result of the deferred is
         assert_that(d, succeeded(IsInstance(dict)))
 
         cert_data = self.vault.get_kv_data('certificates/www.p16n.org')
         live_data = self.vault.get_kv_data('live')
-        assert live_data['data'] == {
-            'p16n.org': 'dummy_data',
-            'www.p16n.org': dummy_live_value(cert_data['metadata']['version'])
-        }
+        assert_that(live_data['data'], MatchesDict({
+            'p16n.org': Equals('dummy_data'),
+            'www.p16n.org': EqualsLiveValue(cert_data['metadata']['version'],
+                                            BUNDLE1_FINGERPRINT,
+                                            BUNDLE1_DNS_NAMES)
+        }))
         assert live_data['metadata']['version'] == 2
 
-    def test_as_dict(self):
+    def test_as_dict(self, bundle1):
         """
         When the certificates are fetched as a dict, all certificates are
         returned in a dict.
         """
         self.vault.set_kv_data('certificates/www.p16n.org', {
             'domains': 'www.p16n.org',
-            'key': TEST_KEY,
-            'cert_chain': TEST_CERT_CHAIN
+            'key': key_text(bundle1),
+            'cert_chain': cert_chain_text(bundle1)
         })
         self.vault.set_kv_data('live', {'www.p16n.org': 'FINGERPRINT'})
 
         d = self.store.as_dict()
-        assert_that(d, succeeded(Equals({'www.p16n.org': TEST_PEM_OBJECTS})))
+        assert_that(d, succeeded(Equals({'www.p16n.org': bundle1})))
 
     def test_as_dict_empty(self):
         """
