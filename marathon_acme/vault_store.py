@@ -28,6 +28,7 @@ def to_pem_objects(kv2_response):
     return key + cert_chain
 
 
+# TODO: Read domains from certificates
 def from_pem_objects(server_name, pem_objects):
     """
     Given a server name and list of PEM objects, create the key/value data that

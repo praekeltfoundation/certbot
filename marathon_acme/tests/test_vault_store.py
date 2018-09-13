@@ -87,13 +87,13 @@ class TestVaultKvCertificateStore(object):
         When a certificate is fetched from the store and it exists, the
         certificate is returned as a list of PEM objects.
         """
-        self.vault.set_kv_data('certificates/marathon-acme.example.org', {
+        self.vault.set_kv_data('certificates/bundle1', {
             'domains': 'marathon-acme.example.org',
             'key': key_text(bundle1),
             'cert_chain': cert_chain_text(bundle1)
         })
 
-        d = self.store.get('marathon-acme.example.org')
+        d = self.store.get('bundle1')
         assert_that(d, succeeded(Equals(bundle1)))
 
     def test_get_not_exists(self):
@@ -111,24 +111,22 @@ class TestVaultKvCertificateStore(object):
         When a certificate is stored in the store, the certificate is saved and
         the live data is created when it does not exist.
         """
-        d = self.store.store('marathon-acme.example.org', bundle1)
+        d = self.store.store('bundle1', bundle1)
         # We return the final kv write response from Vault, but txacme doesn't
         # care what the result of the deferred is
         assert_that(d, succeeded(IsInstance(dict)))
 
-        cert_data = self.vault.get_kv_data(
-            'certificates/marathon-acme.example.org')
+        cert_data = self.vault.get_kv_data('certificates/bundle1')
         assert cert_data['data'] == {
-            'domains': 'marathon-acme.example.org',
+            'domains': 'bundle1',
             'key': key_text(bundle1),
             'cert_chain': cert_chain_text(bundle1)
         }
 
         live_data = self.vault.get_kv_data('live')
         assert_that(live_data['data'], MatchesDict({
-            'marathon-acme.example.org': EqualsLiveValue(
-                cert_data['metadata']['version'], BUNDLE1_FINGERPRINT,
-                BUNDLE1_DNS_NAMES)
+            'bundle1': EqualsLiveValue(cert_data['metadata']['version'],
+                                       BUNDLE1_FINGERPRINT, BUNDLE1_DNS_NAMES)
         }))
         assert live_data['metadata']['version'] == 1
 
@@ -139,18 +137,17 @@ class TestVaultKvCertificateStore(object):
         """
         self.vault.set_kv_data('live', {'p16n.org': 'dummy_data'})
 
-        d = self.store.store('www.p16n.org', bundle1)
+        d = self.store.store('bundle1', bundle1)
         # We return the final kv write response from Vault, but txacme doesn't
         # care what the result of the deferred is
         assert_that(d, succeeded(IsInstance(dict)))
 
-        cert_data = self.vault.get_kv_data('certificates/www.p16n.org')
+        cert_data = self.vault.get_kv_data('certificates/bundle1')
         live_data = self.vault.get_kv_data('live')
         assert_that(live_data['data'], MatchesDict({
             'p16n.org': Equals('dummy_data'),
-            'www.p16n.org': EqualsLiveValue(cert_data['metadata']['version'],
-                                            BUNDLE1_FINGERPRINT,
-                                            BUNDLE1_DNS_NAMES)
+            'bundle1': EqualsLiveValue(cert_data['metadata']['version'],
+                                       BUNDLE1_FINGERPRINT, BUNDLE1_DNS_NAMES)
         }))
         assert live_data['metadata']['version'] == 2
 
@@ -159,15 +156,15 @@ class TestVaultKvCertificateStore(object):
         When the certificates are fetched as a dict, all certificates are
         returned in a dict.
         """
-        self.vault.set_kv_data('certificates/www.p16n.org', {
-            'domains': 'www.p16n.org',
+        self.vault.set_kv_data('certificates/bundle1', {
+            'domains': 'marathon-acme.example.org',
             'key': key_text(bundle1),
             'cert_chain': cert_chain_text(bundle1)
         })
-        self.vault.set_kv_data('live', {'www.p16n.org': 'FINGERPRINT'})
+        self.vault.set_kv_data('live', {'bundle1': 'FINGERPRINT'})
 
         d = self.store.as_dict()
-        assert_that(d, succeeded(Equals({'www.p16n.org': bundle1})))
+        assert_that(d, succeeded(Equals({'bundle1': bundle1})))
 
     def test_as_dict_empty(self):
         """
