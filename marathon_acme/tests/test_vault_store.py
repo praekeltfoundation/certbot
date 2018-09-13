@@ -1,3 +1,5 @@
+import json
+
 import pem
 
 from testtools.assertions import assert_that
@@ -11,6 +13,7 @@ from marathon_acme.vault_store import (
     VaultKvCertificateStore, from_pem_objects, to_pem_objects)
 
 
+# TODO: Put these certs in their own files
 TEST_KEY = """-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEA6+vi8A5o9OuYN7ScRnfxqsGRK182AqU7IVw+CRypy6BfhoII
 90pEuJtll7hgwcprsUuNWRhrJYQoXQWhmJbpTGZ6DaAlcOgWQZvwCtSH01vsvK/v
@@ -94,6 +97,19 @@ TEST_CERT_CHAIN = '\n'.join([TEST_CERT, TEST_CA_CERT])
 TEST_PEM_OBJECTS = (pem.parse(TEST_KEY.encode('utf-8'))
                     + pem.parse(TEST_CERT_CHAIN.encode('utf-8')))
 
+# TODO: Use a less random certificate set for this
+TEST_FINGERPRINT = (
+    '7853a0cefc0aae2cec6f35db712507c911292352a694d3363ded90476d091d40')
+TEST_DNS_NAMES = ['controller-0', 'controller-0.k8s.jamie.computer']
+
+
+def dummy_live_value(version):
+    return json.dumps({
+        'version': version,
+        'fingerprint': TEST_FINGERPRINT,
+        'dns_names': TEST_DNS_NAMES
+    })
+
 
 def test_to_pem_object():
     pem_objects = to_pem_objects({
@@ -170,10 +186,11 @@ class TestVaultKvCertificateStore(object):
             'key': TEST_KEY,
             'cert_chain': TEST_CERT_CHAIN
         }
-        assert cert_data['metadata']['version'] == 1
 
         live_data = self.vault.get_kv_data('live')
-        assert live_data['data'] == {'www.p16n.org': 'FINGERPRINT'}
+        assert live_data['data'] == {
+            'www.p16n.org': dummy_live_value(cert_data['metadata']['version'])
+        }
         assert live_data['metadata']['version'] == 1
 
     def test_store_update_live(self):
@@ -181,17 +198,18 @@ class TestVaultKvCertificateStore(object):
         When a certificate is stored in the store, the certificate is saved and
         the live data is updated when it does exist.
         """
-        self.vault.set_kv_data('live', {'p16n.org': 'FINGERPRINT'})
+        self.vault.set_kv_data('live', {'p16n.org': 'dummy_data'})
 
         d = self.store.store('www.p16n.org', TEST_PEM_OBJECTS)
         # We return the final kv write response from Vault, but txacme doesn't
         # care what the result of the deferred is
         assert_that(d, succeeded(IsInstance(dict)))
 
+        cert_data = self.vault.get_kv_data('certificates/www.p16n.org')
         live_data = self.vault.get_kv_data('live')
         assert live_data['data'] == {
-            'p16n.org': 'FINGERPRINT',
-            'www.p16n.org': 'FINGERPRINT'
+            'p16n.org': 'dummy_data',
+            'www.p16n.org': dummy_live_value(cert_data['metadata']['version'])
         }
         assert live_data['metadata']['version'] == 2
 
