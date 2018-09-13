@@ -74,9 +74,9 @@ def EqualsLiveValue(version, fingerprint, dns_names):
 class TestVaultKvCertificateStore(object):
     def setup_method(self):
         self.vault = FakeVault()
-        vault_api = FakeVaultAPI(self.vault)
+        self.vault_api = FakeVaultAPI(self.vault)
 
-        self.client = vault_api.client
+        self.client = self.vault_api.client
         vault_client = VaultClient(
             'http://localhost:8200', self.vault.token, client=self.client)
 
@@ -141,6 +141,43 @@ class TestVaultKvCertificateStore(object):
         # We return the final kv write response from Vault, but txacme doesn't
         # care what the result of the deferred is
         assert_that(d, succeeded(IsInstance(dict)))
+
+        cert_data = self.vault.get_kv_data('certificates/bundle1')
+        live_data = self.vault.get_kv_data('live')
+        assert_that(live_data['data'], MatchesDict({
+            'p16n.org': Equals('dummy_data'),
+            'bundle1': EqualsLiveValue(cert_data['metadata']['version'],
+                                       BUNDLE1_FINGERPRINT, BUNDLE1_DNS_NAMES)
+        }))
+        assert live_data['metadata']['version'] == 2
+
+    def test_store_update_live_cas_retry(self, bundle1):
+        """
+        When a certificate is stored in the store, and the live map is updated
+        between the read and the write of the live mapping, the live map
+        update is attempted again.
+        """
+        writes = [0]
+        def pre_create_update():
+            # The first write to Vault should be storing the certificate. We
+            # want to intercept the write to the live mapping, which should be
+            # the second write.
+            if writes == [1]:
+                self.vault.set_kv_data('live', {'p16n.org': 'dummy_data'})
+            writes[0] += 1
+
+        self.vault_api.set_pre_create_update(pre_create_update)
+
+        d = self.store.store('bundle1', bundle1)
+        # We return the final kv write response from Vault, but txacme doesn't
+        # care what the result of the deferred is
+        assert_that(d, succeeded(IsInstance(dict)))
+
+        # There should've been 3 writes:
+        # 1. Storing the certificate
+        # 2. The first attempt at updating the live mapping (CAS mismatch)
+        # 3. The second attempt at updating the live mapping (success)
+        assert_that(writes, Equals([3]))
 
         cert_data = self.vault.get_kv_data('certificates/bundle1')
         live_data = self.vault.get_kv_data('live')

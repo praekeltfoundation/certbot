@@ -67,6 +67,16 @@ class FakeVaultAPI(object):
         self._vault = vault
         self.client = StubTreq(self.app.resource())
 
+        self._pre_create_update = None
+
+    def set_pre_create_update(self, cb):
+        """
+        Set a 0-args callback that will be called before any create or update
+        request is processed in any way. This is useful for intercepting writes
+        to simulate concurrent access to Vault.
+        """
+        self._pre_create_update = cb
+
     @app.route('/v1/secret/data/', methods=['GET'], branch=True)
     def read_secret(self, request):
         if not self._check_token(request):
@@ -82,6 +92,9 @@ class FakeVaultAPI(object):
 
     @app.route('/v1/secret/data/', methods=['POST', 'PUT'], branch=True)
     def create_update_secret(self, request):
+        if self._pre_create_update is not None:
+            self._pre_create_update()
+
         if not self._check_token(request):
             return
 

@@ -130,7 +130,7 @@ class VaultKvCertificateStore(object):
         # mismatch, try again from scratch
         def retry_on_cas_error(failure):
             failure.trap(CasError)
-            self._update_live(new_live_value, server_name)
+            return self._update_live(new_live_value, server_name)
 
         def update(read_response):
             # Get the live mapping data and its version
