@@ -158,6 +158,7 @@ class TestVaultKvCertificateStore(object):
         update is attempted again.
         """
         writes = [0]
+
         def pre_create_update():
             # The first write to Vault should be storing the certificate. We
             # want to intercept the write to the live mapping, which should be
