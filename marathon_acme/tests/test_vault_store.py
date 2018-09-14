@@ -66,8 +66,8 @@ def EqualsFingerprint(fingerprint):
 def EqualsLiveValue(version, fingerprint, dns_names):
     return After(json.loads, MatchesDict({
         'version': Equals(version),
-        'fingerprint': EqualsFingerprint(BUNDLE1_FINGERPRINT),
-        'dns_names': Equals(BUNDLE1_DNS_NAMES)
+        'fingerprint': EqualsFingerprint(fingerprint),
+        'dns_names': Equals(dns_names)
     }))
 
 
@@ -148,6 +148,38 @@ class TestVaultKvCertificateStore(object):
             'p16n.org': Equals('dummy_data'),
             'bundle1': EqualsLiveValue(cert_data['metadata']['version'],
                                        BUNDLE1_FINGERPRINT, BUNDLE1_DNS_NAMES)
+        }))
+        assert live_data['metadata']['version'] == 2
+
+    def test_store_update_existing(self, bundle1, bundle2):
+        """
+        When a certificate is stored in the store, and a certificate already
+        exists for the server name, the certificate and live mapping are
+        updated.
+        """
+        self.vault.set_kv_data('certificates/bundle', {
+            'domains': 'bundle',
+            'key': key_text(bundle1),
+            'cert_chain': cert_chain_text(bundle1)
+        })
+        self.vault.set_kv_data('live', {
+            'bundle': json.dumps({
+                'version': 1,
+                'fingerprint': BUNDLE1_FINGERPRINT,
+                'dns_names': BUNDLE1_DNS_NAMES
+            })
+        })
+
+        d = self.store.store('bundle', bundle2)
+        # We return the final kv write response from Vault, but txacme doesn't
+        # care what the result of the deferred is
+        assert_that(d, succeeded(IsInstance(dict)))
+
+        cert_data = self.vault.get_kv_data('certificates/bundle')
+        live_data = self.vault.get_kv_data('live')
+        assert_that(live_data['data'], MatchesDict({
+            'bundle': EqualsLiveValue(cert_data['metadata']['version'],
+                                      BUNDLE2_FINGERPRINT, BUNDLE2_DNS_NAMES)
         }))
         assert live_data['metadata']['version'] == 2
 
