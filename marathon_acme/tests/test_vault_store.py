@@ -8,7 +8,7 @@ import pytest
 
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    AfterPreprocessing as After, Equals, IsInstance, MatchesDict)
+    AfterPreprocessing as After, Equals, Is, IsInstance, MatchesDict)
 from testtools.twistedsupport import failed, succeeded
 
 from marathon_acme.clients import VaultClient
@@ -174,6 +174,63 @@ class TestVaultKvCertificateStore(object):
         # We return the final kv write response from Vault, but txacme doesn't
         # care what the result of the deferred is
         assert_that(d, succeeded(IsInstance(dict)))
+
+        cert_data = self.vault.get_kv_data('certificates/bundle')
+        live_data = self.vault.get_kv_data('live')
+        assert_that(live_data['data'], MatchesDict({
+            'bundle': EqualsLiveValue(cert_data['metadata']['version'],
+                                      BUNDLE2_FINGERPRINT, BUNDLE2_DNS_NAMES)
+        }))
+        assert live_data['metadata']['version'] == 2
+
+    def test_store_update_existing_live_updated(self, bundle1, bundle2):
+        """
+        When a certificate is stored in the store, and a certificate already
+        exists for the server name, the certificate should be updated, and if
+        another writer updates the live mapping for that certificate, the store
+        operation should still succeed.
+        """
+        self.vault.set_kv_data('certificates/bundle', {
+            'domains': 'bundle',
+            'key': key_text(bundle1),
+            'cert_chain': cert_chain_text(bundle1)
+        })
+        self.vault.set_kv_data('live', {
+            'bundle': json.dumps({
+                'version': 1,
+                'fingerprint': BUNDLE1_FINGERPRINT,
+                'dns_names': BUNDLE1_DNS_NAMES
+            })
+        })
+
+        writes = [0]
+
+        def pre_create_update():
+            # The first write to Vault should be storing the certificate. We
+            # want to intercept the write to the live mapping, which should be
+            # the second write.
+            if writes == [1]:
+                self.vault.set_kv_data('live', {
+                    'bundle': json.dumps({
+                        'version': 2,
+                        'fingerprint': BUNDLE2_FINGERPRINT,
+                        'dns_names': BUNDLE2_DNS_NAMES
+                    })
+                })
+            writes[0] += 1
+        self.vault_api.set_pre_create_update(pre_create_update)
+
+        d = self.store.store('bundle', bundle2)
+        # We return a nothing if we skip the final live mapping update, but
+        # txacme doesn't care what the result of the deferred is
+        assert_that(d, succeeded(Is(None)))
+
+        # There should've been 2 writes:
+        # 1. Storing the certificate
+        # 2. The first attempt at updating the live mapping (CAS mismatch)
+        # - A third write should never happen since the live mapping is already
+        #   up to date.
+        assert_that(writes, Equals([2]))
 
         cert_data = self.vault.get_kv_data('certificates/bundle')
         live_data = self.vault.get_kv_data('live')

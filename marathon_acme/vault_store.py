@@ -160,7 +160,7 @@ class VaultKvCertificateStore(object):
                 return d
             else:
                 # Else assume somebody else updated the live mapping and stop
-                return None
+                return
 
         d.addCallback(update)
         return d
