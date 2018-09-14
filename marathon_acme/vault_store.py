@@ -98,7 +98,7 @@ class VaultKvCertificateStore(object):
 
         1.  The new certificate is stored without a CAS parameter. This assumes
             that the certificate we are storing is always up-to-date.
-            1.1 From Vault’s response, take the new certificate version:
+            1.1 From Vault's response, take the new certificate version:
                 ``v_cert_new``.
         2. The live map is read.
             2.1 The version of the live map is kept: ``v_live``
