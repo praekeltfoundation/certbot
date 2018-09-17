@@ -16,41 +16,63 @@ from zope.interface import implementer
 from marathon_acme.clients.vault import CasError
 
 
-def to_pem_objects(kv2_response):
+def sort_pem_objects(pem_objects):
+    """
+    Given a list of pem objects, sort the objects into the private key, leaf
+    certificate, and list of CA certificates in the trust chain. This function
+    assumes that the list of pem objects will contain exactly one private key
+    and exactly one leaf certificate and that only key and certificate type
+    objects are provided.
+    """
+    keys, certs, ca_certs = [], [], []
+    for pem_object in pem_objects:
+        if isinstance(pem_object, pem.Key):
+            keys.append(pem_object)
+        else:
+            # This assumes all pem objects provided are either of type pem.Key
+            # or pem.Certificate. Technically, there are CSR and CRL types, but
+            # we should never be passed those.
+            if _is_ca(pem_object):
+                ca_certs.append(pem_object)
+            else:
+                certs.append(pem_object)
+
+    [key], [cert] = keys, certs
+    return key, cert, ca_certs
+
+
+def _is_ca(cert_pem_object):
+    cert = x509.load_pem_x509_certificate(
+        cert_pem_object.as_bytes(), default_backend())
+
+    basic_constraints = (
+        cert.extensions.get_extension_for_class(x509.BasicConstraints).value)
+    return basic_constraints.ca
+
+
+def _cert_data_from_pem_objects(key, cert, ca_certs):
+    privkey = key.as_text()
+    cert = cert.as_text()
+    chain = ''.join([c.as_text() for c in ca_certs])
+    return {'privkey': privkey, 'cert': cert, 'chain': chain}
+
+
+def _cert_data_to_pem_objects(cert_data):
     """
     Given a non-None response from the Vault key/value store, convert the
     key/values into a list of PEM objects.
     """
-    data = kv2_response['data']['data']
-    key = pem.parse(data['key'].encode('utf-8'))
-    cert_chain = pem.parse(data['cert_chain'].encode('utf-8'))
+    pem_objects = []
+    for key in ['privkey', 'cert', 'chain']:
+        pem_objects.extend(pem.parse(cert_data[key].encode('utf-8')))
 
-    return key + cert_chain
-
-
-# TODO: Read domains from certificates
-def from_pem_objects(server_name, pem_objects):
-    """
-    Given a server name and list of PEM objects, create the key/value data that
-    will be stored in Vault.
-    """
-    [key] = [p.as_text() for p in pem_objects if isinstance(p, pem.Key)]
-    # The pem library adds newlines to the ends of PEMs, so we just concat
-    cert_chain = ''.join(
-        [p.as_text() for p in pem_objects if isinstance(p, pem.Certificate)]
-    )
-
-    return {
-        'domains': server_name,
-        'key': key,
-        'cert_chain': cert_chain
-    }
+    return pem_objects
 
 
-def _live_value(pem_objects, version):
-    pem_data = b'\n'.join([p.as_bytes() for p in pem_objects])
+def _live_value(cert_pem_object, version):
     # https://cryptography.io/en/stable/x509/reference/#cryptography.x509.load_pem_x509_certificate
-    cert = x509.load_pem_x509_certificate(pem_data, default_backend())
+    cert = x509.load_pem_x509_certificate(
+        cert_pem_object.as_bytes(), default_backend())
 
     # https://cryptography.io/en/stable/x509/reference/#cryptography.x509.Certificate.fingerprint
     fingerprint = cert.fingerprint(hashes.SHA256())
@@ -88,8 +110,12 @@ class VaultKvCertificateStore(object):
                 raise KeyError(server_name)
             return response
 
+        def get_data(response):
+            return response['data']['data']
+
         d.addCallback(handle_not_found)
-        d.addCallback(to_pem_objects)
+        d.addCallback(get_data)
+        d.addCallback(_cert_data_to_pem_objects)
         return d
 
     def store(self, server_name, pem_objects):
@@ -110,13 +136,14 @@ class VaultKvCertificateStore(object):
             3.1 If the CAS fails, go back to step 2.
         """
         # First store the certificate
-        data = from_pem_objects(server_name, pem_objects)
+        key, cert, ca_certs = sort_pem_objects(pem_objects)
+        data = _cert_data_from_pem_objects(key, cert, ca_certs)
         d = self._client.create_or_update_kv2(
             'certificates/' + server_name, data, mount_path=self._mount_path)
 
         def live_value(cert_response):
             cert_version = cert_response['data']['version']
-            return _live_value(pem_objects, cert_version)
+            return _live_value(cert, cert_version)
 
         d.addCallback(live_value)
 

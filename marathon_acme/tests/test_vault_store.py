@@ -2,6 +2,10 @@ import binascii
 import json
 import os
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
+
 import pem
 
 import pytest
@@ -14,7 +18,7 @@ from testtools.twistedsupport import failed, succeeded
 from marathon_acme.clients import VaultClient
 from marathon_acme.tests.fake_vault import FakeVault, FakeVaultAPI
 from marathon_acme.tests.matchers import WithErrorTypeAndMessage
-from marathon_acme.vault_store import VaultKvCertificateStore
+from marathon_acme.vault_store import VaultKvCertificateStore, sort_pem_objects
 
 
 FIXTURES = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fixtures')
@@ -33,17 +37,6 @@ def bundle_pem_objects(filename):
         return pem.parse(bundle.read())
 
 
-def key_text(pem_objects):
-    keys = filter(lambda p: isinstance(p, pem.Key), pem_objects)
-    [key] = list(keys)
-    return key.as_text()
-
-
-def cert_chain_text(pem_objects):
-    certs = filter(lambda p: isinstance(p, pem.Certificate), pem_objects)
-    return ''.join([p.as_text() for p in certs])
-
-
 @pytest.fixture(scope='module')
 def bundle1():
     return bundle_pem_objects(BUNDLE1_FILENAME)
@@ -52,6 +45,41 @@ def bundle1():
 @pytest.fixture(scope='module')
 def bundle2():
     return bundle_pem_objects(BUNDLE2_FILENAME)
+
+
+def test_sort_pem_objects(bundle1):
+    """
+    ``sort_pem_objects`` can divide up a list of pem objects into the private
+    key, leaf certificate, and a list of CA certificates in the chain of trust.
+    """
+    key, cert, ca_certs = sort_pem_objects(bundle1)
+
+    # Check the private key
+    assert isinstance(key, pem.Key)
+
+    # Check the certificate
+    assert isinstance(cert, pem.Certificate)
+
+    x509_cert = x509.load_pem_x509_certificate(
+        cert.as_bytes(), default_backend())
+    basic_constraints = x509_cert.extensions.get_extension_for_class(
+        x509.BasicConstraints).value
+    assert not basic_constraints.ca
+    # https://cryptography.io/en/latest/x509/reference/#cryptography.x509.Name.get_attributes_for_oid
+    [common_name] = (
+        x509_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME))
+    assert common_name.value == BUNDLE1_DNS_NAMES[0]
+
+    # Check the CA certificates
+    assert len(ca_certs) == 1
+    x509_ca_cert = x509.load_pem_x509_certificate(
+        ca_certs[0].as_bytes(), default_backend())
+    basic_constraints = x509_ca_cert.extensions.get_extension_for_class(
+        x509.BasicConstraints).value
+    assert basic_constraints.ca
+    [common_name] = (
+        x509_ca_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME))
+    assert common_name.value == 'Test Certificate Authority'
 
 
 def hex_str_to_bytes(hex_str):
@@ -71,6 +99,23 @@ def EqualsLiveValue(version, fingerprint, dns_names):
     }))
 
 
+def live_value(version, fingerprint, dns_names):
+    return json.dumps({
+        'version': version,
+        'fingerprint': fingerprint,
+        'dns_names': dns_names
+    })
+
+
+def certificate_value(pem_objects):
+    key, cert, ca_chain = sort_pem_objects(pem_objects)
+    return {
+        'privkey': key.as_text(),
+        'cert': cert.as_text(),
+        'chain': ''.join([c.as_text() for c in ca_chain])
+    }
+
+
 class TestVaultKvCertificateStore(object):
     def setup_method(self):
         self.vault = FakeVault()
@@ -87,11 +132,8 @@ class TestVaultKvCertificateStore(object):
         When a certificate is fetched from the store and it exists, the
         certificate is returned as a list of PEM objects.
         """
-        self.vault.set_kv_data('certificates/bundle1', {
-            'domains': 'marathon-acme.example.org',
-            'key': key_text(bundle1),
-            'cert_chain': cert_chain_text(bundle1)
-        })
+        self.vault.set_kv_data(
+            'certificates/bundle1', certificate_value(bundle1))
 
         d = self.store.get('bundle1')
         assert_that(d, succeeded(Equals(bundle1)))
@@ -117,11 +159,7 @@ class TestVaultKvCertificateStore(object):
         assert_that(d, succeeded(IsInstance(dict)))
 
         cert_data = self.vault.get_kv_data('certificates/bundle1')
-        assert cert_data['data'] == {
-            'domains': 'bundle1',
-            'key': key_text(bundle1),
-            'cert_chain': cert_chain_text(bundle1)
-        }
+        assert cert_data['data'] == certificate_value(bundle1)
 
         live_data = self.vault.get_kv_data('live')
         assert_that(live_data['data'], MatchesDict({
@@ -157,11 +195,8 @@ class TestVaultKvCertificateStore(object):
         exists for the server name, the certificate and live mapping are
         updated.
         """
-        self.vault.set_kv_data('certificates/bundle', {
-            'domains': 'bundle',
-            'key': key_text(bundle1),
-            'cert_chain': cert_chain_text(bundle1)
-        })
+        self.vault.set_kv_data(
+            'certificates/bundle', certificate_value(bundle1))
         self.vault.set_kv_data('live', {
             'bundle': json.dumps({
                 'version': 1,
@@ -190,17 +225,10 @@ class TestVaultKvCertificateStore(object):
         another writer updates the live mapping for that certificate, the store
         operation should still succeed.
         """
-        self.vault.set_kv_data('certificates/bundle', {
-            'domains': 'bundle',
-            'key': key_text(bundle1),
-            'cert_chain': cert_chain_text(bundle1)
-        })
+        self.vault.set_kv_data(
+            'certificates/bundle', certificate_value(bundle1))
         self.vault.set_kv_data('live', {
-            'bundle': json.dumps({
-                'version': 1,
-                'fingerprint': BUNDLE1_FINGERPRINT,
-                'dns_names': BUNDLE1_DNS_NAMES
-            })
+            'bundle': live_value(1, BUNDLE1_FINGERPRINT, BUNDLE1_DNS_NAMES)
         })
 
         writes = [0]
@@ -211,11 +239,8 @@ class TestVaultKvCertificateStore(object):
             # the second write.
             if writes == [1]:
                 self.vault.set_kv_data('live', {
-                    'bundle': json.dumps({
-                        'version': 2,
-                        'fingerprint': BUNDLE2_FINGERPRINT,
-                        'dns_names': BUNDLE2_DNS_NAMES
-                    })
+                    'bundle':
+                        live_value(2, BUNDLE2_FINGERPRINT, BUNDLE2_DNS_NAMES)
                 })
             writes[0] += 1
         self.vault_api.set_pre_create_update(pre_create_update)
@@ -283,11 +308,8 @@ class TestVaultKvCertificateStore(object):
         When the certificates are fetched as a dict, all certificates are
         returned in a dict.
         """
-        self.vault.set_kv_data('certificates/bundle1', {
-            'domains': 'marathon-acme.example.org',
-            'key': key_text(bundle1),
-            'cert_chain': cert_chain_text(bundle1)
-        })
+        self.vault.set_kv_data(
+            'certificates/bundle1', certificate_value(bundle1))
         self.vault.set_kv_data('live', {'bundle1': 'FINGERPRINT'})
 
         d = self.store.as_dict()
