@@ -94,7 +94,7 @@ def _live_value(cert_pem_object, version):
 @implementer(ICertificateStore)
 class VaultKvCertificateStore(object):
     """
-    A ``txacme.interfaces.ICertificatStore`` implementation that stores
+    A ``txacme.interfaces.ICertificateStore`` implementation that stores
     certificates in a Vault key/value version 2 secret engine.
     """
 

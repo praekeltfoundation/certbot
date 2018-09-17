@@ -208,7 +208,7 @@ class TestFakeVaultAPI(object):
 
     def test_pre_create_update(self):
         """
-        When a request is made to update KV data for and a pre-create/update
+        When a request is made to update KV data and a pre-create/update
         callback has been set, that callback is called before the request is
         processed and afterwards the request proceeds as usual.
         """
