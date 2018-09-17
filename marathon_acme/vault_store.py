@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives import hashes
 import pem
 
 from twisted.internet.defer import Deferred
+from twisted.logger import Logger
 
 from txacme.interfaces import ICertificateStore
 
@@ -97,6 +98,8 @@ class VaultKvCertificateStore(object):
     certificates in a Vault key/value version 2 secret engine.
     """
 
+    log = Logger()
+
     def __init__(self, client, mount_path):
         self._client = client
         self._mount_path = mount_path
@@ -138,6 +141,10 @@ class VaultKvCertificateStore(object):
         # First store the certificate
         key, cert, ca_certs = sort_pem_objects(pem_objects)
         data = _cert_data_from_pem_objects(key, cert, ca_certs)
+
+        self.log.debug("Storing certificate '{server_name}'...",
+                       server_name=server_name)
+
         d = self._client.create_or_update_kv2(
             'certificates/' + server_name, data, mount_path=self._mount_path)
 
@@ -151,63 +158,84 @@ class VaultKvCertificateStore(object):
         return d.addCallback(self._update_live, server_name)
 
     def _update_live(self, new_live_value, server_name):
-        d = self._read_live()
+        d = self._read_live_data_and_version()
 
         # When we fail to update the live mapping due to a Check-And-Set
         # mismatch, try again from scratch
         def retry_on_cas_error(failure):
             failure.trap(CasError)
+            self.log.warn('Check-And-Set mismatch while updating live '
+                          'mapping. Retrying...')
             return self._update_live(new_live_value, server_name)
 
-        def update(read_response):
-            # Get the live mapping data and its version
-            if read_response is not None:
-                data = read_response['data']['data']
-                version = read_response['data']['metadata']['version']
-            else:
-                data = {}
-                version = 0
+        def update(live_data_and_version):
+            live, version = live_data_and_version
 
             # Get the existing version of the cert in the live mapping
-            existing_live_value = data.get(server_name)
+            existing_live_value = live.get(server_name)
             if existing_live_value is not None:
                 existing_cert_version = (
                     json.loads(existing_live_value)['version'])
             else:
+                self.log.debug(
+                    "Certificate '{server_name}' not previously stored",
+                    server_name=server_name)
                 existing_cert_version = 0
 
             # If the existing cert version is lower than what we want to update
             # it to, then try update it
-            if existing_cert_version < new_live_value['version']:
-                data[server_name] = json.dumps(new_live_value)
+            new_cert_version = new_live_value['version']
+            if existing_cert_version < new_cert_version:
+                self.log.debug(
+                    "Updating live mapping for certificate '{server_name}' "
+                    'from version {v1} to {v2}', server_name=server_name,
+                    v1=existing_cert_version, v2=new_cert_version)
+                live[server_name] = json.dumps(new_live_value)
 
                 d = self._client.create_or_update_kv2(
-                    'live', data, cas=version, mount_path=self._mount_path)
+                    'live', live, cas=version, mount_path=self._mount_path)
                 d.addErrback(retry_on_cas_error)
                 return d
             else:
                 # Else assume somebody else updated the live mapping and stop
+                self.log.warn(
+                    'Existing certificate version ({v1}) >= version we are '
+                    'trying to store ({v2}). Not updating...',
+                    v1=existing_cert_version, v2=new_cert_version)
                 return
 
         d.addCallback(update)
         return d
 
-    def _read_live(self):
-        return self._client.read_kv2('live', mount_path=self._mount_path)
+    def _read_live_data_and_version(self):
+        d = self._client.read_kv2('live', mount_path=self._mount_path)
+
+        def get_data_and_version(response):
+            if response is not None:
+                data = response['data']['data']
+                version = response['data']['metadata']['version']
+            else:
+                data = {}
+                version = 0
+
+            self.log.debug('Read live mapping version {v} with {len_live} '
+                           'entries.', v=version, len_live=len(data))
+
+            return data, version
+
+        return d.addCallback(get_data_and_version)
 
     def as_dict(self):
-        d = self._read_live()
+        d = self._read_live_data_and_version()
         d.addCallback(self._read_all_certs)
         return d
 
-    def _read_all_certs(self, live_response):
-        if live_response is None:
-            return {}
-
+    def _read_all_certs(self, live_data_and_version):
+        live, _ = live_data_and_version
         certs = {}
-        live = live_response['data']['data']
 
         def read_cert(_result, name):
+            self.log.debug("Reading certificate '{name}'...", name=name)
             return self.get(name)
 
         def collect_cert(pem_objects, name):
