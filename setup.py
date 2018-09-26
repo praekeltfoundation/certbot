@@ -27,6 +27,7 @@ install_requires = [
     'cryptography',
     'josepy',
     'klein',
+    'pem >= 16.1.0',
     'requests',
     # treq.testing broken on older versions of treq with Twisted 17.1.0
     'treq >= 17.3.1',
@@ -54,7 +55,6 @@ setup(
     extras_require={
         'test': [
             'fixtures',
-            'pem >= 16.1.0',
             'pytest >= 3.0.0',
             'testtools',
             'txfake >= 0.1.1',

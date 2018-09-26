@@ -206,6 +206,36 @@ class TestFakeVaultAPI(object):
         # No data set since CAS didn't match
         assert_that(data, Is(None))
 
+    def test_pre_create_update(self):
+        """
+        When a request is made to update KV data and a pre-create/update
+        callback has been set, that callback is called before the request is
+        processed and afterwards the request proceeds as usual.
+        """
+        called = [False]
+
+        def pre_create_update():
+            # Check that the data hasn't been updated yet
+            data = self.vault.get_kv_data('my-secret')
+            assert_that(data, Is(None))
+
+            called[0] = True
+
+        self.vault_api.set_pre_create_update(pre_create_update)
+
+        response = self.client.put(
+            'http://localhost/v1/secret/data/my-secret',
+            headers={'X-Vault-Token': self.vault.token},
+            json={'data': {'foo': 'bar'}}
+        )
+        assert_that(response, succeeded(IsJsonResponseWithCode(200)))
+
+        assert_that(called, Equals([True]))
+
+        # After the callback, the data is stored
+        data = self.vault.get_kv_data('my-secret')
+        assert_that(data['data'], Equals({'foo': 'bar'}))
+
     def test_update_kv(self):
         """
         When a request is made to update KV data for a path with data, the
