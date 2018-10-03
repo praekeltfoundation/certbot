@@ -18,6 +18,7 @@ from testtools.matchers import (
 from testtools.twistedsupport import failed, succeeded
 
 from twisted.internet.defer import succeed
+from twisted.python.compat import unicode
 from twisted.python.filepath import FilePath
 
 from txacme.testing import MemoryStore
@@ -102,7 +103,7 @@ class TestMaybeKeyVault(object):
         assert_that(d, succeeded(Not(Is(None))))
 
         vault_data = self.vault.get_kv_data('client_key')['data']
-        assert_that(vault_data, MatchesDict({'key': IsInstance(str)}))
+        assert_that(vault_data, MatchesDict({'key': IsInstance(unicode)}))
 
         key = d.result
         vault_key = _load_pem_private_key_bytes(
