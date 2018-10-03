@@ -67,13 +67,13 @@ class TestCli(TestCase):
     def test_cannot_listen(self):
         """
         When the program is run with an argument and a listen address specified
-        with a port that we can't listen on (e.g. port 1), a CannotListenError
-        is expected to be logged and the program should stop.
+        with an address that we can't listen on (e.g. 1.1.1.1), a
+        CannotListenError is expected to be logged and the program should stop.
         """
         temp_dir = self.useFixture(TempDir())
         yield main(reactor, raw_args=[
             temp_dir.path,
-            '--listen', ':1',  # A port we can't listen on
+            '--listen', '1.1.1.1:8080',  # An address we can't listen on
         ])
 
         # Expect a 'certs' directory to be created
