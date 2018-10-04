@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from josepy.jwk import JWKRSA
@@ -13,19 +13,24 @@ import pytest
 
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    Equals, HasLength, IsInstance, MatchesListwise, MatchesStructure)
+    Equals, HasLength, Is, IsInstance, MatchesDict, MatchesListwise,
+    MatchesStructure, Not)
 from testtools.twistedsupport import failed, succeeded
 
 from twisted.internet.defer import succeed
+from twisted.python.compat import unicode
 from twisted.python.filepath import FilePath
 
 from txacme.testing import MemoryStore
 from txacme.util import generate_private_key
 
 from marathon_acme.acme_util import (
-    MlbCertificateStore, generate_wildcard_pem_bytes, maybe_key)
-from marathon_acme.clients import MarathonLbClient
+    MlbCertificateStore, _dump_pem_private_key_bytes,
+    _load_pem_private_key_bytes, generate_wildcard_pem_bytes, maybe_key,
+    maybe_key_vault)
+from marathon_acme.clients import MarathonLbClient, VaultClient
 from marathon_acme.tests.fake_marathon import FakeMarathonLb
+from marathon_acme.tests.fake_vault import FakeVault, FakeVaultAPI
 from marathon_acme.tests.matchers import (
     WithErrorTypeAndMessage, matches_time_or_just_before)
 
@@ -44,11 +49,7 @@ class TestMaybeKey(object):
         expected_key = JWKRSA(key=raw_key)
 
         pem_file = pem_path.child(u'client.key')
-        pem_file.setContent(raw_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption()
-        ))
+        pem_file.setContent(_dump_pem_private_key_bytes(raw_key))
 
         actual_key = maybe_key(pem_path)
         assert_that(actual_key, Equals(expected_key))
@@ -63,14 +64,53 @@ class TestMaybeKey(object):
         pem_file = pem_path.child(u'client.key')
         assert_that(pem_file.exists(), Equals(True))
 
-        file_key = serialization.load_pem_private_key(
-            pem_file.getContent(),
-            password=None,
-            backend=default_backend()
-        )
+        file_key = _load_pem_private_key_bytes(pem_file.getContent())
         file_key = JWKRSA(key=file_key)
 
         assert_that(key, Equals(file_key))
+
+
+class TestMaybeKeyVault(object):
+    def setup_method(self):
+        self.vault = FakeVault()
+        vault_api = FakeVaultAPI(self.vault)
+
+        self.vault_client = VaultClient(
+            'http://localhost:8200', self.vault.token, client=vault_api.client)
+
+    def test_key_exists(self):
+        """
+        When we get the client key and the key already exists in Vault, the
+        value in Vault should be read and the existing key returned.
+        """
+        raw_key = generate_private_key(u'rsa')
+        expected_key = JWKRSA(key=raw_key)
+
+        key_data = {
+            'key': _dump_pem_private_key_bytes(raw_key).decode('utf-8')
+        }
+        self.vault.set_kv_data('client_key', key_data)
+
+        actual_key = maybe_key_vault(self.vault_client, 'secret')
+        assert_that(actual_key, succeeded(Equals(expected_key)))
+
+    def test_key_not_exists(self):
+        """
+        When we get the client key and no key exists in Vault, a new key should
+        be generated and the key should be stored in Vault.
+        """
+        d = maybe_key_vault(self.vault_client, 'secret')
+        assert_that(d, succeeded(Not(Is(None))))
+
+        vault_data = self.vault.get_kv_data('client_key')['data']
+        assert_that(vault_data, MatchesDict({'key': IsInstance(unicode)}))
+
+        key = d.result
+        vault_key = _load_pem_private_key_bytes(
+            vault_data['key'].encode('utf-8'))
+        vault_key = JWKRSA(key=vault_key)
+
+        assert_that(key, Equals(vault_key))
 
 
 def test_generate_wildcard_pem_bytes():
@@ -88,11 +128,7 @@ def test_generate_wildcard_pem_bytes():
 
     # Deserialize the private key and assert that it is the right type (the
     # other details we trust txacme with)
-    key = serialization.load_pem_private_key(
-        pem_objects[0].as_bytes(),
-        password=None,
-        backend=default_backend()
-    )
+    key = _load_pem_private_key_bytes(pem_objects[0].as_bytes())
     assert_that(key, IsInstance(rsa.RSAPrivateKey))
 
     # Deserialize the certificate and validate all the options we set
