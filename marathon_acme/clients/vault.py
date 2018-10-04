@@ -1,10 +1,21 @@
 import json
+import os
 
 from requests.exceptions import RequestException
 
-from twisted.web.http import BAD_REQUEST, NOT_FOUND
+from treq.client import treq_HTTPClient
 
-from marathon_acme.clients._base import HTTPClient, get_single_header
+from twisted.internet.ssl import (
+    Certificate, PrivateCertificate, optionsForClientTLS)
+from twisted.python.filepath import FilePath
+from twisted.web.client import Agent
+from twisted.web.http import BAD_REQUEST, NOT_FOUND
+from twisted.web.iweb import IPolicyForHTTPS
+
+from zope.interface import implementer
+
+from marathon_acme.clients._base import (
+    HTTPClient, default_reactor, get_single_header)
 
 
 class VaultError(RequestException):
@@ -38,6 +49,23 @@ class VaultClient(HTTPClient):
         """
         super(VaultClient, self).__init__(*args, url=url, **kwargs)
         self._token = token
+
+    @classmethod
+    def from_environ(cls, reactor=None, env=os.environ):
+        # Support a limited number of the available config options:
+        # https://github.com/hashicorp/vault/blob/v0.11.2/api/client.go#L28-L40
+        address = _get_environ_str(env, 'VAULT_ADDR', 'https://127.0.0.1:8200')
+        # This seems to be what the Vault CLI defaults to
+        token = _get_environ_str(env, 'VAULT_TOKEN', 'TEST')
+
+        insecure = _get_environ_bool(env, 'VAULT_SKIP_VERIFY')
+        ca_cert = _get_environ_str(env, 'VAULT_CACERT')
+        client_cert = _get_environ_str(env, 'VAULT_CLIENT_CERT')
+        client_key = _get_environ_str(env, 'VAULT_CLIENT_KEY')
+        agent = _create_agent(
+            reactor, insecure, ca_cert, client_cert, client_key)
+
+        return VaultClient(address, token, client=treq_HTTPClient(agent))
 
     def request(self, method, path, *args, **kwargs):
         headers = kwargs.pop('headers', {})
@@ -127,3 +155,78 @@ class VaultClient(HTTPClient):
 
         write_path = '{}/data/{}'.format(mount_path, path)
         return self.write(write_path, **params)
+
+
+def _create_agent(reactor, insecure, ca_cert, client_cert, client_key):
+    if insecure:
+        context_factory = _insecure_context_factory()
+    else:
+        context_factory = _secure_context_factory(
+            ca_cert, client_cert, client_key)
+
+    return Agent(default_reactor(reactor), contextFactory=context_factory)
+
+
+def _insecure_context_factory():
+    # TODO: Figure out how to do this?
+    # https://github.com/twisted/treq/issues/65
+    raise NotImplementedError()
+
+
+def _secure_context_factory(ca_cert, client_cert, client_key):
+    trust_root, client_certificate = None, None
+    if ca_cert:
+        trust_root = Certificate.loadPEM(FilePath(ca_cert).getContent())
+
+    if client_cert and client_key:
+        client_certificate = PrivateCertificate.loadPEM(
+            FilePath(client_key).getContent() +
+            FilePath(client_cert).getContent())
+
+    return _BrowserLikePolicyForHTTPS(
+        trustRoot=trust_root, clientCertificate=client_certificate)
+
+
+def _get_environ_str(env, env_key, default=None):
+    # Works like the logic in Vault--ignores values that are set but empty
+    env_value = env.get(env_key)
+    return env_value if env_value else default
+
+
+def _get_environ_bool(env, env_key):
+    env_value = env.get(env_key)
+    return env_value and strconv_ParseBool(env_value)
+
+
+def strconv_ParseBool(s):
+    """
+    A port of Go's ParseBool function in the strconv package:
+    https://github.com/golang/go/blob/release-branch.go1.11/src/strconv/atob.go#L7-L18
+    """
+    if s in ['1', 't', 'T', 'true', 'TRUE', 'True']:
+        return True
+
+    if s in ['0', 'f', 'F', 'false', 'FALSE', 'False']:
+        return False
+
+    raise ValueError("Unable to parse boolean value from '{}'".format(s))
+
+
+@implementer(IPolicyForHTTPS)
+class _BrowserLikePolicyForHTTPS(object):
+    """
+    A copy of twisted.web.client.BrowserLikePolicyForHTTPS but allows passing
+    the clientCertificate option to twisted.internet.ssl.optionsForClientTLS.
+
+    https://github.com/twisted/twisted/blob/twisted-18.7.0/src/twisted/web/client.py#L915
+    https://twistedmatrix.com/documents/current/api/twisted.internet.ssl.optionsForClientTLS.html
+    """
+
+    def __init__(self, trustRoot=None, clientCertificate=None):
+        self._trustRoot = trustRoot
+        self._clientCertificate = clientCertificate
+
+    def creatorForNetloc(self, hostname, port):
+        return optionsForClientTLS(hostname.decode("ascii"),
+                                   trustRoot=self._trustRoot,
+                                   clientCertificate=self._clientCertificate)

@@ -1,4 +1,7 @@
+import os
 import uuid
+
+import pytest
 
 from testtools.assertions import assert_that
 from testtools.matchers import (
@@ -15,7 +18,8 @@ from twisted.web.server import NOT_DONE_YET
 from zope.interface import implementer
 
 from marathon_acme.clients.tests.matchers import HasRequestProperties
-from marathon_acme.clients.vault import CasError, VaultClient, VaultError
+from marathon_acme.clients.vault import (
+    CasError, VaultClient, VaultError, strconv_ParseBool)
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import read_request_json
 from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
@@ -354,3 +358,49 @@ class TestVaultClient(object):
             CasError,
             'check-and-set parameter did not match the current version'
         )))
+
+
+FIXTURES = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fixtures')
+CA_FILENAME = 'ca.pem'
+CLIENT_CERT_FILENAME = 'vault-client.pem'
+CLIENT_KEY_FILENAME = 'vault-client-key.pem'
+SERVER_CERT_FILENAME = 'vault-server.pem'
+SERVER_KEY_FILENAME = 'vault-server-key.pem'
+
+
+class TestVaultClientFromEnviron(object):
+    def test_empty_environ(self):
+        vault_client = VaultClient.from_environ(env={})
+
+        # TODO: Figure out how to test this better?
+        assert vault_client.url == 'https://127.0.0.1:8200'
+        assert vault_client._token == 'TEST'
+
+    def test_insecure_not_implemented(self):
+        with pytest.raises(NotImplementedError):
+            VaultClient.from_environ(env={'VAULT_SKIP_VERIFY': '1'})
+
+    def test_certs(self):
+        VaultClient.from_environ(env={
+            'VAULT_CACERT': os.path.join(FIXTURES, CA_FILENAME),
+            'VAULT_CLIENT_CERT': os.path.join(FIXTURES, CLIENT_CERT_FILENAME),
+            'VAULT_CLIENT_KEY': os.path.join(FIXTURES, CLIENT_KEY_FILENAME),
+        })
+
+        # TODO: Figure out how to assert things...
+
+
+class TestStrconvParseBoolFunc(object):
+    def test_true(self):
+        for s in ['1', 't', 'T', 'true', 'TRUE', 'True']:
+            assert strconv_ParseBool(s)
+
+    def test_false(self):
+        for s in ['0', 'f', 'F', 'false', 'FALSE', 'False']:
+            assert not strconv_ParseBool(s)
+
+    def test_invalid(self):
+        with pytest.raises(ValueError) as e_info:
+            strconv_ParseBool('TrUe')
+
+        assert str(e_info.value) == "Unable to parse boolean value from 'TrUe'"
