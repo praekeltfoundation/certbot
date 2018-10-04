@@ -3,7 +3,7 @@ import os
 
 from requests.exceptions import RequestException
 
-from treq.client import treq_HTTPClient
+from treq.client import HTTPClient as treq_HTTPClient
 
 from twisted.internet.ssl import (
     Certificate, PrivateCertificate, optionsForClientTLS)
