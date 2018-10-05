@@ -9,12 +9,12 @@ brew install cfssl
 New test certificates can be generated as follows:
 ```shell
 DOMAIN=vault.example.org
-cfssl gencert -config=config.json -profile=server -ca=ca.pem -ca-key=ca-key.pem -cn=$DOMAIN -hostname=$DOMAIN csr.json \
-  | cfssljson -bare vault-server
+cfssl gencert -config=config.json -profile=server -ca=ca.pem -ca-key=ca-key.pem \
+  -cn=$DOMAIN -hostname=$DOMAIN,localhost csr.json | cfssljson -bare vault-server
 
 DOMAIN=marathon-acme.example.org
-cfssl gencert -config=config.json -profile=client -ca=ca.pem -ca-key=ca-key.pem -cn=$DOMAIN -hostname=$DOMAIN csr.json \
-  | cfssljson -bare vault-client
+cfssl gencert -config=config.json -profile=client -ca=ca.pem -ca-key=ca-key.pem \
+  -cn=$DOMAIN -hostname=$DOMAIN,localhost csr.json | cfssljson -bare vault-client
 ```
 
 This will generate a few files. You can delete the CSR files: `rm *.csr`
