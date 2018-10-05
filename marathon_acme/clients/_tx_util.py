@@ -18,10 +18,9 @@ def default_client(reactor, client=None, agent=None, contextFactory=None,
         return client, reactor
 
     if agent is None:
-        pool = _default_pool(reactor, pool, persistent=persistent)
+        pool = HTTPConnectionPool(reactor, persistent=persistent)
         contextFactory = _default_contextFactory(contextFactory)
-        agent = _default_agent(
-            reactor, contextFactory=contextFactory, pool=pool)
+        agent = Agent(reactor, contextFactory=contextFactory, pool=pool)
 
     return HTTPClient(agent), reactor
 
@@ -32,25 +31,11 @@ def _default_reactor(reactor=None):
     return reactor
 
 
-def _default_pool(reactor, pool=None, **kwargs):
-    if pool is not None:
-        return pool
-
-    return HTTPConnectionPool(reactor, **kwargs)
-
-
 def _default_contextFactory(contextFactory=None, **kwargs):
     if contextFactory is not None:
         return contextFactory
 
     return BrowserLikePolicyForHTTPS(**kwargs)
-
-
-def _default_agent(reactor, agent=None, **kwargs):
-    if agent is not None:
-        return agent
-
-    return Agent(reactor, **kwargs)
 
 
 @implementer(IPolicyForHTTPS)

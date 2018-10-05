@@ -16,7 +16,7 @@ from twisted.internet.endpoints import SSL4ServerEndpoint
 from twisted.internet.task import Clock
 from twisted.python.filepath import FilePath
 from twisted.web._newclient import ResponseNeverReceived
-from twisted.web.client import Agent
+from twisted.web.client import Agent, HTTPConnectionPool
 from twisted.web.server import Site
 
 from marathon_acme.clients._tx_util import ClientPolicyForHTTPS, default_client
@@ -24,9 +24,39 @@ from marathon_acme.clients.tests.helpers import QueueResource
 
 
 class TestDefaultClientFunc(object):
-    def test_default_client(self):
+    def test_defaults(self):
         """
-        When default_client is passed a client it should return that client.
+        When only a reactor is passed to default_client, a client is created
+        with all the defaults we expect.
+        """
+        reactor = Clock()
+
+        client, actual_reactor = default_client(reactor)
+
+        # The reactor is the one we passed
+        assert actual_reactor is reactor
+
+        # We get a client
+        assert isinstance(client, HTTPClient)
+
+        # The client has the default agent and the agent has our reactor
+        # NOTE: Accessing treq HTTPClient internals :-(
+        agent = client._agent
+        assert isinstance(agent, Agent)
+        # NOTE: Twisted _AgentBase internals :-(
+        assert agent._reactor is reactor
+        pool = agent._pool
+
+        # The agent has a connection pool that is not persistent
+        assert isinstance(pool, HTTPConnectionPool)
+        assert not pool.persistent
+        # NOTE: Accessing Twisted HTTPConnectionPool internals :-(
+        assert pool._reactor is reactor
+
+    def test_client_provided(self):
+        """
+        When default_client is passed a client it should return that client
+        and the reactor.
         """
         reactor = Clock()
         client = HTTPClient(Agent(reactor))
@@ -36,17 +66,55 @@ class TestDefaultClientFunc(object):
         assert actual_client is client
         assert actual_reactor is reactor
 
-    def test_default_client_not_provided(self):
+    def test_reactor_not_provided(self):
         """
-        When default_agent is not passed an agent, it should return a default
-        agent.
+        When default_client is not passed a reactor, if should use the default
+        reactor.
         """
         client, actual_reactor = default_client(None)
 
-        assert isinstance(client, HTTPClient)
+        # NOTE: Accessing treq HTTPClient & Twisted _AgentBase internals :-(
+        assert client._agent._reactor is actual_reactor
 
         from twisted.internet import reactor
         assert actual_reactor is reactor
+
+    def test_agent_provided(self):
+        """
+        When default_client is passed an agent, it should create the client
+        with that agent.
+        """
+        reactor = Clock()
+        agent = Agent(reactor)
+
+        client, _ = default_client(reactor, agent=agent)
+
+        # NOTE: Accessing treq HTTPClient internals :-(
+        assert client._agent == agent
+
+    def test_agent_parts_provided(self):
+        """
+        When default_client is passed parameters for the parts that make up an
+        agent, is should create an agent and client with those parameters.
+        """
+        reactor = Clock()
+        contextFactory = ClientPolicyForHTTPS()
+
+        client, actual_reactor = default_client(
+            reactor, persistent=True, contextFactory=contextFactory)
+
+        # NOTE: Accessing treq HTTPClient internals :-(
+        agent = client._agent
+        assert isinstance(agent, Agent)
+
+        # NOTE: Accessing Twisted _AgentBase internals :-(
+        assert agent._reactor is reactor
+        pool = agent._pool
+
+        assert isinstance(pool, HTTPConnectionPool)
+        assert pool.persistent
+        # NOTE: Accessing Twisted HTTPConnectionPool internals :-(
+        assert pool._reactor is reactor
 
 
 FIXTURES = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fixtures')
