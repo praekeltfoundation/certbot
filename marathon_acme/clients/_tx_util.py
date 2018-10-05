@@ -2,7 +2,8 @@ from treq.client import HTTPClient
 
 from twisted.internet import ssl
 from twisted.python.filepath import FilePath
-from twisted.web.client import Agent, HTTPConnectionPool
+from twisted.web.client import (
+    Agent, BrowserLikePolicyForHTTPS, HTTPConnectionPool)
 from twisted.web.iweb import IPolicyForHTTPS
 
 from zope.interface import implementer
@@ -17,6 +18,7 @@ def default_client(reactor, client=None, agent=None, contextFactory=None,
 
     if agent is None:
         pool = _default_pool(reactor, pool, persistent=persistent)
+        contextFactory = _default_contextFactory(contextFactory)
         agent = _default_agent(
             reactor, contextFactory=contextFactory, pool=pool)
 
@@ -34,6 +36,13 @@ def _default_pool(reactor, pool=None, **kwargs):
         return pool
 
     return HTTPConnectionPool(reactor, **kwargs)
+
+
+def _default_contextFactory(contextFactory=None, **kwargs):
+    if contextFactory is not None:
+        return contextFactory
+
+    return BrowserLikePolicyForHTTPS(**kwargs)
 
 
 def _default_agent(reactor, agent=None, **kwargs):
