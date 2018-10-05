@@ -84,3 +84,6 @@ class QueueResource(object):
 
     def get(self):
         return self.queue.get()
+
+    def assert_empty(self):
+        assert not self.queue.pending

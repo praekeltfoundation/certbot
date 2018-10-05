@@ -1,5 +1,9 @@
 import os
 
+from OpenSSL.SSL import Error as SSLError
+
+from service_identity.exceptions import DNSMismatch, VerificationError
+
 from testtools import TestCase
 from testtools.twistedsupport import (
     AsynchronousDeferredRunTestForBrokenTwisted)
@@ -11,6 +15,7 @@ from twisted.internet.defer import DeferredList
 from twisted.internet.endpoints import SSL4ServerEndpoint
 from twisted.internet.task import Clock
 from twisted.python.filepath import FilePath
+from twisted.web._newclient import ResponseNeverReceived
 from twisted.web.client import Agent
 from twisted.web.server import Site
 
@@ -46,9 +51,11 @@ class TestDefaultClientFunc(object):
 
 FIXTURES = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fixtures')
 CA_CERT = os.path.join(FIXTURES, 'ca.pem')
+CA2_CERT = os.path.join(FIXTURES, 'ca2.pem')
 CLIENT_CERT = os.path.join(FIXTURES, 'vault-client.pem')
 CLIENT_KEY = os.path.join(FIXTURES, 'vault-client-key.pem')
-CLIENT_COMMON_NAME = 'marathon-acme.example.org'
+CLIENT2_CERT = os.path.join(FIXTURES, 'vault-client2.pem')
+CLIENT2_KEY = os.path.join(FIXTURES, 'vault-client2-key.pem')
 SERVER_CERT = os.path.join(FIXTURES, 'vault-server.pem')
 SERVER_KEY = os.path.join(FIXTURES, 'vault-server-key.pem')
 SERVER_COMMON_NAME = 'vault.example.org'
@@ -101,19 +108,27 @@ class TestClientPolicyForHTTPS(TestCase):
             addr = hostname if hostname is not None else host.host
             address = 'https://{}:{}'.format(addr, host.port)
 
+            deferreds = []
+
             # Actually make the request
             response_d = client.get(address)
+            deferreds.append(response_d)
 
             # Get the request server side
-            request_d = resource.get()
-            request_d.addBoth(assert_request)
+            if assert_request is not None:
+                request_d = resource.get()
+                deferreds.append(request_d)
+                request_d.addBoth(assert_request)
 
             # Check the response
             response_d.addBoth(assert_response)
 
             # Make sure everything completes
-            done_d = DeferredList([request_d, response_d],
-                                  fireOnOneErrback=True, consumeErrors=True)
+            done_d = DeferredList(
+                deferreds, fireOnOneErrback=True, consumeErrors=True)
+
+            # Make sure there are no pending requests
+            done_d.addCallback(lambda _: resource.assert_empty())
 
             # Finally, shutdown
             done_d.addCallback(lambda _: listening_port.stopListening())
@@ -148,6 +163,33 @@ class TestClientPolicyForHTTPS(TestCase):
         return self._test_request_success(
             client, endpoint, hostname='localhost')
 
+    def test_wrong_ca_cert(self):
+        """
+        When a client is created with a custom CA certificate, that certificate
+        is used to validate the server's certificate and is rejected if the
+        CA does not match.
+        """
+        client = self.create_client(caKey=CA2_CERT)
+        endpoint = self.create_ssl_server_endpoint()
+
+        # A request should never arrive since the request fails
+        assert_request = None
+
+        def assert_response(failure):
+            assert isinstance(failure.value, ResponseNeverReceived)
+
+            [reason] = failure.value.reasons
+            assert isinstance(reason.value, SSLError)
+            assert reason.value.args == ([(
+                'SSL routines',
+                'tls_process_server_certificate',
+                'certificate verify failed'
+            )],)
+
+        return self._test_request(
+            client, endpoint, assert_request, assert_response,
+            hostname='localhost')
+
     def test_client_certs(self):
         """
         When a client is created with a custom client certificates, those
@@ -163,6 +205,37 @@ class TestClientPolicyForHTTPS(TestCase):
         return self._test_request_success(
             client, endpoint, hostname='localhost')
 
+    def test_wrong_client_certs(self):
+        """
+        When a client is created with a custom client certificates, those
+        certificates can be validated by the server and are rejected if they
+        are invalid.
+        """
+        client = self.create_client(
+            caKey=CA_CERT, privateKey=CLIENT2_KEY, certKey=CLIENT2_CERT)
+
+        # NOTE: The caKey parameter here means the server checks the client
+        # cert against this CA cert.
+        endpoint = self.create_ssl_server_endpoint(caKey=CA_CERT)
+
+        # A request should never arrive since the request fails
+        assert_request = None
+
+        def assert_response(failure):
+            assert isinstance(failure.value, ResponseNeverReceived)
+
+            [reason] = failure.value.reasons
+            assert isinstance(reason.value, SSLError)
+            assert reason.value.args == ([(
+                'SSL routines',
+                'ssl3_read_bytes',
+                'tlsv1 alert unknown ca'
+            )],)
+
+        return self._test_request(
+            client, endpoint, assert_request, assert_response,
+            hostname='localhost')
+
     def test_tls_server_name(self):
         """
         When a client is created with a custom TLS server name, that server
@@ -177,3 +250,28 @@ class TestClientPolicyForHTTPS(TestCase):
         # doesn't like IP addresses for SSL verification, but we pass
         # tls_server_name so it should be ok.
         return self._test_request_success(client, endpoint)
+
+    def test_wrong_tls_server_name(self):
+        """
+        When a client is created with a custom TLS server name, that server
+        name is used for SSL verification and verification will fail if there
+        is a mismatch.
+        """
+        client = self.create_client(
+            caKey=CA_CERT, tls_server_name='www.google.com')
+        endpoint = self.create_ssl_server_endpoint()
+
+        assert_request = None
+
+        def assert_response(failure):
+            assert isinstance(failure.value, ResponseNeverReceived)
+
+            [reason] = failure.value.reasons
+            assert isinstance(reason.value, VerificationError)
+
+            [error] = reason.value.errors
+            assert isinstance(error, DNSMismatch)
+            assert error.mismatched_id.hostname == b'www.google.com'
+
+        return self._test_request(
+            client, endpoint, assert_request, assert_response)
