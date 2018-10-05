@@ -1,6 +1,7 @@
 from treq.client import HTTPClient
 
 from twisted.internet import ssl
+from twisted.python.compat import unicode
 from twisted.python.filepath import FilePath
 from twisted.web.client import (
     Agent, BrowserLikePolicyForHTTPS, HTTPConnectionPool)
@@ -68,6 +69,9 @@ class ClientPolicyForHTTPS(object):
                  tls_server_name=None):
         self._trustRoot = trustRoot
         self._clientCertificate = clientCertificate
+
+        if tls_server_name and not isinstance(tls_server_name, unicode):
+            tls_server_name = tls_server_name.decode('utf-8')
         self._tls_server_name = tls_server_name
 
     @classmethod
