@@ -4,12 +4,15 @@ from testtools.twistedsupport import AsynchronousDeferredRunTest
 from treq.client import HTTPClient as treq_HTTPClient
 
 from twisted.internet.defer import DeferredQueue
+from twisted.web.resource import IResource
 from twisted.web.server import NOT_DONE_YET
 
 from txfake import FakeHttpServer
 from txfake.fake_connection import wait0
 
 from uritools import urisplit
+
+from zope.interface import implementer
 
 
 class TestHTTPClientBase(TestCase):
@@ -66,3 +69,18 @@ class PerLocationAgent(object):
         agent = self.agents[urisplit(uri).authority]
         return agent.request(
             method, uri, headers=headers, bodyProducer=bodyProducer)
+
+
+@implementer(IResource)
+class QueueResource(object):
+    isLeaf = True
+
+    def __init__(self):
+        self.queue = DeferredQueue()
+
+    def render(self, request):
+        self.queue.put(request)
+        return NOT_DONE_YET
+
+    def get(self):
+        return self.queue.get()

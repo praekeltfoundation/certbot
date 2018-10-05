@@ -1,46 +1,19 @@
-import os
 import uuid
 
-import pytest
-
-from testtools import TestCase, run_test_with
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Equals, Is, IsInstance, MatchesAll,
     MatchesStructure)
-from testtools.twistedsupport import (
-    AsynchronousDeferredRunTestForBrokenTwisted, failed, succeeded)
+from testtools.twistedsupport import failed, succeeded
 
 from treq.testing import StubTreq
 
-from twisted.internet.defer import DeferredList, DeferredQueue
-from twisted.python.filepath import FilePath
-from twisted.web.resource import IResource
-from twisted.web.server import NOT_DONE_YET, Site
-
-from zope.interface import implementer
-
+from marathon_acme.clients.tests.helpers import QueueResource
 from marathon_acme.clients.tests.matchers import HasRequestProperties
-from marathon_acme.clients.vault import (
-    CasError, VaultClient, VaultError, strconv_ParseBool)
+from marathon_acme.clients.vault import CasError, VaultClient, VaultError
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import read_request_json
 from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
-
-
-@implementer(IResource)
-class QueueResource(object):
-    isLeaf = True
-
-    def __init__(self):
-        self.queue = DeferredQueue()
-
-    def render(self, request):
-        self.queue.put(request)
-        return NOT_DONE_YET
-
-    def get(self):
-        return self.queue.get()
 
 
 class TestVaultClient(object):
@@ -362,135 +335,15 @@ class TestVaultClient(object):
             'check-and-set parameter did not match the current version'
         )))
 
+    def test_from_env(self):
+        """
+        When the VaultClient is created from the environment, the Vault address
+        and token are taken from environment values.
+        """
+        client = VaultClient.from_env(env={
+            'VAULT_ADDR': 'https://vault.example.org:8200',
+            'VAULT_TOKEN': 'abcdef',
+        })
 
-FIXTURES = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fixtures')
-CA_FILENAME = 'ca.pem'
-CLIENT_CERT_FILENAME = 'vault-client.pem'
-CLIENT_KEY_FILENAME = 'vault-client-key.pem'
-CLIENT_COMMON_NAME = 'marathon-acme.example.org'
-SERVER_CERT_FILENAME = 'vault-server.pem'
-SERVER_KEY_FILENAME = 'vault-server-key.pem'
-SERVER_COMMON_NAME = 'vault.example.org'
-
-
-def start_vault_server(resource, verify=True):
-    # This is somewhat copied from the endpoint description parsing code:
-    # https://github.com/twisted/twisted/blob/twisted-18.7.0/src/twisted/internet/endpoints.py#L1325-L1408
-    # But we can't use endpoint descriptions because we want to verify the
-    # client certificate (add the trustRoot param to CertificateOptions).
-    from twisted.internet import ssl
-    certPEM = FilePath(FIXTURES).child(SERVER_CERT_FILENAME).getContent()
-    keyPEM = FilePath(FIXTURES).child(SERVER_KEY_FILENAME).getContent()
-    privateCertificate = ssl.PrivateCertificate.loadPEM(
-        certPEM + b'\n' + keyPEM)
-
-    if verify:
-        caPEM = FilePath(FIXTURES).child(CA_FILENAME).getContent()
-        trustRoot = ssl.Certificate.loadPEM(caPEM)
-    else:
-        trustRoot = None
-
-    cf = ssl.CertificateOptions(
-        privateKey=privateCertificate.privateKey.original,
-        certificate=privateCertificate.original,
-        trustRoot=trustRoot
-    )
-
-    from twisted.internet import endpoints, reactor
-    endpoint = (
-        endpoints.SSL4ServerEndpoint(reactor, 0, cf, interface='127.0.0.1'))
-
-    return endpoint.listen(Site(resource))
-
-
-class TestVaultClientFromEnviron(TestCase):
-    def test_empty_environ(self):
-        vault_client = VaultClient.from_environ(env={})
-
-        # TODO: Figure out how to test this better?
-        assert vault_client.url == 'https://127.0.0.1:8200'
-        assert vault_client._token == 'TEST'
-
-    def test_insecure_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            VaultClient.from_environ(env={'VAULT_SKIP_VERIFY': '1'})
-
-    # FIXME: Twisted's (18.7.0) TLSMemoryBIOProtocol seems to hang around in
-    # the reactor unless we use AsynchronousDeferredRunTestForBrokenTwisted:
-    # https://testtools.readthedocs.io/en/latest/api.html#testtools.twistedsupport.AsynchronousDeferredRunTestForBrokenTwisted
-    @run_test_with(
-        AsynchronousDeferredRunTestForBrokenTwisted.make_factory(timeout=1.0))
-    def test_request_client_certs(self):
-        return self._test_request({
-            'VAULT_CACERT': os.path.join(FIXTURES, CA_FILENAME),
-            'VAULT_CLIENT_CERT':
-                os.path.join(FIXTURES, CLIENT_CERT_FILENAME),
-            'VAULT_CLIENT_KEY':
-                os.path.join(FIXTURES, CLIENT_KEY_FILENAME),
-        },
-        # FIXME: Twisted bugs out with an IP address for TLS verification
-        host_addr='localhost')
-
-    @run_test_with(
-        AsynchronousDeferredRunTestForBrokenTwisted.make_factory(timeout=1.0))
-    def test_request_tls_server_name(self):
-        return self._test_request({
-            'VAULT_CACERT': os.path.join(FIXTURES, CA_FILENAME),
-            'VAULT_TLS_SERVER_NAME': SERVER_COMMON_NAME,
-        },
-        # NOTE: Twisted would bug out if it weren't for VAULT_TLS_SERVER_NAME
-        host_addr='127.0.0.1',
-        verify=False)
-
-    def _test_request(self, env, host_addr='localhost', verify=True):
-        resource = QueueResource()
-        token = str(uuid.uuid4())
-        env['VAULT_TOKEN'] = token
-
-        d = start_vault_server(resource, verify=verify)
-
-        def assert_request(request):
-            # TODO: Actually assert stuff on the request
-            assert request.isSecure()
-
-            request.write(b'{}')
-            request.finish()
-
-        def assert_response(response):
-            # TODO: Actually assert on the response
-            pass
-
-        def make_request(listening_port):
-            host = listening_port.getHost()
-            env['VAULT_ADDR'] = 'https://{}:{}'.format(host_addr, host.port)
-
-            client = VaultClient.from_environ(env=env)
-
-            response_d = client.read('sys/health')
-
-            request_d = resource.get()
-            request_d.addCallback(assert_request)
-
-            response_d.addCallback(assert_response)
-
-            done_d = DeferredList([request_d, response_d],
-                                  fireOnOneErrback=True, consumeErrors=True)
-            done_d.addCallback(lambda _: listening_port.stopListening())
-            return done_d
-
-        return d.addCallback(make_request)
-
-class TestStrconvParseBoolFunc(object):
-    def test_true(self):
-        for s in ['1', 't', 'T', 'true', 'TRUE', 'True']:
-            assert strconv_ParseBool(s)
-
-    def test_false(self):
-        for s in ['0', 'f', 'F', 'false', 'FALSE', 'False']:
-            assert not strconv_ParseBool(s)
-
-    def test_invalid(self):
-        with pytest.raises(ValueError) as e_info:
-            strconv_ParseBool('TrUe')
-
-        assert str(e_info.value) == "Unable to parse boolean value from 'TrUe'"
+        assert client.url == 'https://vault.example.org:8200'
+        assert client._token == 'abcdef'

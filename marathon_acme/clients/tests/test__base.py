@@ -3,19 +3,13 @@ from testtools.assertions import assert_that
 from testtools.matchers import Equals, Is, IsInstance, MatchesStructure
 from testtools.twistedsupport import failed, flush_logged_errors
 
-from treq.client import HTTPClient as treq_HTTPClient
-
-from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
-from twisted.internet.task import Clock
-from twisted.web.client import Agent
 from twisted.web.http_headers import Headers
 
 from txfake.fake_connection import wait0
 
 from marathon_acme.clients._base import (
-    HTTPClient, HTTPError, default_client, default_reactor, get_single_header,
-    raise_for_status)
+    HTTPClient, HTTPError, get_single_header, raise_for_status)
 from marathon_acme.clients.tests.helpers import TestHTTPClientBase
 from marathon_acme.clients.tests.matchers import HasRequestProperties
 from marathon_acme.tests.helpers import failing_client
@@ -67,40 +61,6 @@ class TestGetSingleHeader(object):
         content_type = get_single_header(headers, 'Accept')
 
         assert_that(content_type, Is(None))
-
-
-class TestDefaultReactor(object):
-    def test_default_reactor(self):
-        """
-        When default_reactor is passed a reactor it should return that reactor.
-        """
-        clock = Clock()
-
-        assert_that(default_reactor(clock), Is(clock))
-
-    def test_default_reactor_not_provided(self):
-        """
-        When default_reactor is not passed a reactor, it should return the
-        default reactor.
-        """
-        assert_that(default_reactor(None), Is(reactor))
-
-
-class TestDefaultClient(object):
-    def test_default_client(self):
-        """
-        When default_client is passed a client it should return that client.
-        """
-        client = treq_HTTPClient(Agent(reactor))
-
-        assert_that(default_client(client, reactor), Is(client))
-
-    def test_default_client_not_provided(self):
-        """
-        When default_agent is not passed an agent, it should return a default
-        agent.
-        """
-        assert_that(default_client(None, reactor), IsInstance(treq_HTTPClient))
 
 
 class TestHTTPClient(TestHTTPClientBase):
