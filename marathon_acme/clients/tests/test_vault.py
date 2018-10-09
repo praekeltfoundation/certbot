@@ -8,32 +8,12 @@ from testtools.twistedsupport import failed, succeeded
 
 from treq.testing import StubTreq
 
-from twisted.internet.defer import DeferredQueue
-from twisted.web.resource import IResource
-from twisted.web.server import NOT_DONE_YET
-
-from zope.interface import implementer
-
+from marathon_acme.clients.tests.helpers import QueueResource
 from marathon_acme.clients.tests.matchers import HasRequestProperties
 from marathon_acme.clients.vault import CasError, VaultClient, VaultError
 from marathon_acme.server import write_request_json
 from marathon_acme.tests.helpers import read_request_json
 from marathon_acme.tests.matchers import HasHeader, WithErrorTypeAndMessage
-
-
-@implementer(IResource)
-class QueueResource(object):
-    isLeaf = True
-
-    def __init__(self):
-        self.queue = DeferredQueue()
-
-    def render(self, request):
-        self.queue.put(request)
-        return NOT_DONE_YET
-
-    def get(self):
-        return self.queue.get()
 
 
 class TestVaultClient(object):
@@ -354,3 +334,16 @@ class TestVaultClient(object):
             CasError,
             'check-and-set parameter did not match the current version'
         )))
+
+    def test_from_env(self):
+        """
+        When the VaultClient is created from the environment, the Vault address
+        and token are taken from environment values.
+        """
+        client = VaultClient.from_env(env={
+            'VAULT_ADDR': 'https://vault.example.org:8200',
+            'VAULT_TOKEN': 'abcdef',
+        })
+
+        assert client.url == 'https://vault.example.org:8200'
+        assert client._token == 'abcdef'

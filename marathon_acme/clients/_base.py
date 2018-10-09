@@ -2,11 +2,11 @@ import cgi
 
 from requests.exceptions import HTTPError
 
-from treq.client import HTTPClient as treq_HTTPClient
-
 from twisted.logger import LogLevel, Logger
 
 from uritools import uricompose, uridecode, urisplit
+
+from marathon_acme.clients._tx_util import default_client
 
 
 def get_single_header(headers, key):
@@ -62,24 +62,6 @@ def raise_for_header(response, key, expected):
     return response
 
 
-def default_reactor(reactor):
-    if reactor is None:
-        from twisted.internet import reactor
-    return reactor
-
-
-def default_client(client, reactor):
-    """
-    Set up a default client if one is not provided. Set up the default
-    ``twisted.web.client.Agent`` using the provided reactor.
-    """
-    if client is None:
-        from twisted.web.client import Agent
-        client = treq_HTTPClient(Agent(reactor))
-
-    return client
-
-
 class HTTPClient(object):
     DEFAULT_TIMEOUT = 5
     log = Logger()
@@ -93,8 +75,7 @@ class HTTPClient(object):
         self._timeout = timeout
         # Keep track of the reactor because treq uses it for timeouts in a
         # clumsy way
-        self._reactor = default_reactor(reactor)
-        self._client = default_client(client, self._reactor)
+        self._client, self._reactor = default_client(reactor, client)
 
     def _log_request_response(self, response, method, path, kwargs):
         self.log.debug(
