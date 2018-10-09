@@ -18,6 +18,12 @@ from txacme.urls import LETSENCRYPT_STAGING_DIRECTORY
 from marathon_acme.cli import init_storage_dir, main, parse_listen_addr
 
 
+# Make sure we always use the Let's Encrypt Staging endpoint for these tests
+def main_t(*args, **kwargs):
+    return main(
+        *args, acme_url=LETSENCRYPT_STAGING_DIRECTORY.asText(), **kwargs)
+
+
 class TestCli(TestCase):
     # These are testtools-style tests so we can run aynchronous tests
 
@@ -27,7 +33,7 @@ class TestCli(TestCase):
         because there is one required argument.
         """
         with ExpectedException(SystemExit, MatchesStructure(code=Equals(2))):
-            main(reactor, raw_args=[])
+            main_t(reactor, argv=[])
 
     @inlineCallbacks
     @run_test_with(AsynchronousDeferredRunTest.make_factory(timeout=10.0))
@@ -42,7 +48,7 @@ class TestCli(TestCase):
         can be halted.
         """
         temp_dir = self.useFixture(TempDir())
-        yield main(reactor, raw_args=[
+        yield main_t(reactor, argv=[
             temp_dir.path,
             '--acme', LETSENCRYPT_STAGING_DIRECTORY.asText(),
             '--marathon', 'http://localhost:28080'  # An address we can't reach
@@ -71,7 +77,7 @@ class TestCli(TestCase):
         CannotListenError is expected to be logged and the program should stop.
         """
         temp_dir = self.useFixture(TempDir())
-        yield main(reactor, raw_args=[
+        yield main_t(reactor, argv=[
             temp_dir.path,
             '--listen', '1.1.1.1:8080',  # An address we can't listen on
         ])

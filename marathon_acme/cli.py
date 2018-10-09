@@ -12,6 +12,7 @@ from twisted.python.filepath import FilePath
 from twisted.python.url import URL
 
 from txacme.store import DirectoryStore
+from txacme.urls import LETSENCRYPT_DIRECTORY
 
 from marathon_acme import __version__
 from marathon_acme.acme_util import (
@@ -22,66 +23,65 @@ from marathon_acme.service import MarathonAcme
 
 log = Logger()
 
-parser = argparse.ArgumentParser(
-    description='Automatically manage ACME certificates for Marathon apps')
-parser.add_argument('-a', '--acme',
-                    help='The address for the ACME Directory Resource '
-                         '(default: %(default)s)',
-                    default=(
-                        'https://acme-v01.api.letsencrypt.org/directory'))
-parser.add_argument('-e', '--email',
-                    help='An email address to register with the ACME service '
-                         '(optional)')
-parser.add_argument('-m', '--marathon', metavar='MARATHON[,MARATHON,...]',
-                    help='The addresses for the Marathon HTTP API (default: '
-                         '%(default)s)',
-                    default='http://marathon.mesos:8080')
-parser.add_argument('-l', '--lb', metavar='LB[,LB,...]',
-                    help='The addresses for the marathon-lb HTTP API '
-                         '(default: %(default)s)',
-                    default='http://marathon-lb.marathon.mesos:9090')
-parser.add_argument('-g', '--group',
-                    help='The marathon-lb group to issue certificates for '
-                         '(default: %(default)s)',
-                    default='external')
-parser.add_argument('--allow-multiple-certs',
-                    help=('Allow multiple certificates for a single app port. '
-                          'This allows multiple domains for an app, but is '
-                          'not recommended.'),
-                    action='store_true')
-parser.add_argument('--listen',
-                    help='The address for the port to listen on (default: '
-                         '%(default)s)',
-                    default=':8000')
-parser.add_argument('--marathon-timeout',
-                    help=('Amount of time in seconds to wait for HTTP '
-                          'response headers to be received for all requests '
-                          'to Marathon. Set to 0 to disable. (default: '
-                          '%(default)s)'),
-                    type=float,
-                    default=10)
-parser.add_argument('--sse-timeout',
-                    help=('Amount of time in seconds to wait for some event '
-                          'data to be received from Marathon. Set to 0 to '
-                          'disable. (default: %(default)s)'),
-                    type=float,
-                    default=60)
-parser.add_argument('--log-level',
-                    help='The minimum severity level to log messages at '
-                         '(default: %(default)s)',
-                    choices=['debug', 'info', 'warn', 'error', 'critical'],
-                    default='info'),
-parser.add_argument('storage_dir', metavar='storage-dir',
-                    help='Path to directory for storing certificates')
-parser.add_argument('--version', action='version', version=__version__)
 
-
-def main(reactor, raw_args=sys.argv[1:]):
+def main(reactor, argv=sys.argv[1:], acme_url=LETSENCRYPT_DIRECTORY.asText()):
     """
     A tool to automatically request, renew and distribute Let's Encrypt
     certificates for apps running on Marathon and served by marathon-lb.
     """
-    args = parser.parse_args(raw_args)
+    parser = argparse.ArgumentParser(
+        description='Automatically manage ACME certificates for Marathon apps')
+    parser.add_argument('-a', '--acme',
+                        help='The address for the ACME Directory Resource '
+                             '(default: %(default)s)',
+                        default=acme_url)
+    parser.add_argument('-e', '--email',
+                        help='An email address to register with the ACME '
+                             'service (optional)')
+    parser.add_argument('-m', '--marathon', metavar='MARATHON[,MARATHON,...]',
+                        help='The addresses for the Marathon HTTP API '
+                             '(default: %(default)s)',
+                        default='http://marathon.mesos:8080')
+    parser.add_argument('-l', '--lb', metavar='LB[,LB,...]',
+                        help='The addresses for the marathon-lb HTTP API '
+                             '(default: %(default)s)',
+                        default='http://marathon-lb.marathon.mesos:9090')
+    parser.add_argument('-g', '--group',
+                        help='The marathon-lb group to issue certificates for '
+                             '(default: %(default)s)',
+                        default='external')
+    parser.add_argument('--allow-multiple-certs',
+                        help=('Allow multiple certificates for a single app '
+                              'port. This allows multiple domains for an app, '
+                              'but is not recommended.'),
+                        action='store_true')
+    parser.add_argument('--listen',
+                        help='The address for the port to listen on (default: '
+                             '%(default)s)',
+                        default=':8000')
+    parser.add_argument('--marathon-timeout',
+                        help=('Amount of time in seconds to wait for HTTP '
+                              'response headers to be received for all '
+                              'requests to Marathon. Set to 0 to disable. '
+                              '(default: %(default)s)'),
+                        type=float,
+                        default=10)
+    parser.add_argument('--sse-timeout',
+                        help=('Amount of time in seconds to wait for some '
+                              'event data to be received from Marathon. Set '
+                              'to 0 to disable. (default: %(default)s)'),
+                        type=float,
+                        default=60)
+    parser.add_argument('--log-level',
+                        help='The minimum severity level to log messages at '
+                             '(default: %(default)s)',
+                        choices=['debug', 'info', 'warn', 'error', 'critical'],
+                        default='info'),
+    parser.add_argument('storage_dir', metavar='storage-dir',
+                        help='Path to directory for storing certificates')
+    parser.add_argument('--version', action='version', version=__version__)
+
+    args = parser.parse_args(argv)
 
     # Set up logging
     init_logging(args.log_level)
