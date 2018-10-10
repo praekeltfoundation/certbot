@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
+from functools import partial
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -11,7 +12,6 @@ from josepy.jwk import JWKRSA
 
 from treq.client import HTTPClient
 
-from twisted.internet.defer import maybeDeferred
 from twisted.web.client import Agent
 
 from txacme.client import Client as txacme_Client, JWSClient
@@ -82,27 +82,20 @@ def maybe_key_vault(client, mount_path):
     return d.addCallback(get_or_create_key)
 
 
-def create_txacme_client_creator(reactor, url, key_func, alg=RS256):
+def create_txacme_client_creator(reactor, url, key, alg=RS256):
     """
     Create a creator for txacme clients to provide to the txacme service. See
     ``txacme.client.Client.from_url()``. We create the underlying JWSClient
     with a non-persistent pool to avoid
     https://github.com/mithrandi/txacme/issues/86.
 
-    :param key_func:
-        A 0-args callable to create a client key. May return a Deferred.
     :return: a callable that returns a deffered that returns the client
     """
-    def key_cb(key):
-        # Creating an Agent without specifying a pool gives us the default pool
-        # which is non-persistent.
-        jws_client = JWSClient(HTTPClient(agent=Agent(reactor)), key, alg)
-        return txacme_Client.from_url(reactor, url, key, alg, jws_client)
+    # Creating an Agent without specifying a pool gives us the default pool
+    # which is non-persistent.
+    jws_client = JWSClient(HTTPClient(agent=Agent(reactor)), key, alg)
 
-    def creator():
-        return maybeDeferred(key_func).addCallback(key_cb)
-
-    return creator
+    return partial(txacme_Client.from_url, reactor, url, key, alg, jws_client)
 
 
 def generate_wildcard_pem_bytes():

@@ -198,8 +198,7 @@ def create_marathon_acme(
     """
     storage_path, certs_path = init_storage_dir(storage_dir)
     acme_url = URL.fromText(_to_unicode(acme_directory))
-    client_creator = create_txacme_client_creator(
-        reactor, acme_url, lambda: maybe_key(storage_path))
+    key = maybe_key(storage_path)
 
     return MarathonAcme(
         MarathonClient(marathon_addrs, timeout=marathon_timeout,
@@ -207,7 +206,7 @@ def create_marathon_acme(
         group,
         DirectoryStore(certs_path),
         MarathonLbClient(mlb_addrs, reactor=reactor),
-        client_creator,
+        create_txacme_client_creator(reactor, acme_url, key),
         reactor,
         acme_email,
         allow_multiple_certs)
