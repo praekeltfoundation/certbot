@@ -7,7 +7,7 @@ from testtools.assertions import assert_that
 from testtools.matchers import (
     Contains, DirExists, Equals, FileContains, FileExists, MatchesStructure)
 from testtools.twistedsupport import (
-    AsynchronousDeferredRunTest, flush_logged_errors, failed)
+    AsynchronousDeferredRunTest, flush_logged_errors)
 
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
@@ -16,7 +16,6 @@ from twisted.internet.error import CannotListenError, ConnectionRefusedError
 from txacme.urls import LETSENCRYPT_STAGING_DIRECTORY
 
 from marathon_acme.cli import init_storage_dir, main, parse_listen_addr
-from marathon_acme.tests.matchers import WithErrorTypeAndMessage
 
 
 # Make sure we always use the Let's Encrypt Staging endpoint for these tests
