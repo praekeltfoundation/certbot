@@ -104,12 +104,6 @@ def main(reactor, argv=sys.argv[1:], env=os.environ,
 
     sse_timeout = args.sse_timeout if args.sse_timeout > 0 else None
 
-    if args.vault:
-        key_d, cert_store = init_vault_storage(
-            reactor, env, args.storage_path)
-    else:
-        key_d, cert_store = init_file_storage(args.storage_path)
-
     acme_url = URL.fromText(_to_unicode(args.acme))
 
     endpoint_description = parse_listen_addr(args.listen)
@@ -117,7 +111,7 @@ def main(reactor, argv=sys.argv[1:], env=os.environ,
     log_args = [
         ('storage-path', args.storage_path),
         ('vault', args.vault),
-        ('acme', args.acme),
+        ('acme', acme_url),
         ('email', args.email),
         ('allow-multiple-certs', args.allow_multiple_certs),
         ('marathon', marathon_addrs),
@@ -127,8 +121,14 @@ def main(reactor, argv=sys.argv[1:], env=os.environ,
         ('endpoint-description', endpoint_description),
     ]
     log_args = ['{}={!r}'.format(k, v) for k, v in log_args]
-    log.info('Running marathon-acme {} with: {}'.format(
+    log.info('Starting marathon-acme {} with: {}'.format(
         __version__, ', '.join(log_args)))
+
+    if args.vault:
+        key_d, cert_store = init_vault_storage(
+            reactor, env, args.storage_path)
+    else:
+        key_d, cert_store = init_file_storage(args.storage_path)
 
     # Once we have the client key, create the txacme client creator
     key_d.addCallback(create_txacme_client_creator, reactor, acme_url)
