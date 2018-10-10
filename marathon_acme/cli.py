@@ -1,5 +1,6 @@
 import argparse
 import ipaddress
+import os
 import sys
 
 from twisted.internet.endpoints import quoteStringArgument
@@ -16,15 +17,18 @@ from txacme.urls import LETSENCRYPT_DIRECTORY
 
 from marathon_acme import __version__
 from marathon_acme.acme_util import (
-    create_txacme_client_creator, generate_wildcard_pem_bytes, maybe_key)
-from marathon_acme.clients import MarathonClient, MarathonLbClient
+    create_txacme_client_creator, generate_wildcard_pem_bytes, maybe_key,
+    maybe_key_vault)
+from marathon_acme.clients import MarathonClient, MarathonLbClient, VaultClient
 from marathon_acme.service import MarathonAcme
+from marathon_acme.vault_store import VaultKvCertificateStore
 
 
 log = Logger()
 
 
-def main(reactor, argv=sys.argv[1:], acme_url=LETSENCRYPT_DIRECTORY.asText()):
+def main(reactor, argv=sys.argv[1:], env=os.environ,
+         acme_url=LETSENCRYPT_DIRECTORY.asText()):
     """
     A tool to automatically request, renew and distribute Let's Encrypt
     certificates for apps running on Marathon and served by marathon-lb.
@@ -77,8 +81,16 @@ def main(reactor, argv=sys.argv[1:], acme_url=LETSENCRYPT_DIRECTORY.asText()):
                              '(default: %(default)s)',
                         choices=['debug', 'info', 'warn', 'error', 'critical'],
                         default='info'),
-    parser.add_argument('storage_dir', metavar='storage-dir',
-                        help='Path to directory for storing certificates')
+    parser.add_argument('--vault',
+                        help=('Enable storage of certificates in Vault. This '
+                              'can be further configured with VAULT_-style '
+                              'environment variables.'),
+                        action='store_true')
+    parser.add_argument('storage_path', metavar='storage-path',
+                        help=('Path for storing certificates. If --vault is '
+                              'used then this is the mount path for the '
+                              'key/value engine in Vault. If not, this is the '
+                              'path to a directory.'))
     parser.add_argument('--version', action='version', version=__version__)
 
     args = parser.parse_args(argv)
@@ -92,17 +104,14 @@ def main(reactor, argv=sys.argv[1:], acme_url=LETSENCRYPT_DIRECTORY.asText()):
 
     sse_timeout = args.sse_timeout if args.sse_timeout > 0 else None
 
-    marathon_acme = create_marathon_acme(
-        args.storage_dir, args.acme, args.email, args.allow_multiple_certs,
-        marathon_addrs, args.marathon_timeout, sse_timeout, mlb_addrs,
-        args.group, reactor)
+    acme_url = URL.fromText(_to_unicode(args.acme))
 
-    # Run the thing
     endpoint_description = parse_listen_addr(args.listen)
 
     log_args = [
-        ('storage-dir', args.storage_dir),
-        ('acme', args.acme),
+        ('storage-path', args.storage_path),
+        ('vault', args.vault),
+        ('acme', acme_url),
         ('email', args.email),
         ('allow-multiple-certs', args.allow_multiple_certs),
         ('marathon', marathon_addrs),
@@ -112,17 +121,32 @@ def main(reactor, argv=sys.argv[1:], acme_url=LETSENCRYPT_DIRECTORY.asText()):
         ('endpoint-description', endpoint_description),
     ]
     log_args = ['{}={!r}'.format(k, v) for k, v in log_args]
-    log.info('Running marathon-acme {} with: {}'.format(
+    log.info('Starting marathon-acme {} with: {}'.format(
         __version__, ', '.join(log_args)))
 
-    return marathon_acme.run(endpoint_description)
+    if args.vault:
+        key_d, cert_store = init_vault_storage(
+            reactor, env, args.storage_path)
+    else:
+        key_d, cert_store = init_file_storage(args.storage_path)
+
+    # Once we have the client key, create the txacme client creator
+    key_d.addCallback(create_txacme_client_creator, reactor, acme_url)
+
+    # Once we have the client creator, create the service
+    key_d.addCallback(
+        create_marathon_acme, cert_store, args.email,
+        args.allow_multiple_certs, marathon_addrs, args.marathon_timeout,
+        sse_timeout, mlb_addrs, args.group, reactor)
+
+    # Finally, run the thing
+    return key_d.addCallback(lambda ma: ma.run(endpoint_description))
 
 
 def _to_unicode(string):
     if isinstance(string, unicode):
         return string
-    elif isinstance(string, bytes):
-        return unicode(string, 'utf-8')
+    return unicode(string, sys.getfilesystemencoding())
 
 
 def parse_listen_addr(listen_addr):
@@ -166,15 +190,16 @@ def _create_tx_endpoints_string(args, kwargs):
 
 
 def create_marathon_acme(
-    storage_dir, acme_directory, acme_email, allow_multiple_certs,
+    client_creator, cert_store, acme_email, allow_multiple_certs,
     marathon_addrs, marathon_timeout, sse_timeout, mlb_addrs, group,
         reactor):
     """
     Create a marathon-acme instance.
 
-    :param storage_dir:
-        Path to the storage directory for certificates and the client key.
-    :param acme_directory: Address for the ACME directory to use.
+    :param client_creator:
+        The txacme client creator function.
+    :param cert_store:
+        The txacme certificate store instance.
     :param acme_email:
         Email address to use when registering with the ACME service.
     :param allow_multiple_certs:
@@ -196,21 +221,21 @@ def create_marathon_acme(
         app domains.
     :param reactor: The reactor to use.
     """
-    storage_path, certs_path = init_storage_dir(storage_dir)
-    acme_url = URL.fromText(_to_unicode(acme_directory))
-    client_creator = create_txacme_client_creator(
-        reactor, acme_url, lambda: maybe_key(storage_path))
+    marathon_client = MarathonClient(marathon_addrs, timeout=marathon_timeout,
+                                     sse_kwargs={'timeout': sse_timeout},
+                                     reactor=reactor)
+    marathon_lb_client = MarathonLbClient(mlb_addrs, reactor=reactor)
 
     return MarathonAcme(
-        MarathonClient(marathon_addrs, timeout=marathon_timeout,
-                       sse_kwargs={'timeout': sse_timeout}, reactor=reactor),
+        marathon_client,
         group,
-        DirectoryStore(certs_path),
-        MarathonLbClient(mlb_addrs, reactor=reactor),
+        cert_store,
+        marathon_lb_client,
         client_creator,
         reactor,
         acme_email,
-        allow_multiple_certs)
+        allow_multiple_certs
+    )
 
 
 def init_storage_dir(storage_dir):
@@ -256,6 +281,20 @@ def init_logging(log_level):
     log_observer = FilteringLogObserver(
         textFileLogObserver(sys.stdout), [log_level_filter])
     globalLogPublisher.addObserver(log_observer)
+
+
+def init_vault_storage(reactor, env, mount_path):
+    vault_client = VaultClient.from_env(reactor=reactor, env=env)
+    cert_store = VaultKvCertificateStore(vault_client, mount_path)
+    key_d = maybe_key_vault(vault_client, mount_path)
+    return key_d, cert_store
+
+
+def init_file_storage(storage_dir):
+    storage_path, certs_path = init_storage_dir(storage_dir)
+    cert_store = DirectoryStore(certs_path)
+    key_d = maybe_key(storage_path)
+    return key_d, cert_store
 
 
 def _main():  # pragma: no cover

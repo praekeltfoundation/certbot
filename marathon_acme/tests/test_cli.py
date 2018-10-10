@@ -19,9 +19,11 @@ from marathon_acme.cli import init_storage_dir, main, parse_listen_addr
 
 
 # Make sure we always use the Let's Encrypt Staging endpoint for these tests
-def main_t(*args, **kwargs):
-    return main(
-        *args, acme_url=LETSENCRYPT_STAGING_DIRECTORY.asText(), **kwargs)
+def main_t(reactor, **kwargs):
+    argv = kwargs.get('argv', [])
+    env = kwargs.get('env', {})
+    return main(reactor, acme_url=LETSENCRYPT_STAGING_DIRECTORY.asText(),
+                argv=argv, env=env)
 
 
 class TestCli(TestCase):
@@ -70,6 +72,35 @@ class TestCli(TestCase):
 
     @inlineCallbacks
     @run_test_with(AsynchronousDeferredRunTest.make_factory(timeout=5.0))
+    def test_storage_dir_provided_vault(self):
+        """
+        When the program is run with an argument and the --vault option, it
+        should start up and run. The program is expected to fail because it is
+        unable to connect to Vault.
+
+        Unlike the above test, this crashes immediately and returns because we
+        never actually start up txacme or marathon-acme if we can't get/store
+        an ACME client key.
+        """
+        with ExpectedException(ConnectionRefusedError,
+                               r'Connection was refused by other side'):
+            yield main_t(
+                reactor,
+                env={
+                    # An address we can't reach
+                    'VAULT_ADDR': 'http://localhost:28080'
+                },
+                argv=[
+                    'secret',
+                    '--vault',
+                    '--acme', LETSENCRYPT_STAGING_DIRECTORY.asText(),
+                ]
+            )
+
+        flush_logged_errors(ConnectionRefusedError)
+
+    @inlineCallbacks
+    @run_test_with(AsynchronousDeferredRunTest.make_factory(timeout=5.0))
     def test_cannot_listen(self):
         """
         When the program is run with an argument and a listen address specified
@@ -102,7 +133,7 @@ class TestParseListenAddr(object):
         with ExpectedException(
             ValueError,
             r"'foobar' does not have the correct form for a listen address: "
-                '\[ipaddress\]:port'):
+                r'\[ipaddress\]:port'):
             parse_listen_addr('foobar')
 
     def test_parse_no_ip_address(self):
@@ -127,7 +158,7 @@ class TestParseListenAddr(object):
         interface is present in the returned endpoint description.
         """
         assert_that(parse_listen_addr('[::]:8080'),
-                    Equals('tcp6:8080:interface=\:\:'))
+                    Equals('tcp6:8080:interface=\\:\\:'))
 
     def test_parse_invalid_ipaddress(self):
         """
