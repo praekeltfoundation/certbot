@@ -7,7 +7,7 @@ from testtools.assertions import assert_that
 from testtools.matchers import (
     Contains, DirExists, Equals, FileContains, FileExists, MatchesStructure)
 from testtools.twistedsupport import (
-    AsynchronousDeferredRunTest, flush_logged_errors)
+    AsynchronousDeferredRunTest, flush_logged_errors, failed)
 
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
@@ -16,12 +16,15 @@ from twisted.internet.error import CannotListenError, ConnectionRefusedError
 from txacme.urls import LETSENCRYPT_STAGING_DIRECTORY
 
 from marathon_acme.cli import init_storage_dir, main, parse_listen_addr
+from marathon_acme.tests.matchers import WithErrorTypeAndMessage
 
 
 # Make sure we always use the Let's Encrypt Staging endpoint for these tests
-def main_t(*args, **kwargs):
-    return main(
-        *args, acme_url=LETSENCRYPT_STAGING_DIRECTORY.asText(), **kwargs)
+def main_t(reactor, **kwargs):
+    argv = kwargs.get('argv', [])
+    env = kwargs.get('env', {})
+    return main(reactor, acme_url=LETSENCRYPT_STAGING_DIRECTORY.asText(),
+                argv=argv, env=env)
 
 
 class TestCli(TestCase):
@@ -66,6 +69,35 @@ class TestCli(TestCase):
                         Equals(True))
 
         # Expect to be unable to connect to Marathon
+        flush_logged_errors(ConnectionRefusedError)
+
+    @inlineCallbacks
+    @run_test_with(AsynchronousDeferredRunTest.make_factory(timeout=5.0))
+    def test_storage_dir_provided_vault(self):
+        """
+        When the program is run with an argument and the --vault option, it
+        should start up and run. The program is expected to fail because it is
+        unable to connect to Vault.
+
+        Unlike the above test, this crashes immediately and returns because we
+        never actually start up txacme or marathon-acme if we can't get/store
+        an ACME client key.
+        """
+        with ExpectedException(ConnectionRefusedError,
+                               r'Connection was refused by other side'):
+            yield main_t(
+                reactor,
+                env={
+                    # An address we can't reach
+                    'VAULT_ADDR': 'http://localhost:28080'
+                },
+                argv=[
+                    'secret',
+                    '--vault',
+                    '--acme', LETSENCRYPT_STAGING_DIRECTORY.asText(),
+                ]
+            )
+
         flush_logged_errors(ConnectionRefusedError)
 
     @inlineCallbacks

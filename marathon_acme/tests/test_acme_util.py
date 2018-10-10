@@ -52,7 +52,7 @@ class TestMaybeKey(object):
         pem_file.setContent(_dump_pem_private_key_bytes(raw_key))
 
         actual_key = maybe_key(pem_path)
-        assert_that(actual_key, Equals(expected_key))
+        assert_that(actual_key, succeeded(Equals(expected_key)))
 
     def test_key_not_exists(self, pem_path):
         """
@@ -67,7 +67,7 @@ class TestMaybeKey(object):
         file_key = _load_pem_private_key_bytes(pem_file.getContent())
         file_key = JWKRSA(key=file_key)
 
-        assert_that(key, Equals(file_key))
+        assert_that(key, succeeded(Equals(file_key)))
 
 
 class TestMaybeKeyVault(object):
