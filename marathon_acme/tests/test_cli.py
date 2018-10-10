@@ -133,7 +133,7 @@ class TestParseListenAddr(object):
         with ExpectedException(
             ValueError,
             r"'foobar' does not have the correct form for a listen address: "
-                '\[ipaddress\]:port'):
+                r'\[ipaddress\]:port'):
             parse_listen_addr('foobar')
 
     def test_parse_no_ip_address(self):
@@ -158,7 +158,7 @@ class TestParseListenAddr(object):
         interface is present in the returned endpoint description.
         """
         assert_that(parse_listen_addr('[::]:8080'),
-                    Equals('tcp6:8080:interface=\:\:'))
+                    Equals('tcp6:8080:interface=\\:\\:'))
 
     def test_parse_invalid_ipaddress(self):
         """
