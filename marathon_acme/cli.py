@@ -146,7 +146,7 @@ def main(reactor, argv=sys.argv[1:], env=os.environ,
 def _to_unicode(string):
     if isinstance(string, unicode):
         return string
-    return unicode(string, 'utf-8')
+    return unicode(string, sys.getfilesystemencoding())
 
 
 def parse_listen_addr(listen_addr):
